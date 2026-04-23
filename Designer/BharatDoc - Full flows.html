@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BharatDoc — Full flows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#E8DFCD; font-family:'Figtree',system-ui,sans-serif; }
+  * { -webkit-font-smoothing:antialiased; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="bharatdoc-screens.jsx"></script>
+<script type="text/babel" src="bharatdoc-flows.jsx"></script>
+
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+const Frame = ({ children, dark }) => <Device dark={dark}>{children}</Device>;
+const W = 412, H = 892;
+
+function App() {
+  return (
+    <DesignCanvas
+      title="BharatDoc · Full flows"
+      subtitle="Every screen from the PRD — Bharat Warmth direction"
+    >
+      {/* ───────────────────────── SYSTEM ───────────────────────── */}
+      <DCSection id="system" title="Design system">
+        <DCArtboard id="tile" label="Style tile · palette, type, status ticks" width={780} height={892}>
+          <StyleTile/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── ONBOARDING ───────────────────────── */}
+      <DCSection id="onboarding" title="1 · Onboarding & clinic setup">
+        <DCArtboard id="phone" label="01 · Phone entry" width={W} height={H}>
+          <Frame><PhoneEntryScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="otp" label="02 · OTP verify" width={W} height={H}>
+          <Frame><OtpVerifyScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="profile" label="03 · Profile setup" width={W} height={H}>
+          <Frame><ProfileSetupScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="clinic-choice" label="04 · Clinic — join or create" width={W} height={H}>
+          <Frame><ClinicChoiceScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="clinic-new" label="05 · Create new clinic" width={W} height={H}>
+          <Frame><CreateClinicScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="pending" label="06 · Pending approval (locked)" width={W} height={H}>
+          <Frame><PendingApprovalScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="rejected" label="07 · Access not granted" width={W} height={H}>
+          <Frame><RejectedScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── DASHBOARD ───────────────────────── */}
+      <DCSection id="dashboard" title="2 · Dashboard">
+        <DCArtboard id="dash" label="08 · Dashboard — online" width={W} height={H}>
+          <Frame><DashboardScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="dash-offline" label="09 · Dashboard — offline + pending uploads" width={W} height={H}>
+          <Frame><DashboardOfflineScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="search" label="10 · Patient search & history" width={W} height={H}>
+          <Frame><PatientSearchScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── RECORDING ───────────────────────── */}
+      <DCSection id="recording" title="3 · Recording lifecycle">
+        <DCArtboard id="mic-perm" label="11 · Mic permission prompt" width={W} height={H}>
+          <Frame><MicPermissionScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="pre-rec" label="12 · Pre-record (tag patient)" width={W} height={H}>
+          <Frame><PreRecordScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="rec-live" label="13 · Recording live" width={W} height={H}>
+          <Frame dark><RecordingScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="rec-paused" label="14 · Recording paused" width={W} height={H}>
+          <Frame dark><RecordingPausedScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="post-rec" label="15 · Recording complete — review" width={W} height={H}>
+          <Frame><PostRecordScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="crash" label="16 · Crash recovery on relaunch" width={W} height={H}>
+          <Frame><CrashRecoveryScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── TRANSCRIBE & SUMMARISE ───────────────────────── */}
+      <DCSection id="ai" title="4 · Transcription & AI summary">
+        <DCArtboard id="transcribing" label="17 · Transcribing (processing)" width={W} height={H}>
+          <Frame><TranscribingScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="transcript" label="18 · Transcript view (Hinglish)" width={W} height={H}>
+          <Frame><TranscriptScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="transcribe-err" label="19 · Transcription failed" width={W} height={H}>
+          <Frame><TranscriptionErrorScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="summary" label="20 · AI summary — review & edit" width={W} height={H}>
+          <Frame><SummaryScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="pdf" label="21 · PDF preview & share" width={W} height={H}>
+          <Frame><PdfPreviewScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── SETTINGS ───────────────────────── */}
+      <DCSection id="settings" title="5 · Settings">
+        <DCArtboard id="settings-main" label="22 · Settings home" width={W} height={H}>
+          <Frame><SettingsScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="lang" label="23 · Transcription language" width={W} height={H}>
+          <Frame><TranscriptionLangScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="prompt" label="24 · Custom prompt editor" width={W} height={H}>
+          <Frame><PromptEditorScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ───────────────────────── OWNER ADMIN ───────────────────────── */}
+      <DCSection id="admin" title="6 · Owner admin (clinic owner only)">
+        <DCArtboard id="admin-pending" label="25 · Pending approvals" width={W} height={H}>
+          <Frame><AdminPendingScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="admin-reject" label="26 · Reject doctor — confirm" width={W} height={H}>
+          <Frame><RejectConfirmScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="admin-active" label="27 · Active doctors list" width={W} height={H}>
+          <Frame><AdminActiveScreen/></Frame>
+        </DCArtboard>
+        <DCArtboard id="admin-profile" label="28 · Clinic profile & code" width={W} height={H}>
+          <Frame><AdminProfileScreen/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

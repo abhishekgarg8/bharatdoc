@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.template
+
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
