@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/dashboard");
 
   await expect(page.getByText("Dr. Aparna Iyer")).toBeVisible();
   await expect(page.getByText("Sunrise Clinic, Pune")).toBeVisible();
@@ -9,12 +9,17 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
   await expect(page.getByText("P-10482")).toBeVisible();
 });
 
-test("onboarding smoke renders setup choices", async ({ page }) => {
+test("root routes unauthenticated users to onboarding", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("onboarding smoke renders phone OTP entry", async ({ page }) => {
   await page.goto("/onboarding");
 
   await expect(page.getByText("Welcome to BharatDoc")).toBeVisible();
-  await expect(page.getByText("Join an existing clinic")).toBeVisible();
-  await expect(page.getByText("Create a new clinic")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Send OTP/i })).toBeVisible();
 });
 
 test("pending approval smoke renders locked state", async ({ page }) => {

@@ -1,0 +1,36 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { SessionGate } from "@/components/session/session-gate";
+import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("SessionGate", () => {
+  it("routes users without Firebase sessions to onboarding", async () => {
+    const authClient: PhoneAuthClient = {
+      sendOtp: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => null)
+    };
+    const navigate = vi.fn();
+
+    render(<SessionGate authClient={authClient} onNavigate={navigate} />);
+
+    expect(screen.getByText("Checking your session")).toBeInTheDocument();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+  });
+
+  it("routes active users to dashboard after /api/me", async () => {
+    const authClient: PhoneAuthClient = {
+      sendOtp: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ doctor: { account_status: "active" } })));
+    const navigate = vi.fn();
+
+    render(<SessionGate authClient={authClient} onNavigate={navigate} />);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
+  });
+});

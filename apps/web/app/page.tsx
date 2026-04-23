@@ -1,5 +1,5 @@
-import { DashboardScreen } from "@/components/dashboard-screen";
+import { SessionGate } from "@/components/session/session-gate";
 
 export default function HomePage() {
-  return <DashboardScreen />;
+  return <SessionGate />;
 }
