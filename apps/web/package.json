@@ -1,0 +1,46 @@
+{
+  "name": "@bharatdoc/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @bharatdoc/shared build && next build",
+    "dev": "pnpm --filter @bharatdoc/shared build && next dev",
+    "lint": "eslint app components lib test e2e --ext .ts,.tsx",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "pnpm --filter @bharatdoc/shared build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bharatdoc/shared": "workspace:*",
+    "@ducanh2912/next-pwa": "^10.2.9",
+    "@hookform/resolvers": "^3.10.0",
+    "@supabase/supabase-js": "^2.49.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "firebase": "^11.6.1",
+    "firebase-admin": "^13.3.0",
+    "idb": "^8.0.2",
+    "lucide-react": "^0.503.0",
+    "next": "^14.2.28",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recordrtc": "^5.6.2",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "vitest": "^3.1.2"
+  }
+}
