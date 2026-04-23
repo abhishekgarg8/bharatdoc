@@ -1,0 +1,107 @@
+import {
+  assertActiveDoctor,
+  TranscriptionLanguageSchema,
+  validateSummaryPrompt,
+  type Doctor,
+  type TranscriptionLanguage
+} from "@bharatdoc/shared";
+import { z } from "zod";
+import type { VerifiedUser } from "@/lib/server/auth";
+import { AppError } from "@/lib/server/errors";
+
+export interface DoctorPreferences {
+  custom_prompt: string | null;
+  transcription_lang: TranscriptionLanguage;
+}
+
+export interface DoctorPreferencesUpdate {
+  custom_prompt?: string | null;
+  transcription_lang?: TranscriptionLanguage;
+}
+
+export interface DoctorPreferencesRepository {
+  findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  updateDoctorPreferences(doctorId: string, input: DoctorPreferencesUpdate): Promise<Doctor>;
+}
+
+const DoctorPreferencesUpdateSchema = z
+  .object({
+    custom_prompt: z.string().nullable().optional(),
+    transcription_lang: TranscriptionLanguageSchema.optional()
+  })
+  .strict();
+
+function toPreferences(doctor: Doctor): DoctorPreferences {
+  return {
+    custom_prompt: doctor.custom_prompt,
+    transcription_lang: doctor.transcription_lang
+  };
+}
+
+function normalizePrompt(prompt: string | null | undefined): string | null | undefined {
+  if (prompt === undefined) {
+    return undefined;
+  }
+
+  if (prompt === null) {
+    return null;
+  }
+
+  const validation = validateSummaryPrompt(prompt);
+
+  if (!validation.ok) {
+    throw new AppError(400, "Summary prompt is invalid.", validation.reason.toUpperCase());
+  }
+
+  return validation.prompt;
+}
+
+async function requireActiveDoctorForSettings(
+  user: VerifiedUser,
+  repository: DoctorPreferencesRepository
+): Promise<Doctor> {
+  const doctor = await repository.findDoctorByFirebaseUid(user.uid);
+
+  if (!doctor) {
+    throw new AppError(404, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");
+  }
+
+  return assertActiveDoctor(doctor);
+}
+
+export async function getDoctorPreferencesForUser(
+  user: VerifiedUser,
+  repository: DoctorPreferencesRepository
+): Promise<DoctorPreferences> {
+  const doctor = await requireActiveDoctorForSettings(user, repository);
+  return toPreferences(doctor);
+}
+
+export async function updateDoctorPreferencesForUser(
+  user: VerifiedUser,
+  input: unknown,
+  repository: DoctorPreferencesRepository
+): Promise<DoctorPreferences> {
+  const doctor = await requireActiveDoctorForSettings(user, repository);
+  const parsed = DoctorPreferencesUpdateSchema.parse(input);
+  const update: DoctorPreferencesUpdate = {};
+
+  if ("custom_prompt" in parsed) {
+    const customPrompt = normalizePrompt(parsed.custom_prompt);
+
+    if (customPrompt !== undefined) {
+      update.custom_prompt = customPrompt;
+    }
+  }
+
+  if (parsed.transcription_lang !== undefined) {
+    update.transcription_lang = parsed.transcription_lang;
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new AppError(400, "No preferences were provided.", "EMPTY_PREFERENCES_UPDATE");
+  }
+
+  const updatedDoctor = await repository.updateDoctorPreferences(doctor.id, update);
+  return toPreferences(updatedDoctor);
+}

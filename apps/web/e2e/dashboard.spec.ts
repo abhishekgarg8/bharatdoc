@@ -29,3 +29,29 @@ test("pending approval smoke renders locked state", async ({ page }) => {
   await expect(page.getByText("MED42X")).toBeVisible();
   await expect(page.getByRole("button", { name: /sign out/i })).toBeVisible();
 });
+
+test("settings smoke renders owner admin surface", async ({ page }) => {
+  await page.goto("/settings");
+
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText("Clinic admin")).toBeVisible();
+  await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
+  await expect(page.getByRole("button", { name: /approve/i })).toBeVisible();
+});
+
+test("settings prompt editor validates and previews prompts", async ({ page }) => {
+  await page.goto("/settings/prompt");
+
+  await expect(page.getByRole("heading", { name: "Summary prompt" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Prompt" })).toHaveValue(/{{transcript}}/);
+  await page.getByRole("button", { name: /test sample/i }).click();
+  await expect(page.getByText(/Patient reports fever/)).toBeVisible();
+});
+
+test("settings language screen renders transcription options", async ({ page }) => {
+  await page.goto("/settings/language");
+
+  await expect(page.getByRole("heading", { name: "Language" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /auto-detect/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /hinglish/i })).toBeVisible();
+});
