@@ -13,6 +13,7 @@ coverage/
 .playwright-cli/
 apps/web/test-results/
 apps/web/playwright-report/
+output/playwright/
 apps/web/public/sw.js
 apps/web/public/workbox-*.js
 
