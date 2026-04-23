@@ -1,5 +1,5 @@
 import { ChevronRight, WifiOff } from "lucide-react";
-import type { DashboardRecord } from "@/lib/dashboard-fixtures";
+import type { DashboardRecord } from "@/lib/client/dashboard-data";
 import { StatusTick } from "@/components/status-tick";
 
 interface DashboardRecordCardProps {

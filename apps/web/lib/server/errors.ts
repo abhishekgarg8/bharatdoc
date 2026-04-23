@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { AccessError } from "@bharatdoc/shared";
 
 export class AppError extends Error {
   constructor(
@@ -14,6 +15,18 @@ export class AppError extends Error {
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) {
     return error;
+  }
+
+  if (error instanceof AccessError) {
+    const statusByCode: Record<AccessError["code"], number> = {
+      AUTH_REQUIRED: 401,
+      ACCOUNT_INACTIVE: 403,
+      OWNER_REQUIRED: 403,
+      CLINIC_SCOPE_REQUIRED: 403,
+      SELF_REMOVAL_FORBIDDEN: 400
+    };
+
+    return new AppError(statusByCode[error.code], error.message, error.code);
   }
 
   if (error instanceof ZodError) {
