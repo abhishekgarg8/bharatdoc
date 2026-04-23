@@ -21,6 +21,7 @@ describe("recording lifecycle helpers", () => {
     expect(canTransitionLocalRecordingState("paused", "recording")).toBe(true);
     expect(canTransitionLocalRecordingState("stopped", "transcribing")).toBe(true);
     expect(canTransitionLocalRecordingState("transcribing", "transcribed")).toBe(true);
+    expect(canTransitionLocalRecordingState("failed", "transcribing")).toBe(true);
     expect(canTransitionLocalRecordingState("transcribed", "recording")).toBe(false);
   });
 

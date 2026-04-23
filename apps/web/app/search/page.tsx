@@ -1,5 +1,5 @@
-import { SearchScreen } from "@/components/search/search-screen";
+import { SearchPageClient } from "@/components/search/search-page-client";
 
 export default function SearchPage() {
-  return <SearchScreen />;
+  return <SearchPageClient />;
 }

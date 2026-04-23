@@ -15,10 +15,29 @@ type ClinicMode = "join_clinic" | "create_clinic";
 interface OnboardingScreenProps {
   phoneAuthClient?: PhoneAuthClient;
   onNavigate?: (href: string) => void;
+  demoMode?: boolean;
 }
 
-export function OnboardingScreen({ phoneAuthClient, onNavigate }: OnboardingScreenProps) {
-  const authClient = useMemo(() => phoneAuthClient ?? createFirebasePhoneAuthClient(), [phoneAuthClient]);
+function createDemoPhoneAuthClient(): PhoneAuthClient {
+  return {
+    async sendOtp(): Promise<PhoneAuthSession> {
+      return {
+        async verifyOtp(): Promise<string> {
+          return "demo-id-token";
+        }
+      };
+    },
+    async getCurrentIdToken(): Promise<string | null> {
+      return "demo-id-token";
+    }
+  };
+}
+
+export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
+  const authClient = useMemo(
+    () => phoneAuthClient ?? (demoMode ? createDemoPhoneAuthClient() : createFirebasePhoneAuthClient()),
+    [demoMode, phoneAuthClient]
+  );
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
   const [step, setStep] = useState<OnboardingStep>("phone");
   const [isBusy, setIsBusy] = useState(false);
@@ -80,7 +99,15 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate }: OnboardingScre
     setError(null);
 
     try {
-      setClinicLookup(await lookupClinic(clinicCode));
+      setClinicLookup(
+        demoMode
+          ? {
+              clinic_id: "demo-clinic",
+              clinic_name: "Sunrise Clinic",
+              clinic_address: "24 Baner Road, Pune"
+            }
+          : await lookupClinic(clinicCode)
+      );
     } catch (lookupError) {
       setClinicLookup(null);
       setError(lookupError instanceof Error ? lookupError.message : "Clinic lookup failed.");
@@ -123,8 +150,12 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate }: OnboardingScre
           };
 
     try {
-      const result = await registerAccount(idToken, input);
-      navigate(destinationForRegistration(result));
+      if (demoMode) {
+        navigate(clinicMode === "join_clinic" ? "/pending-approval" : "/dashboard");
+      } else {
+        const result = await registerAccount(idToken, input);
+        navigate(destinationForRegistration(result));
+      }
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Registration failed.");
     } finally {

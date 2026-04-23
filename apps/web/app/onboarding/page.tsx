@@ -1,5 +1,11 @@
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
 
-export default function OnboardingPage() {
-  return <OnboardingScreen />;
+interface OnboardingPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function OnboardingPage({ searchParams }: OnboardingPageProps) {
+  return <OnboardingScreen demoMode={searchParams?.demo === "1"} />;
 }

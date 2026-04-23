@@ -3,11 +3,13 @@
 import { Check, ChevronRight, ClipboardList, Edit3, Languages, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ClinicCodeSchema } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import {
   approvePendingDoctor,
   rejectPendingDoctor,
+  updateClinicProfile,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
 import { DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
@@ -21,14 +23,26 @@ export interface SettingsDoctorProfile {
 }
 
 export interface SettingsClinicProfile {
+  id: string;
   name: string;
   code: string;
+  address: string | null;
   activeDoctorsCount: number;
+}
+
+export interface SettingsActiveDoctor {
+  id: string;
+  name: string;
+  specialization: string;
+  phone: string;
+  role: "owner" | "doctor";
+  createdAt: string;
 }
 
 interface SettingsScreenProps {
   doctor?: SettingsDoctorProfile;
   clinic?: SettingsClinicProfile;
+  activeDoctors?: SettingsActiveDoctor[];
   pendingApprovals?: PendingApproval[];
   idToken?: string;
   fetcher?: typeof fetch;
@@ -42,10 +56,39 @@ const defaultDoctor: SettingsDoctorProfile = {
 };
 
 const defaultClinic: SettingsClinicProfile = {
+  id: "demo-clinic",
   name: "Sunrise Clinic",
   code: "MED42X",
+  address: "24 Baner Road, Pune 411045",
   activeDoctorsCount: 3
 };
+
+const defaultActiveDoctors: SettingsActiveDoctor[] = [
+  {
+    id: "owner-aparna",
+    name: "Dr. Aparna Iyer",
+    specialization: "General Physician",
+    phone: "+91 98765 43210",
+    role: "owner",
+    createdAt: "2026-04-23T06:40:00.000Z"
+  },
+  {
+    id: "doctor-meera",
+    name: "Dr. Meera Shah",
+    specialization: "Pediatrician",
+    phone: "+91 98340 12340",
+    role: "doctor",
+    createdAt: "2026-04-23T07:10:00.000Z"
+  },
+  {
+    id: "doctor-leena",
+    name: "Dr. Leena Joshi",
+    specialization: "General Physician",
+    phone: "+91 98111 22334",
+    role: "doctor",
+    createdAt: "2026-04-22T11:10:00.000Z"
+  }
+];
 
 const defaultPendingApprovals: PendingApproval[] = [
   {
@@ -98,12 +141,22 @@ function requestedLabel(requestedAt: string, now = new Date()): string {
 export function SettingsScreen({
   doctor = defaultDoctor,
   clinic = defaultClinic,
+  activeDoctors = defaultActiveDoctors,
   pendingApprovals = defaultPendingApprovals,
   idToken,
   fetcher = fetch
 }: SettingsScreenProps) {
   const [pending, setPending] = useState(pendingApprovals);
+  const [clinicState, setClinicState] = useState(clinic);
+  const [activeDoctorsState] = useState(activeDoctors);
   const [workingRequestId, setWorkingRequestId] = useState<string | null>(null);
+  const [savingClinic, setSavingClinic] = useState(false);
+  const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "clinic-profile" | null>(null);
+  const [clinicForm, setClinicForm] = useState({
+    name: clinic.name,
+    address: clinic.address ?? "",
+    code: clinic.code
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isOwner = doctor.role === "owner";
@@ -130,6 +183,68 @@ export function SettingsScreen({
     } finally {
       setWorkingRequestId(null);
     }
+  }
+
+  async function saveClinic() {
+    setError(null);
+    setMessage(null);
+
+    const normalizedName = clinicForm.name.trim();
+    const normalizedCode = clinicForm.code.trim().toUpperCase();
+    const normalizedAddress = clinicForm.address.trim();
+    const clinicCodeResult = ClinicCodeSchema.safeParse(normalizedCode);
+
+    if (!normalizedName) {
+      setError("Clinic name is required.");
+      return;
+    }
+
+    if (!clinicCodeResult.success) {
+      setError("Clinic code must be 6 uppercase characters.");
+      return;
+    }
+
+    setSavingClinic(true);
+
+    try {
+      if (idToken) {
+        const updatedClinic = await updateClinicProfile(
+          idToken,
+          {
+            name: normalizedName,
+            clinic_code: clinicCodeResult.data,
+            address: normalizedAddress || null
+          },
+          fetcher
+        );
+        setClinicState(updatedClinic);
+        setClinicForm({
+          name: updatedClinic.name,
+          address: updatedClinic.address ?? "",
+          code: updatedClinic.code
+        });
+      } else {
+        setClinicState((current) => ({
+          ...current,
+          name: normalizedName,
+          code: clinicCodeResult.data,
+          address: normalizedAddress || null
+        }));
+      }
+
+      setMessage("Clinic profile saved.");
+      setExpandedPanel(null);
+    } catch {
+      setError("Unable to save clinic profile.");
+    } finally {
+      setSavingClinic(false);
+    }
+  }
+
+  function togglePanel(panel: "active-doctors" | "clinic-profile") {
+    setMessage(null);
+    setError(null);
+    setExpandedPanel((current) => (current === panel ? null : panel));
   }
 
   return (
@@ -162,17 +277,141 @@ export function SettingsScreen({
                 accent={pending.length > 0}
                 icon={<ShieldCheck className="h-4 w-4" />}
               />
-              <SettingsRow title="Active doctors" subtitle={`${clinic.activeDoctorsCount} members`} icon={<UserRound className="h-4 w-4" />} />
+              <SettingsRow
+                title="Active doctors"
+                subtitle={`${activeDoctorsState.length} members`}
+                icon={<UserRound className="h-4 w-4" />}
+                onClick={() => togglePanel("active-doctors")}
+                expanded={expandedPanel === "active-doctors"}
+              />
               <SettingsRow
                 title="Clinic profile"
                 subtitle={
                   <span>
-                    Code: <span className="font-mono font-bold text-terracotta">{clinic.code}</span>
+                    Code: <span className="font-mono font-bold text-terracotta">{clinicState.code}</span>
                   </span>
                 }
                 icon={<ClipboardList className="h-4 w-4" />}
+                onClick={() => togglePanel("clinic-profile")}
+                expanded={expandedPanel === "clinic-profile"}
               />
             </SettingsGroup>
+          ) : null}
+
+          {isOwner && expandedPanel === "active-doctors" ? (
+            <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-3 shadow-[0_1px_0_#E5DAC5]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-body text-sm font-bold text-ink">Active doctors</h2>
+                  <p className="mt-0.5 font-body text-[11.5px] text-ink-muted">
+                    Current clinic members with active BharatDoc access.
+                  </p>
+                </div>
+                <span className="rounded-full bg-paper-deep px-2 py-1 font-body text-[11px] font-bold text-ink-soft">
+                  {activeDoctorsState.length}
+                </span>
+              </div>
+              <div className="space-y-2.5">
+                {activeDoctorsState.map((member) => (
+                  <article key={member.id} className="flex items-start gap-3 rounded-[12px] border border-rule bg-paper-deep px-3 py-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-terracotta font-display text-lg text-white">
+                      {initialForName(member.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-body text-sm font-bold text-ink">{member.name}</h3>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-[0.08em]",
+                            member.role === "owner" ? "bg-terracotta/10 text-terracotta" : "bg-paper text-ink-muted"
+                          )}
+                        >
+                          {member.role}
+                        </span>
+                      </div>
+                      <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
+                      <p className="mt-1 font-mono text-[11px] text-ink-faint">{member.phone}</p>
+                      <p className="mt-1 font-body text-[11px] text-ink-soft">Joined {requestedLabel(member.createdAt)}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {isOwner && expandedPanel === "clinic-profile" ? (
+            <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-4 shadow-[0_1px_0_#E5DAC5]">
+              <div className="mb-4">
+                <h2 className="font-body text-sm font-bold text-ink">Clinic profile</h2>
+                <p className="mt-1 font-body text-[11.5px] leading-relaxed text-ink-muted">
+                  Update the clinic name, address, and shareable code used by doctors during onboarding.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                <label className="block">
+                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                    Clinic name
+                  </span>
+                  <input
+                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                    value={clinicForm.name}
+                    onChange={(event) => setClinicForm((current) => ({ ...current, name: event.target.value }))}
+                    aria-label="Clinic name"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                    Clinic address
+                  </span>
+                  <textarea
+                    className="mt-2 min-h-24 w-full resize-none rounded-xl border border-rule bg-paper-deep px-3 py-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                    value={clinicForm.address}
+                    onChange={(event) => setClinicForm((current) => ({ ...current, address: event.target.value }))}
+                    aria-label="Clinic address"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                    Clinic code
+                  </span>
+                  <input
+                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-mono text-base font-bold tracking-[0.08em] text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                    value={clinicForm.code}
+                    onChange={(event) =>
+                      setClinicForm((current) => ({
+                        ...current,
+                        code: event.target.value.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 6)
+                      }))
+                    }
+                    aria-label="Clinic code"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <BharatButton className="flex-1" disabled={savingClinic} onClick={saveClinic}>
+                  Save clinic
+                </BharatButton>
+                <BharatButton
+                  className="flex-1"
+                  variant="ghost"
+                  onClick={() => {
+                    setClinicForm({
+                      name: clinicState.name,
+                      address: clinicState.address ?? "",
+                      code: clinicState.code
+                    });
+                    setExpandedPanel(null);
+                    setError(null);
+                  }}
+                >
+                  Cancel
+                </BharatButton>
+              </div>
+            </section>
           ) : null}
 
           <SettingsGroup title="Transcription">
@@ -262,7 +501,9 @@ function SettingsRow({
   danger,
   accent,
   icon,
-  href
+  href,
+  onClick,
+  expanded = false
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -272,6 +513,8 @@ function SettingsRow({
   accent?: boolean;
   icon?: React.ReactNode;
   href?: string;
+  onClick?: () => void;
+  expanded?: boolean;
 }) {
   const className = cn(
     "flex w-full items-center gap-3 border-b border-rule px-4 py-3.5 text-left last:border-b-0",
@@ -290,7 +533,9 @@ function SettingsRow({
         </span>
       ) : null}
       {right}
-      {!danger ? <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" /> : null}
+      {!danger ? (
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-ink-faint transition", expanded ? "rotate-90" : "")} />
+      ) : null}
     </>
   );
 
@@ -303,7 +548,7 @@ function SettingsRow({
   }
 
   return (
-    <button className={className} type="button">
+    <button className={className} type="button" onClick={onClick}>
       {content}
     </button>
   );

@@ -26,7 +26,7 @@ const LOCAL_RECORDING_TRANSITIONS: Record<LocalRecordingCaptureState, LocalRecor
   stopped: ["transcribing", "failed"],
   transcribing: ["transcribed", "failed"],
   transcribed: [],
-  failed: ["recording"]
+  failed: ["recording", "transcribing"]
 };
 
 export function canTransitionRecordingStatus(from: RecordingStatus, to: RecordingStatus): boolean {

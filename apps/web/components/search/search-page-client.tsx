@@ -1,0 +1,85 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { SearchScreen } from "@/components/search/search-screen";
+import { PageLoading } from "@/components/session/page-loading";
+import {
+  demoDashboardRecords,
+  fetchDashboardRecords,
+  type DashboardRecord
+} from "@/lib/client/dashboard-data";
+import { createFirebasePhoneAuthClient, type PhoneAuthClient } from "@/lib/client/phone-auth";
+
+interface SearchPageClientProps {
+  authClient?: PhoneAuthClient;
+  fetcher?: typeof fetch;
+  demoOnMissingToken?: boolean;
+}
+
+export function SearchPageClient({
+  authClient,
+  fetcher = fetch,
+  demoOnMissingToken = true
+}: SearchPageClientProps) {
+  const client = useMemo(() => authClient ?? createFirebasePhoneAuthClient(), [authClient]);
+  const [loading, setLoading] = useState(true);
+  const [idToken, setIdToken] = useState<string | undefined>(undefined);
+  const [records, setRecords] = useState<DashboardRecord[]>(demoDashboardRecords);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSearchContext() {
+      const token = await client.getCurrentIdToken();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!token) {
+        if (demoOnMissingToken) {
+          setLoading(false);
+        } else {
+          window.location.assign("/onboarding");
+        }
+        return;
+      }
+
+      setIdToken(token);
+
+      try {
+        const nextRecords = await fetchDashboardRecords(token, fetcher);
+
+        if (isMounted) {
+          setRecords(nextRecords);
+        }
+      } catch {
+        if (isMounted) {
+          setRecords(demoDashboardRecords);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadSearchContext();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [client, demoOnMissingToken, fetcher]);
+
+  if (loading) {
+    return <PageLoading label="Loading search" />;
+  }
+
+  const searchProps = {
+    fetcher,
+    initialRecords: records,
+    ...(idToken ? { idToken } : {})
+  };
+
+  return <SearchScreen {...searchProps} />;
+}

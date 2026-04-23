@@ -1,4 +1,10 @@
-import { assertRecordingDuration, normalizePatientId, type RecordingStatus } from "@bharatdoc/shared";
+import {
+  assertLocalRecordingTransition,
+  assertRecordingDuration,
+  normalizePatientId,
+  type LocalRecordingCaptureState,
+  type RecordingStatus
+} from "@bharatdoc/shared";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import {
   formatRecordedAt,
@@ -16,7 +22,9 @@ export interface LocalRecording {
   recordedAt: string;
   updatedAt: string;
   audioBlob: Blob | null;
+  audioChunks: Blob[];
   audioMimeType: string | null;
+  captureState: LocalRecordingCaptureState;
   syncState: LocalRecordingSyncState;
   serverRecordingId: string | null;
   transcript: string | null;
@@ -28,6 +36,23 @@ export interface LocalRecordingDraftInput {
   patientId?: string | null;
   label?: string | null;
   recordedAt?: string;
+}
+
+export interface UpdateLocalRecordingDraftInput {
+  id: string;
+  patientId?: string | null;
+  label?: string | null;
+  durationSeconds?: number;
+  captureState?: LocalRecordingCaptureState;
+}
+
+export interface AppendAudioChunkInput {
+  id: string;
+  audioChunk: Blob;
+  audioMimeType: string;
+  durationSeconds: number;
+  patientId?: string | null;
+  label?: string | null;
 }
 
 export interface FinalizeLocalRecordingInput {
@@ -45,6 +70,9 @@ export interface LocalRecordingRepository {
   get(id: string): Promise<LocalRecording | null>;
   list(): Promise<LocalRecording[]>;
   remove(id: string): Promise<void>;
+  updateDraft(input: UpdateLocalRecordingDraftInput): Promise<LocalRecording>;
+  appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording>;
+  getLatestRecoverable(): Promise<LocalRecording | null>;
   finalize(input: FinalizeLocalRecordingInput): Promise<LocalRecording>;
   markSyncing(id: string): Promise<LocalRecording>;
   markSynced(id: string, serverRecordingId: string): Promise<LocalRecording>;
@@ -100,11 +128,28 @@ function sortByNewest(recordings: LocalRecording[]): LocalRecording[] {
   return [...recordings].sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt));
 }
 
+function nextCaptureState(
+  current: LocalRecordingCaptureState,
+  nextState: LocalRecordingCaptureState | undefined
+): LocalRecordingCaptureState {
+  if (!nextState || nextState === current) {
+    return current;
+  }
+
+  return assertLocalRecordingTransition(current, nextState);
+}
+
 async function openLocalRecordingDb(): Promise<IDBPDatabase<BharatDocRecordingDb>> {
-  return openDB<BharatDocRecordingDb>(DB_NAME, 1, {
-    upgrade(db) {
-      const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-      store.createIndex("by-recorded-at", "recordedAt");
+  return openDB<BharatDocRecordingDb>(DB_NAME, 2, {
+    upgrade(db, oldVersion, _newVersion, transaction) {
+      const store =
+        oldVersion === 0
+          ? db.createObjectStore(STORE_NAME, { keyPath: "id" })
+          : transaction.objectStore(STORE_NAME);
+
+      if (!store.indexNames.contains("by-recorded-at")) {
+        store.createIndex("by-recorded-at", "recordedAt");
+      }
     }
   });
 }
@@ -125,12 +170,56 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
       recordedAt: timestamp,
       updatedAt: timestamp,
       audioBlob: null,
+      audioChunks: [],
       audioMimeType: null,
+      captureState: "idle",
       syncState: "local",
       serverRecordingId: null,
       transcript: null,
       error: null
     });
+  }
+
+  async updateDraft(input: UpdateLocalRecordingDraftInput): Promise<LocalRecording> {
+    const current = requireExisting(await this.get(input.id), input.id);
+
+    return this.save({
+      ...current,
+      patientId: input.patientId !== undefined ? normalizeOptionalPatientId(input.patientId) : current.patientId,
+      label: input.label !== undefined ? normalizeOptionalText(input.label) : current.label,
+      durationSeconds: input.durationSeconds !== undefined ? assertRecordingDuration(input.durationSeconds) : current.durationSeconds,
+      captureState: nextCaptureState(current.captureState, input.captureState),
+      updatedAt: nowIso(),
+      error: null
+    });
+  }
+
+  async appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording> {
+    const current = requireExisting(await this.get(input.id), input.id);
+
+    return this.save({
+      ...current,
+      patientId: input.patientId !== undefined ? normalizeOptionalPatientId(input.patientId) : current.patientId,
+      label: input.label !== undefined ? normalizeOptionalText(input.label) : current.label,
+      durationSeconds: assertRecordingDuration(input.durationSeconds),
+      audioChunks: [...current.audioChunks, input.audioChunk],
+      audioMimeType: input.audioMimeType,
+      captureState: current.captureState === "paused" ? current.captureState : nextCaptureState(current.captureState, "recording"),
+      updatedAt: nowIso(),
+      error: null
+    });
+  }
+
+  async getLatestRecoverable(): Promise<LocalRecording | null> {
+    const recordings = await this.list();
+
+    return (
+      recordings.find(
+        (recording) =>
+          (recording.captureState === "recording" || recording.captureState === "paused") &&
+          Boolean(localRecordingAudioBlob(recording))
+      ) ?? null
+    );
   }
 
   async finalize(input: FinalizeLocalRecordingInput): Promise<LocalRecording> {
@@ -147,7 +236,9 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
       label: normalizeOptionalText(input.label),
       durationSeconds: assertRecordingDuration(input.durationSeconds),
       audioBlob: input.audioBlob,
+      audioChunks: current.audioChunks.length > 0 ? current.audioChunks : [input.audioBlob],
       audioMimeType: input.audioMimeType,
+      captureState: nextCaptureState(current.captureState, "stopped"),
       syncState: "local",
       updatedAt: nowIso(),
       error: null
@@ -172,13 +263,20 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
 
   async markTranscribing(id: string): Promise<LocalRecording> {
     const current = requireExisting(await this.get(id), id);
-    return this.save({ ...current, syncState: "transcribing", updatedAt: nowIso(), error: null });
+    return this.save({
+      ...current,
+      captureState: nextCaptureState(current.captureState, "transcribing"),
+      syncState: "transcribing",
+      updatedAt: nowIso(),
+      error: null
+    });
   }
 
   async markTranscribed(id: string, transcript: string): Promise<LocalRecording> {
     const current = requireExisting(await this.get(id), id);
     return this.save({
       ...current,
+      captureState: nextCaptureState(current.captureState, "transcribed"),
       syncState: "transcribed",
       transcript: transcript.trim(),
       updatedAt: nowIso(),
@@ -190,6 +288,7 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
     const current = requireExisting(await this.get(id), id);
     return this.save({
       ...current,
+      captureState: current.captureState === "failed" ? "failed" : assertLocalRecordingTransition(current.captureState, "failed"),
       syncState: "failed",
       error: error.trim() || "Recording workflow failed.",
       updatedAt: nowIso()
@@ -256,8 +355,24 @@ export function createMemoryLocalRecordingRepository(initialRecords: LocalRecord
   return new MemoryLocalRecordingRepository(initialRecords);
 }
 
+export function localRecordingAudioBlob(recording: LocalRecording): Blob | null {
+  if (recording.audioBlob) {
+    return recording.audioBlob;
+  }
+
+  if (!recording.audioChunks.length || !recording.audioMimeType) {
+    return null;
+  }
+
+  return new Blob(recording.audioChunks, { type: recording.audioMimeType });
+}
+
 export function localRecordingStatus(recording: LocalRecording): RecordingStatus {
   return recording.syncState === "transcribed" ? "transcribed" : "recorded";
+}
+
+function isDashboardVisibleRecording(recording: LocalRecording): boolean {
+  return ["stopped", "transcribing", "transcribed", "failed"].includes(recording.captureState) && Boolean(localRecordingAudioBlob(recording));
 }
 
 export function toLocalDashboardRecord(recording: LocalRecording, now = new Date()): LocalDashboardRecord {
@@ -277,5 +392,7 @@ export function mapLocalRecordingsToDashboardRecords(
   recordings: LocalRecording[],
   now = new Date()
 ): LocalDashboardRecord[] {
-  return sortByNewest(recordings).map((recording) => toLocalDashboardRecord(recording, now));
+  return sortByNewest(recordings)
+    .filter(isDashboardVisibleRecording)
+    .map((recording) => toLocalDashboardRecord(recording, now));
 }

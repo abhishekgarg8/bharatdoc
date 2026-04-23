@@ -16,6 +16,35 @@ export interface PendingApprovalsResponse {
   pending: PendingApproval[];
 }
 
+export interface ActiveClinicDoctor {
+  id: string;
+  name: string;
+  specialization: string;
+  phone: string;
+  role: "owner" | "doctor";
+  created_at: string;
+}
+
+export interface ClinicProfile {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+  activeDoctorsCount: number;
+}
+
+export interface ClinicAdminSnapshot {
+  clinic: ClinicProfile;
+  activeDoctors: ActiveClinicDoctor[];
+  pendingApprovals: PendingApproval[];
+}
+
+export interface ClinicProfileUpdate {
+  name?: string;
+  address?: string | null;
+  clinic_code?: string;
+}
+
 async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
   if (!response.ok) {
     throw new Error(errorMessage);
@@ -40,6 +69,35 @@ export async function fetchPendingApprovals(
   const payload = await parseJson<PendingApprovalsResponse>(response, "Unable to load pending approvals.");
 
   return payload.pending;
+}
+
+export async function fetchClinicAdminSnapshot(
+  idToken: string,
+  fetcher: typeof fetch = fetch
+): Promise<ClinicAdminSnapshot> {
+  const response = await fetcher("/api/clinic/admin", {
+    headers: authHeaders(idToken)
+  });
+
+  return parseJson<ClinicAdminSnapshot>(response, "Unable to load clinic admin details.");
+}
+
+export async function updateClinicProfile(
+  idToken: string,
+  input: ClinicProfileUpdate,
+  fetcher: typeof fetch = fetch
+): Promise<ClinicProfile> {
+  const response = await fetcher("/api/clinic/admin", {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(idToken),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  const payload = await parseJson<{ clinic: ClinicProfile }>(response, "Unable to update clinic profile.");
+
+  return payload.clinic;
 }
 
 export async function approvePendingDoctor(

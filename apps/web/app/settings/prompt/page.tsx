@@ -1,5 +1,5 @@
-import { PromptEditorScreen } from "@/components/settings/prompt-editor-screen";
+import { PromptEditorPageClient } from "@/components/settings/prompt-editor-page-client";
 
 export default function PromptSettingsPage() {
-  return <PromptEditorScreen />;
+  return <PromptEditorPageClient />;
 }

@@ -5,3 +5,4 @@ export * from "./env.js";
 export * from "./prompts.js";
 export * from "./recordings.js";
 export * from "./schemas.js";
+export * from "./service-account.js";

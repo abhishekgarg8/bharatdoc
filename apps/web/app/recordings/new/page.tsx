@@ -1,4 +1,4 @@
-import { RecordingScreen } from "@/components/recordings/recording-screen";
+import { NewRecordingPageClient } from "@/components/recordings/new-recording-page-client";
 
 interface NewRecordingPageProps {
   searchParams?: {
@@ -7,5 +7,5 @@ interface NewRecordingPageProps {
 }
 
 export default function NewRecordingPage({ searchParams }: NewRecordingPageProps) {
-  return <RecordingScreen useDemoRecorder={searchParams?.mockRecorder === "1"} />;
+  return <NewRecordingPageClient useDemoRecorder={searchParams?.mockRecorder === "1"} />;
 }

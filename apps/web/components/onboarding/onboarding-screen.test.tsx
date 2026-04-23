@@ -67,4 +67,23 @@ describe("OnboardingScreen", () => {
       })
     );
   });
+
+  it("supports deterministic demo onboarding without Firebase or API calls", async () => {
+    const navigate = vi.fn();
+
+    render(<OnboardingScreen demoMode onNavigate={navigate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByLabelText("OTP");
+    fireEvent.change(screen.getByLabelText("OTP"), { target: { value: "427111" } });
+    fireEvent.click(screen.getByRole("button", { name: /verify & continue/i }));
+    await screen.findByText("Profile details");
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+    await screen.findByText("Your clinic");
+    fireEvent.click(screen.getByRole("button", { name: /check clinic code/i }));
+    await screen.findByText("Clinic found");
+    fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+  });
 });

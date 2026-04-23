@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { approvePendingDoctor, fetchPendingApprovals, rejectPendingDoctor } from "@/lib/client/clinic-admin-api";
+import {
+  approvePendingDoctor,
+  fetchClinicAdminSnapshot,
+  fetchPendingApprovals,
+  rejectPendingDoctor,
+  updateClinicProfile
+} from "@/lib/client/clinic-admin-api";
 
 describe("clinic admin API client", () => {
   it("loads pending approvals with a bearer token", async () => {
@@ -49,6 +55,72 @@ describe("clinic admin API client", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ reason: "Not recognised" })
+    });
+  });
+
+  it("loads clinic admin snapshot with clinic and active doctors", async () => {
+    const snapshot = {
+      clinic: {
+        id: "clinic-1",
+        name: "Sunrise Clinic",
+        code: "MED42X",
+        address: "24 Baner Road, Pune",
+        activeDoctorsCount: 2
+      },
+      activeDoctors: [
+        {
+          id: "doctor-1",
+          name: "Dr. Aparna Iyer",
+          specialization: "General Physician",
+          phone: "+91 98765 43210",
+          role: "owner" as const,
+          created_at: "2026-04-23T09:00:00.000Z"
+        }
+      ],
+      pendingApprovals: [
+        {
+          id: "request-1",
+          requested_at: "2026-04-23T07:10:00.000Z",
+          doctor: {
+            id: "doctor-2",
+            name: "Dr. Meera Shah",
+            specialization: "Pediatrician",
+            phone: "+91 98340 12340",
+            created_at: "2026-04-23T07:10:00.000Z"
+          }
+        }
+      ]
+    };
+    const fetcher = vi.fn(async () => Response.json(snapshot)) as unknown as typeof fetch;
+
+    await expect(fetchClinicAdminSnapshot("id-token", fetcher)).resolves.toEqual(snapshot);
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+  });
+
+  it("updates the clinic profile through the owner admin endpoint", async () => {
+    const clinic = {
+      id: "clinic-1",
+      name: "Sunrise Family Clinic",
+      code: "MED43Y",
+      address: null,
+      activeDoctorsCount: 2
+    };
+    const fetcher = vi.fn(async () => Response.json({ clinic })) as unknown as typeof fetch;
+
+    await expect(
+      updateClinicProfile("id-token", { name: "Sunrise Family Clinic", clinic_code: "MED43Y", address: null }, fetcher)
+    ).resolves.toEqual(clinic);
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ name: "Sunrise Family Clinic", clinic_code: "MED43Y", address: null })
     });
   });
 });

@@ -1,7 +1,9 @@
 import "server-only";
-import type { Doctor } from "@bharatdoc/shared";
+import type { Clinic, Doctor } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ActiveClinicDoctor,
+  ClinicProfileUpdate,
   ClinicAdminRepository,
   JoinRequestForReview,
   PendingApproval
@@ -41,6 +43,41 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
       }
 
       return data as Doctor | null;
+    },
+
+    async findClinicById(clinicId: string): Promise<Clinic | null> {
+      const { data, error } = await supabase.from("clinics").select("*").eq("id", clinicId).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as Clinic | null;
+    },
+
+    async findClinicByCode(clinicCode: string): Promise<Clinic | null> {
+      const { data, error } = await supabase.from("clinics").select("*").eq("clinic_code", clinicCode).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as Clinic | null;
+    },
+
+    async listActiveDoctors(clinicId: string): Promise<ActiveClinicDoctor[]> {
+      const { data, error } = await supabase
+        .from("doctors")
+        .select("id, name, specialization, phone, role, created_at")
+        .eq("clinic_id", clinicId)
+        .eq("account_status", "active")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as ActiveClinicDoctor[];
     },
 
     async listPendingApprovals(clinicId: string): Promise<PendingApproval[]> {
@@ -124,6 +161,16 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
       if (doctorError) {
         throw doctorError;
       }
+    },
+
+    async updateClinicProfile(clinicId: string, input: ClinicProfileUpdate): Promise<Clinic> {
+      const { data, error } = await supabase.from("clinics").update(input).eq("id", clinicId).select("*").single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as Clinic;
     }
   };
 }

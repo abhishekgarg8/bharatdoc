@@ -1,0 +1,76 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { DashboardPageClient } from "@/components/dashboard-page-client";
+import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { Doctor } from "@bharatdoc/shared";
+
+const activeDoctor: Doctor = {
+  id: "11111111-1111-4111-8111-111111111111",
+  firebase_uid: "firebase-doctor",
+  clinic_id: "22222222-2222-4222-8222-222222222222",
+  role: "doctor",
+  account_status: "active",
+  name: "Dr. Nisha Shah",
+  specialization: "General Physician",
+  medical_reg_no: null,
+  phone: "+919876543210",
+  profile_photo_path: null,
+  custom_prompt: null,
+  transcription_lang: "auto",
+  created_at: "2026-04-23T09:00:00.000Z"
+};
+
+const apiRecord = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  patient_id: "P-20001",
+  label: null,
+  duration_seconds: 180,
+  doctor_name: "Dr. Nisha Shah",
+  status: "recorded",
+  recorded_at: "2026-04-23T06:12:00.000Z"
+};
+
+describe("DashboardPageClient", () => {
+  it("loads authenticated doctor context and dashboard records", async () => {
+    const authClient: PhoneAuthClient = {
+      sendOtp: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+
+      if (url === "/api/me") {
+        return Response.json({ doctor: activeDoctor });
+      }
+
+      if (url === "/api/recordings") {
+        return Response.json({ records: [apiRecord] });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findAllByText("Dr. Nisha Shah")).resolves.toHaveLength(2);
+    expect(screen.getByText("P-20001")).toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith("/api/me", {
+      headers: { Authorization: "Bearer id-token" }
+    });
+    expect(fetcher).toHaveBeenCalledWith("/api/recordings", {
+      headers: { Authorization: "Bearer id-token" }
+    });
+  });
+
+  it("falls back to demo dashboard when no token is available", async () => {
+    const authClient: PhoneAuthClient = {
+      sendOtp: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => null)
+    };
+
+    render(<DashboardPageClient authClient={authClient} />);
+
+    await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
+    expect(screen.getByText("P-10482")).toBeInTheDocument();
+  });
+});

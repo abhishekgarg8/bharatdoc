@@ -14,6 +14,7 @@ import {
 } from "@/lib/client/audio-recorder";
 import {
   createIndexedDbLocalRecordingRepository,
+  localRecordingAudioBlob,
   type LocalRecording,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
@@ -26,6 +27,7 @@ interface RecordingScreenProps {
   localRepository?: LocalRecordingRepository;
   recorderFactory?: AudioRecorderFactory;
   useDemoRecorder?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
 const DEMO_TRANSCRIPT =
@@ -50,7 +52,8 @@ export function RecordingScreen({
   fetcher = fetch,
   localRepository,
   recorderFactory,
-  useDemoRecorder = false
+  useDemoRecorder = false,
+  onNavigate
 }: RecordingScreenProps) {
   const repository = useMemo(
     () => localRepository ?? createIndexedDbLocalRecordingRepository(),
@@ -59,6 +62,10 @@ export function RecordingScreen({
   const selectedRecorderFactory =
     recorderFactory ?? (useDemoRecorder ? createDemoAudioRecorder : createRecordRtcAudioRecorder);
   const recorderRef = useRef<AudioRecorder | null>(null);
+  const chunkUnsubscribeRef = useRef<(() => void) | null>(null);
+  const patientIdRef = useRef("");
+  const labelRef = useRef("");
+  const limitReachedRef = useRef(false);
   const [phase, setPhase] = useState<LocalRecordingCaptureState>("idle");
   const [recording, setRecording] = useState<LocalRecording | null>(null);
   const [patientId, setPatientId] = useState("");
@@ -67,6 +74,15 @@ export function RecordingScreen({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
+
+  useEffect(() => {
+    patientIdRef.current = patientId;
+  }, [patientId]);
+
+  useEffect(() => {
+    labelRef.current = label;
+  }, [label]);
 
   useEffect(() => {
     if (phase !== "recording") {
@@ -81,7 +97,70 @@ export function RecordingScreen({
   }, [phase]);
 
   useEffect(() => {
+    if (phase !== "recording" || elapsedSeconds < MAX_RECORDING_SECONDS || limitReachedRef.current) {
+      return;
+    }
+
+    limitReachedRef.current = true;
+    void stopRecording("60-minute limit reached. Recording saved on this device.");
+  }, [elapsedSeconds, phase]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRecoverableRecording() {
+      if (!localRepository && typeof indexedDB === "undefined") {
+        return;
+      }
+
+      try {
+        const recoverable = await repository.getLatestRecoverable();
+
+        if (!isMounted || !recoverable) {
+          return;
+        }
+
+        const recoveredAudio = localRecordingAudioBlob(recoverable);
+        const nextUrl = recoveredAudio ? objectUrlFor(recoveredAudio) : null;
+
+        if (audioUrl && typeof URL.revokeObjectURL === "function") {
+          URL.revokeObjectURL(audioUrl);
+        }
+
+        if (recoverable.captureState === "recording" || recoverable.captureState === "paused") {
+          await repository.updateDraft({
+            id: recoverable.id,
+            captureState: "stopped",
+            durationSeconds: recoverable.durationSeconds
+          });
+        }
+
+        const refreshed = (await repository.get(recoverable.id)) ?? recoverable;
+        setRecording(refreshed);
+        setPatientId(refreshed.patientId ?? "");
+        setLabel(refreshed.label ?? "");
+        setElapsedSeconds(refreshed.durationSeconds);
+        setAudioUrl(nextUrl);
+        setPhase("stopped");
+        setMessage("Recovered an interrupted local recording.");
+      } catch {
+        return;
+      }
+    }
+
+    if (phase === "idle" && !recording) {
+      void loadRecoverableRecording();
+    }
+
     return () => {
+      isMounted = false;
+    };
+  }, [audioUrl, localRepository, phase, recording, repository]);
+
+  useEffect(() => {
+    return () => {
+      chunkUnsubscribeRef.current?.();
+
       if (audioUrl && typeof URL.revokeObjectURL === "function") {
         URL.revokeObjectURL(audioUrl);
       }
@@ -92,13 +171,35 @@ export function RecordingScreen({
     setError(null);
     setMessage(null);
     setElapsedSeconds(0);
+    limitReachedRef.current = false;
 
     try {
       const nextRecorder = await selectedRecorderFactory();
       const draft = await repository.createDraft({ patientId, label });
+      chunkUnsubscribeRef.current?.();
+      chunkUnsubscribeRef.current = nextRecorder.onChunk(async (chunk) => {
+        const updated = await repository.appendChunk({
+          id: draft.id,
+          audioChunk: chunk.blob,
+          audioMimeType: chunk.mimeType,
+          durationSeconds: chunk.durationSeconds,
+          patientId: patientIdRef.current,
+          label: labelRef.current
+        });
+
+        setRecording(updated);
+        setElapsedSeconds(updated.durationSeconds);
+      });
       await nextRecorder.start();
       recorderRef.current = nextRecorder;
-      setRecording(draft);
+      const activeDraft = await repository.updateDraft({
+        id: draft.id,
+        patientId,
+        label,
+        durationSeconds: 0,
+        captureState: "recording"
+      });
+      setRecording(activeDraft);
       setPhase("recording");
       setMessage("Recording started.");
     } catch {
@@ -108,24 +209,40 @@ export function RecordingScreen({
   }
 
   async function pauseRecording() {
-    if (!recorderRef.current) {
+    if (!recorderRef.current || !recording) {
       return;
     }
 
     await recorderRef.current.pause();
+    const updated = await repository.updateDraft({
+      id: recording.id,
+      patientId,
+      label,
+      durationSeconds: elapsedSeconds,
+      captureState: "paused"
+    });
+    setRecording(updated);
     setPhase("paused");
   }
 
   async function resumeRecording() {
-    if (!recorderRef.current) {
+    if (!recorderRef.current || !recording) {
       return;
     }
 
     await recorderRef.current.resume();
+    const updated = await repository.updateDraft({
+      id: recording.id,
+      patientId,
+      label,
+      durationSeconds: elapsedSeconds,
+      captureState: "recording"
+    });
+    setRecording(updated);
     setPhase("recording");
   }
 
-  async function stopRecording() {
+  async function stopRecording(successMessage = "Recording saved on this device.") {
     if (!recorderRef.current || !recording) {
       return;
     }
@@ -136,6 +253,8 @@ export function RecordingScreen({
     try {
       const recordedAudio = await recorderRef.current.stop();
       recorderRef.current = null;
+      chunkUnsubscribeRef.current?.();
+      chunkUnsubscribeRef.current = null;
       const durationSeconds = Math.max(1, recordedAudio.durationSeconds ?? elapsedSeconds);
       const finalized = await repository.finalize({
         id: recording.id,
@@ -155,7 +274,7 @@ export function RecordingScreen({
       setRecording(finalized);
       setElapsedSeconds(durationSeconds);
       setPhase("stopped");
-      setMessage("Recording saved on this device.");
+      setMessage(successMessage);
     } catch (caught) {
       setPhase("failed");
       setError(caught instanceof Error ? caught.message : "Unable to save local recording.");
@@ -163,7 +282,9 @@ export function RecordingScreen({
   }
 
   async function transcribeNow() {
-    if (!recording?.audioBlob || !recording.audioMimeType) {
+    const audioBlob = recording ? localRecordingAudioBlob(recording) : null;
+
+    if (!audioBlob || !recording?.audioMimeType) {
       setError("Stop and save audio before transcription.");
       return;
     }
@@ -198,12 +319,13 @@ export function RecordingScreen({
         const result = await transcribeRecordingAudio(
           idToken,
           serverRecord.id,
-          recording.audioBlob,
+          audioBlob,
           recording.audioMimeType,
           fetcher
         );
         const updated = await repository.markTranscribed(recording.id, result.transcript);
         setRecording(updated);
+        navigate(`/recordings/${serverRecord.id}`);
       } else {
         const updated = await repository.markTranscribed(recording.id, DEMO_TRANSCRIPT);
         setRecording(updated);
@@ -220,6 +342,9 @@ export function RecordingScreen({
 
   function resetLocalFlow() {
     recorderRef.current = null;
+    chunkUnsubscribeRef.current?.();
+    chunkUnsubscribeRef.current = null;
+    limitReachedRef.current = false;
     setPhase("idle");
     setRecording(null);
     setElapsedSeconds(0);
@@ -230,6 +355,7 @@ export function RecordingScreen({
 
   const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped";
   const transcript = recording?.transcript;
+  const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
@@ -329,17 +455,31 @@ export function RecordingScreen({
         </div>
 
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-rule bg-paper px-5 pb-4 pt-3">
-          {phase === "idle" || phase === "failed" ? (
+          {phase === "idle" || (phase === "failed" && !hasSavedAudio) ? (
             <BharatButton className="col-span-2" icon={<Mic className="h-4 w-4" />} onClick={startRecording}>
               Start recording
             </BharatButton>
+          ) : null}
+          {phase === "failed" && hasSavedAudio ? (
+            <>
+              <Link
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rule bg-transparent px-4 py-3 font-body text-sm font-bold text-ink-soft transition active:scale-[0.99]"
+                href="/dashboard"
+              >
+                <Save className="h-4 w-4" />
+                Later
+              </Link>
+              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow}>
+                Retry
+              </BharatButton>
+            </>
           ) : null}
           {phase === "recording" ? (
             <>
               <BharatButton variant="ghost" icon={<Pause className="h-4 w-4" />} onClick={pauseRecording}>
                 Pause
               </BharatButton>
-              <BharatButton icon={<Square className="h-4 w-4" />} onClick={stopRecording}>
+              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()}>
                 Stop
               </BharatButton>
             </>
@@ -349,7 +489,7 @@ export function RecordingScreen({
               <BharatButton variant="ghost" icon={<Play className="h-4 w-4" />} onClick={resumeRecording}>
                 Resume
               </BharatButton>
-              <BharatButton icon={<Square className="h-4 w-4" />} onClick={stopRecording}>
+              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()}>
                 Stop
               </BharatButton>
             </>

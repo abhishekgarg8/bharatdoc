@@ -65,6 +65,34 @@ test("root routes unauthenticated users to onboarding", async ({ page }) => {
   await expect(page).toHaveURL(/\/onboarding$/);
 });
 
+test("demo onboarding join flow reaches pending approval", async ({ page }) => {
+  await page.goto("/onboarding?demo=1");
+
+  await page.getByRole("button", { name: /send otp/i }).click();
+  await page.getByLabel("OTP").fill("427111");
+  await page.getByRole("button", { name: /verify & continue/i }).click();
+  await expect(page.getByText("Profile details")).toBeVisible();
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await expect(page.getByText("Your clinic")).toBeVisible();
+  await page.getByRole("button", { name: /check clinic code/i }).click();
+  await expect(page.getByText("Clinic found")).toBeVisible();
+  await page.getByRole("button", { name: /request to join/i }).click();
+  await expect(page).toHaveURL(/\/pending-approval$/);
+});
+
+test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
+  await page.goto("/onboarding?demo=1");
+
+  await page.getByRole("button", { name: /send otp/i }).click();
+  await page.getByLabel("OTP").fill("427111");
+  await page.getByRole("button", { name: /verify & continue/i }).click();
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await page.getByRole("button", { name: /create clinic/i }).click();
+  await page.getByRole("button", { name: /create clinic & continue/i }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText("Today's consultations")).toBeVisible();
+});
+
 test("onboarding smoke renders phone OTP entry", async ({ page }) => {
   await page.goto("/onboarding");
 
@@ -89,6 +117,39 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
   await expect(page.getByRole("button", { name: /approve/i })).toBeVisible();
 });
 
+test("settings owner approval removes pending doctor", async ({ page }) => {
+  await page.goto("/settings");
+
+  await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
+  await page.getByRole("button", { name: /approve/i }).click();
+  await expect(page.getByText("Dr. Meera Shah approved.")).toBeVisible();
+  await expect(page.getByText("No pending join requests.")).toBeVisible();
+});
+
+test("settings owner can inspect active doctors", async ({ page }) => {
+  await page.goto("/settings");
+
+  await page.getByRole("button", { name: /active doctors/i }).first().click();
+  await expect(page.getByText("Current clinic members with active BharatDoc access.")).toBeVisible();
+  const leenaCard = page.locator("article").filter({ hasText: "Dr. Leena Joshi" });
+  const ownerCard = page.locator("article").filter({ hasText: "Dr. Aparna Iyer" });
+  await expect(leenaCard).toBeVisible();
+  await expect(leenaCard.getByText("doctor", { exact: true })).toBeVisible();
+  await expect(ownerCard.getByText("owner", { exact: true })).toBeVisible();
+});
+
+test("settings owner can edit the clinic profile locally", async ({ page }) => {
+  await page.goto("/settings");
+
+  await page.getByRole("button", { name: /clinic profile/i }).first().click();
+  await page.getByLabel("Clinic name").fill("Sunrise Family Clinic");
+  await page.getByLabel("Clinic address").fill("24 Baner Road, Pune 411045");
+  await page.getByLabel("Clinic code").fill("MED43Y");
+  await page.getByRole("button", { name: /save clinic/i }).click();
+  await expect(page.getByText("Clinic profile saved.")).toBeVisible();
+  await expect(page.getByText("MED43Y")).toBeVisible();
+});
+
 test("settings prompt editor validates and previews prompts", async ({ page }) => {
   await page.goto("/settings/prompt");
 
@@ -104,4 +165,18 @@ test("settings language screen renders transcription options", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Language" })).toBeVisible();
   await expect(page.getByRole("button", { name: /auto-detect/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /hinglish/i })).toBeVisible();
+});
+
+test("pwa manifest exposes installable app metadata", async ({ request }) => {
+  const response = await request.get("/manifest.webmanifest");
+  expect(response.ok()).toBe(true);
+  const manifest = await response.json();
+
+  expect(manifest).toMatchObject({
+    name: "BharatDoc",
+    short_name: "BharatDoc",
+    display: "standalone",
+    background_color: "#FAF5EA",
+    theme_color: "#C24A2A"
+  });
 });

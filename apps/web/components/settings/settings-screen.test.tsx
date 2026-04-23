@@ -31,6 +31,16 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Delete account")).toBeInTheDocument();
   });
 
+  it("shows active doctor details when the owner expands the clinic team", async () => {
+    render(<SettingsScreen pendingApprovals={pendingApprovals} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /active doctors/i }));
+
+    await waitFor(() => expect(screen.getByText("Current clinic members with active BharatDoc access.")).toBeInTheDocument());
+    expect(screen.getByText("Dr. Leena Joshi")).toBeInTheDocument();
+    expect(screen.getByText("owner")).toBeInTheDocument();
+  });
+
   it("approves a pending doctor through the API and removes the card", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
@@ -63,6 +73,46 @@ describe("SettingsScreen", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ reason: null })
+    });
+  });
+
+  it("updates the clinic profile through the owner API", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString() === "/api/clinic/admin") {
+        return Response.json({
+          clinic: {
+            id: "demo-clinic",
+            name: "Sunrise Family Clinic",
+            code: "MED43Y",
+            address: null,
+            activeDoctorsCount: 3
+          }
+        });
+      }
+
+      return Response.json({ ok: true });
+    }) as unknown as typeof fetch;
+
+    render(<SettingsScreen pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
+    fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
+    fireEvent.change(screen.getByLabelText("Clinic address"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Clinic code"), { target: { value: "MED43Y" } });
+    fireEvent.click(screen.getByRole("button", { name: /save clinic/i }));
+
+    await waitFor(() => expect(screen.getByText("Clinic profile saved.")).toBeInTheDocument());
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Sunrise Family Clinic",
+        clinic_code: "MED43Y",
+        address: null
+      })
     });
   });
 });

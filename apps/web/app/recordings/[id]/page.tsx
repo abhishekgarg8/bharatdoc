@@ -1,5 +1,4 @@
-import { TranscriptSummaryScreen } from "@/components/recordings/transcript-summary-screen";
-import { findDemoRecordingDetail } from "@/lib/client/recording-detail-data";
+import { RecordingDetailPageClient } from "@/components/recordings/recording-detail-page-client";
 
 interface RecordingDetailPageProps {
   params: {
@@ -8,5 +7,5 @@ interface RecordingDetailPageProps {
 }
 
 export default function RecordingDetailPage({ params }: RecordingDetailPageProps) {
-  return <TranscriptSummaryScreen recording={findDemoRecordingDetail(params.id)} />;
+  return <RecordingDetailPageClient recordingId={params.id} />;
 }

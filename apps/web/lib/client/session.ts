@@ -1,9 +1,9 @@
 "use client";
 
+import type { Doctor } from "@bharatdoc/shared";
+
 export interface MeResponse {
-  doctor: {
-    account_status: "pending_approval" | "active" | "rejected";
-  };
+  doctor: Doctor;
 }
 
 export function destinationForDoctorStatus(status: MeResponse["doctor"]["account_status"]): string {

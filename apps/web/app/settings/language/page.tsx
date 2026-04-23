@@ -1,5 +1,5 @@
-import { TranscriptionLanguageScreen } from "@/components/settings/transcription-language-screen";
+import { TranscriptionLanguagePageClient } from "@/components/settings/transcription-language-page-client";
 
 export default function LanguageSettingsPage() {
-  return <TranscriptionLanguageScreen />;
+  return <TranscriptionLanguagePageClient />;
 }
