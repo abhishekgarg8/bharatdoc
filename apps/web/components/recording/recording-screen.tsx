@@ -1,9 +1,21 @@
 "use client";
 
-import { ArrowLeft, FastForward, Mic, Pause, Play, Rewind, Save, Square, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  FastForward,
+  Loader2,
+  Mic,
+  Pause,
+  Play,
+  Rewind,
+  Save,
+  Sparkles,
+  Square,
+  Trash2
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { MAX_RECORDING_SECONDS } from "@bharatdoc/shared";
+import { MAX_RECORDING_SECONDS, normalizePatientId } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import {
   createMockAudioRecorder,
@@ -15,23 +27,40 @@ import {
   buildLocalRecordingMetadata,
   createLocalRecordingsRepository,
   type LocalRecordingDraft,
+  type LocalRecordingMetadata,
   type LocalRecordingsRepository
 } from "@/lib/client/local-recordings";
+import { createFirebasePhoneAuthClient } from "@/lib/client/phone-auth";
 import { formatElapsedTime, initialRecordingState, reduceRecordingState } from "@/lib/client/recording-state";
+import { transcribeLocalRecording, type RecordingTranscriber } from "@/lib/client/transcription-api";
 import { cn } from "@/lib/utils";
 
 interface RecordingScreenProps {
   audioRecorderFactory?: AudioRecorderFactory;
+  getIdToken?: () => Promise<string | null>;
   mockAudio?: boolean;
   now?: () => string;
+  online?: () => boolean;
   repository?: LocalRecordingsRepository;
+  transcribeRecording?: RecordingTranscriber;
+}
+
+function getDefaultIdToken(): Promise<string | null> {
+  return createFirebasePhoneAuthClient().getCurrentIdToken();
+}
+
+function isBrowserOnline(): boolean {
+  return typeof navigator === "undefined" ? true : navigator.onLine;
 }
 
 export function RecordingScreen({
   audioRecorderFactory,
+  getIdToken = getDefaultIdToken,
   mockAudio = false,
   now = () => new Date().toISOString(),
-  repository = createLocalRecordingsRepository()
+  online = isBrowserOnline,
+  repository = createLocalRecordingsRepository(),
+  transcribeRecording = transcribeLocalRecording
 }: RecordingScreenProps) {
   const [state, dispatch] = useReducer(reduceRecordingState, initialRecordingState);
   const [patientId, setPatientId] = useState("");
@@ -42,6 +71,8 @@ export function RecordingScreen({
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
   const recorderRef = useRef<AudioRecorderController | null>(null);
   const durationRef = useRef(initialRecordingState.durationSeconds);
   const elapsed = formatElapsedTime(state.durationSeconds);
@@ -95,6 +126,7 @@ export function RecordingScreen({
     setSavedId(null);
     setError(null);
     setAudioBlob(null);
+    setTranscript(null);
     setIsStarting(true);
 
     try {
@@ -114,6 +146,7 @@ export function RecordingScreen({
     setAudioBlob(null);
     setSavedId(null);
     setError(null);
+    setTranscript(null);
     dispatch({ type: "discard" });
   }
 
@@ -154,27 +187,87 @@ export function RecordingScreen({
     }
   }
 
-  async function saveRecording() {
+  function buildRecordingDraft(): LocalRecordingDraft {
+    const draft: LocalRecordingDraft = {
+      patientId,
+      label,
+      durationSeconds: state.durationSeconds,
+      recordedAt: state.startedAt ?? now(),
+      updatedAt: now(),
+      audioMimeType: audioBlob?.type ?? null
+    };
+
+    if (savedId) {
+      draft.id = savedId;
+    }
+
+    if (audioBlob) {
+      draft.audioBlob = audioBlob;
+    }
+
+    return draft;
+  }
+
+  async function saveRecording(): Promise<LocalRecordingMetadata | null> {
     setError(null);
 
     try {
-      const draft: LocalRecordingDraft = {
-        patientId,
-        label,
-        durationSeconds: state.durationSeconds,
-        recordedAt: state.startedAt ?? now(),
-        updatedAt: now(),
-        audioMimeType: audioBlob?.type ?? null
-      };
-
-      if (audioBlob) {
-        draft.audioBlob = audioBlob;
-      }
-
-      const saved = await repository.save(buildLocalRecordingMetadata(draft));
+      const saved = await repository.save(buildLocalRecordingMetadata(buildRecordingDraft()));
       setSavedId(saved.id);
+      return saved;
     } catch {
       setError("Unable to save recording locally.");
+      return null;
+    }
+  }
+
+  async function transcribeNow() {
+    const normalizedPatientId = normalizePatientId(patientId);
+
+    setError(null);
+
+    if (!normalizedPatientId) {
+      setError("Patient ID is required before transcription.");
+      return;
+    }
+
+    if (!audioBlob) {
+      setError("Recording audio is required before transcription.");
+      return;
+    }
+
+    if (!online()) {
+      const saved = await saveRecording();
+
+      if (saved) {
+        setError("You're offline. Recording saved locally. Transcribe when connected.");
+      }
+
+      return;
+    }
+
+    setIsTranscribing(true);
+
+    try {
+      const idToken = await getIdToken();
+
+      if (!idToken) {
+        setError("Please sign in again before transcription.");
+        return;
+      }
+
+      const saved = await saveRecording();
+
+      if (!saved) {
+        return;
+      }
+
+      const result = await transcribeRecording({ idToken, recording: saved });
+      setTranscript(result.transcript);
+    } catch {
+      setError("Unable to transcribe recording. Please try again.");
+    } finally {
+      setIsTranscribing(false);
     }
   }
 
@@ -313,6 +406,15 @@ export function RecordingScreen({
             </p>
           </div>
 
+          {transcript ? (
+            <section className="mt-4 rounded-xl border border-indigo/20 bg-paper px-3.5 py-3">
+              <p className="font-body text-[11px] font-bold uppercase tracking-[0.14em] text-indigo">Transcript ready</p>
+              <p className="mt-2 max-h-28 overflow-y-auto font-body text-[12.5px] leading-relaxed text-ink-soft">
+                {transcript}
+              </p>
+            </section>
+          ) : null}
+
           {savedId ? (
             <p className="mt-3 rounded-lg border border-sage/30 bg-sage/10 px-3 py-2 font-body text-xs font-semibold text-sage">
               Recording saved locally as {savedId}.
@@ -323,18 +425,39 @@ export function RecordingScreen({
 
         <footer className="shrink-0 px-6 pb-8 pt-3">
           {state.phase === "complete" ? (
-            <div className="grid grid-cols-[1fr_1.2fr] gap-2">
+            <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
               <BharatButton
-                className="border-stamp/30 text-stamp"
+                className="border-stamp/30 px-3 text-xs text-stamp"
                 variant="ghost"
                 icon={<Trash2 className="h-4 w-4" />}
                 onClick={discardRecording}
               >
                 Discard
               </BharatButton>
-              <BharatButton icon={<Save className="h-4 w-4" />} onClick={saveRecording}>
-                Save locally
-              </BharatButton>
+              <div className="grid min-w-0 grid-cols-1 gap-2">
+                <BharatButton
+                  className="px-3 text-xs"
+                  icon={<Save className="h-4 w-4" />}
+                  onClick={() => void saveRecording()}
+                >
+                  Save, transcribe later
+                </BharatButton>
+                <BharatButton
+                  className="px-3 text-xs"
+                  disabled={isTranscribing}
+                  icon={
+                    isTranscribing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )
+                  }
+                  variant="ink"
+                  onClick={() => void transcribeNow()}
+                >
+                  {isTranscribing ? "Transcribing" : "Transcribe now"}
+                </BharatButton>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">

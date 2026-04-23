@@ -20,7 +20,7 @@ test("recording screen supports local draft flow", async ({ page }) => {
   await page.getByRole("button", { name: /stop recording/i }).click();
   await expect(page.getByRole("heading", { name: "Recording complete" })).toBeVisible();
   await expect(page.getByRole("button", { name: /play recording/i })).toBeVisible();
-  await page.getByRole("button", { name: /save locally/i }).click();
+  await page.getByRole("button", { name: /save, transcribe later/i }).click();
   await expect(page.getByText(/Recording saved locally/i)).toBeVisible();
 
   await page.goto("/dashboard");

@@ -42,7 +42,6 @@ describe("RecordingScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await screen.findByText("Recording");
-
     await waitFor(() => expect(screen.getByText("00:01")).toBeInTheDocument(), { timeout: 2000 });
 
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
@@ -58,7 +57,7 @@ describe("RecordingScreen", () => {
     expect(controller.stop).toHaveBeenCalled();
   });
 
-  it("saves completed recording metadata locally", async () => {
+  it("saves completed recording metadata locally for later transcription", async () => {
     const repository = createRepository();
     const { blob, factory } = createAudioRecorder();
 
@@ -76,7 +75,7 @@ describe("RecordingScreen", () => {
     await screen.findByText("Recording");
     fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
     await screen.findByRole("heading", { name: "Recording complete" });
-    fireEvent.click(screen.getByRole("button", { name: /save locally/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save, transcribe later/i }));
 
     await waitFor(() => expect(repository.save).toHaveBeenCalled());
     expect(repository.save).toHaveBeenCalledWith(
@@ -93,39 +92,73 @@ describe("RecordingScreen", () => {
     expect(screen.getByText(/Recording saved locally as saved-local-recording/i)).toBeInTheDocument();
   });
 
-  it("creates a playback preview for the completed audio blob", async () => {
-    const createObjectURL = vi.fn(() => "blob:recording-preview");
-    const revokeObjectURL = vi.fn();
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: createObjectURL
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: revokeObjectURL
-    });
-    const { blob, factory } = createAudioRecorder();
+  it("requires a patient id before transcription", async () => {
+    const { factory } = createAudioRecorder();
 
-    const { unmount } = render(
-      <RecordingScreen
-        audioRecorderFactory={factory}
-        repository={createRepository()}
-      />
-    );
+    render(<RecordingScreen audioRecorderFactory={factory} repository={createRepository()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await screen.findByText("Recording");
     fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+    await screen.findByRole("heading", { name: "Recording complete" });
+    fireEvent.click(screen.getByRole("button", { name: /transcribe now/i }));
 
-    const audio = await screen.findByLabelText("Recording playback");
+    expect(screen.getByText("Patient ID is required before transcription.")).toBeInTheDocument();
+  });
 
-    expect(createObjectURL).toHaveBeenCalledWith(blob);
-    expect(audio).toHaveAttribute("src", "blob:recording-preview");
-    expect(screen.getByRole("button", { name: /play recording/i })).toBeEnabled();
+  it("saves locally and shows an offline transcription message", async () => {
+    const repository = createRepository();
+    const { factory } = createAudioRecorder();
 
-    unmount();
+    render(
+      <RecordingScreen
+        audioRecorderFactory={factory}
+        repository={repository}
+        online={() => false}
+      />
+    );
 
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:recording-preview");
+    fireEvent.change(screen.getByLabelText(/patient id/i), { target: { value: "P-10483" } });
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording");
+    fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+    await screen.findByRole("heading", { name: "Recording complete" });
+    fireEvent.click(screen.getByRole("button", { name: /transcribe now/i }));
+
+    await waitFor(() => expect(repository.save).toHaveBeenCalled());
+    expect(screen.getByText("You're offline. Recording saved locally. Transcribe when connected.")).toBeInTheDocument();
+  });
+
+  it("transcribes completed audio when online and signed in", async () => {
+    const repository = createRepository();
+    const transcribeRecording = vi.fn(async () => ({
+      recording_id: "saved-local-recording",
+      transcript: "Patient reports fever."
+    }));
+    const { factory } = createAudioRecorder();
+
+    render(
+      <RecordingScreen
+        audioRecorderFactory={factory}
+        getIdToken={async () => "id-token"}
+        repository={repository}
+        transcribeRecording={transcribeRecording}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/patient id/i), { target: { value: "P-10483" } });
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording");
+    fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+    await screen.findByRole("heading", { name: "Recording complete" });
+    fireEvent.click(screen.getByRole("button", { name: /transcribe now/i }));
+
+    await screen.findByText("Transcript ready");
+    expect(transcribeRecording).toHaveBeenCalledWith({
+      idToken: "id-token",
+      recording: expect.objectContaining({ id: "saved-local-recording", patientId: "P-10483" })
+    });
+    expect(screen.getByText("Patient reports fever.")).toBeInTheDocument();
   });
 
   it("shows an error when microphone capture cannot start", async () => {
