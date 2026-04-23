@@ -41,6 +41,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 ### 4. Auth and onboarding APIs
 
 - Implement Firebase phone OTP client flow and server registration endpoints.
+- [x] Bind invisible Firebase reCAPTCHA to the OTP submit button, reuse the verifier across retries, and reset it after failed sends.
 - Owner path creates clinic, owner doctor row, active account, and clinic code.
 - Doctor path looks up clinic code, creates pending doctor row, and creates join request.
 - Add unit/API tests for owner creation, doctor join, duplicate pending request, invalid clinic code, pending gate, and rejected gate.

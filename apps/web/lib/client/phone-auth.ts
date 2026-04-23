@@ -19,6 +19,14 @@ export interface PhoneAuthClient {
   getCurrentIdToken(): Promise<string | null>;
 }
 
+type RecaptchaVerifierWithInternals = RecaptchaVerifier & {
+  render(): Promise<number>;
+  clear(): void;
+};
+
+let sharedRecaptchaVerifier: RecaptchaVerifierWithInternals | null = null;
+let sharedRecaptchaContainerId: string | null = null;
+
 export function formatIndianPhoneNumber(input: string): string {
   const digits = input.replace(/\D/g, "");
   const withoutCountry = digits.startsWith("91") && digits.length > 10 ? digits.slice(2) : digits;
@@ -68,7 +76,40 @@ function getFirebaseAuth(): Auth | null {
   return getAuth(app);
 }
 
-export function createFirebasePhoneAuthClient(containerId = "firebase-recaptcha-container"): PhoneAuthClient {
+async function resetRecaptchaVerifier(verifier: RecaptchaVerifierWithInternals): Promise<void> {
+  try {
+    const widgetId = await verifier.render();
+    if (typeof window !== "undefined" && window.grecaptcha) {
+      window.grecaptcha.reset(widgetId);
+    }
+  } catch {
+    // If render/reset fails, fall back to clearing and recreating the verifier on the next attempt.
+  } finally {
+    verifier.clear();
+    if (sharedRecaptchaVerifier === verifier) {
+      sharedRecaptchaVerifier = null;
+      sharedRecaptchaContainerId = null;
+    }
+  }
+}
+
+function getRecaptchaVerifier(auth: Auth, containerId: string): RecaptchaVerifierWithInternals {
+  if (sharedRecaptchaVerifier && sharedRecaptchaContainerId === containerId) {
+    return sharedRecaptchaVerifier;
+  }
+
+  if (sharedRecaptchaVerifier) {
+    sharedRecaptchaVerifier.clear();
+  }
+
+  sharedRecaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+    size: "invisible"
+  }) as RecaptchaVerifierWithInternals;
+  sharedRecaptchaContainerId = containerId;
+  return sharedRecaptchaVerifier;
+}
+
+export function createFirebasePhoneAuthClient(containerId = "send-otp-button"): PhoneAuthClient {
   return {
     async sendOtp(phoneNumber: string): Promise<PhoneAuthSession> {
       const auth = getFirebaseAuth();
@@ -77,10 +118,15 @@ export function createFirebasePhoneAuthClient(containerId = "firebase-recaptcha-
         throw new Error("Firebase client environment is not configured.");
       }
 
-      const verifier = new RecaptchaVerifier(auth, containerId, {
-        size: "invisible"
-      });
-      const confirmation: ConfirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+      const verifier = getRecaptchaVerifier(auth, containerId);
+      let confirmation: ConfirmationResult;
+
+      try {
+        confirmation = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+      } catch (error) {
+        await resetRecaptchaVerifier(verifier);
+        throw error;
+      }
 
       return {
         async verifyOtp(otp: string): Promise<string> {

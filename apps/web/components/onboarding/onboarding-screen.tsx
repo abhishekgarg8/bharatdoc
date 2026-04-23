@@ -165,7 +165,6 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
 
   return (
     <OnboardingShell>
-      <div id="firebase-recaptcha-container" />
       <section className="flex flex-1 flex-col px-7 py-10">
         <LogoMark />
 
@@ -195,7 +194,7 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
               />
             </div>
             <p className="mt-2 font-body text-[11px] text-ink-muted">We will send a 6-digit OTP via SMS.</p>
-            <BharatButton className="mt-5 w-full" onClick={handleSendOtp} disabled={isBusy}>
+            <BharatButton id="send-otp-button" className="mt-5 w-full" onClick={handleSendOtp} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Send OTP
             </BharatButton>

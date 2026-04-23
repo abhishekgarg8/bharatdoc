@@ -83,7 +83,7 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
     async listPendingApprovals(clinicId: string): Promise<PendingApproval[]> {
       const { data, error } = await supabase
         .from("clinic_join_requests")
-        .select("id, requested_at, doctors!inner(id, name, specialization, phone, created_at)")
+        .select("id, requested_at, doctors!clinic_join_requests_doctor_id_fkey(id, name, specialization, phone, created_at)")
         .eq("clinic_id", clinicId)
         .eq("status", "pending")
         .order("requested_at", { ascending: true });
