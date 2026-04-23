@@ -1,12 +1,25 @@
+"use client";
+
 import { Mic, Search, Settings } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import { DashboardRecordCard } from "@/components/dashboard-record-card";
-import { demoDashboardRecords, type DashboardRecord } from "@/lib/client/dashboard-data";
+import {
+  demoDashboardRecords,
+  mapLocalRecordingToDashboardRecord,
+  mergeDashboardRecords,
+  type DashboardRecord,
+  type LocalDashboardRecord
+} from "@/lib/client/dashboard-data";
+import { createLocalRecordingsRepository, type LocalRecordingsRepository } from "@/lib/client/local-recordings";
 
 interface DashboardScreenProps {
   doctorName?: string;
   clinicName?: string;
+  localRecordingsRepository?: Pick<LocalRecordingsRepository, "list">;
+  now?: () => Date;
   records?: DashboardRecord[];
   pendingApprovalsCount?: number;
   pendingTranscriptionsCount?: number;
@@ -20,18 +33,58 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function defaultNow(): Date {
+  return new Date();
+}
+
 export function DashboardScreen({
   doctorName = "Dr. Aparna Iyer",
   clinicName = "Sunrise Clinic, Pune",
+  localRecordingsRepository,
+  now,
   records = demoDashboardRecords,
   pendingApprovalsCount = 1,
   pendingTranscriptionsCount
 }: DashboardScreenProps) {
+  const [localRecords, setLocalRecords] = useState<LocalDashboardRecord[]>([]);
+  const defaultLocalRecordingsRepository = useMemo(() => createLocalRecordingsRepository(), []);
+  const effectiveLocalRecordingsRepository = localRecordingsRepository ?? defaultLocalRecordingsRepository;
+  const effectiveNow = now ?? defaultNow;
+  const dashboardRecords = useMemo(
+    () => mergeDashboardRecords(records, localRecords),
+    [localRecords, records]
+  );
+  const localPendingCount = localRecords.filter((record) => record.status === "recorded").length;
   const pendingCount =
-    pendingTranscriptionsCount ?? records.filter((record) => record.status === "recorded").length;
+    pendingTranscriptionsCount ?? dashboardRecords.filter((record) => record.status === "recorded").length;
+
+  useEffect(() => {
+    let mounted = true;
+    const snapshotNow = effectiveNow();
+
+    async function loadLocalRecordings() {
+      try {
+        const localMetadata = await effectiveLocalRecordingsRepository.list();
+
+        if (mounted) {
+          setLocalRecords(
+            localMetadata.map((recording) => mapLocalRecordingToDashboardRecord(recording, snapshotNow))
+          );
+        }
+      } catch {
+        // The dashboard can still render server/demo records if IndexedDB is unavailable.
+      }
+    }
+
+    void loadLocalRecordings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveLocalRecordingsRepository, effectiveNow]);
 
   return (
-    <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
+    <main className="relative mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
         <header className="flex items-center gap-3 px-5 pb-4 pt-5">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-terracotta font-display text-[22px] text-white">
@@ -74,12 +127,22 @@ export function DashboardScreen({
         <div className="px-5 pb-2">
           <h2 className="font-display text-[28px] italic leading-none tracking-normal text-ink">Today's consultations</h2>
           <p className="mt-1.5 font-body text-xs text-ink-muted">
-            {pluralize(records.length, "record")} · {pluralize(pendingCount, "pending transcription")}
+            {pluralize(dashboardRecords.length, "record")} · {pluralize(pendingCount, "pending transcription")}
           </p>
         </div>
 
+        {localPendingCount > 0 ? (
+          <div className="px-5 pb-3">
+            <div className="rounded-xl border border-terracotta/25 bg-terracotta/10 px-3.5 py-2.5">
+              <p className="font-body text-xs font-semibold text-terracotta">
+                {pluralize(localPendingCount, "recording")} saved locally · transcribe when connected
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 pb-28">
-          {records.map((record) => (
+          {dashboardRecords.map((record) => (
             <DashboardRecordCard key={record.id} record={record} />
           ))}
         </div>
@@ -92,8 +155,9 @@ export function DashboardScreen({
                 <Mic className="h-5 w-5" />
               </span>
             }
+            asChild
           >
-            Start recording
+            <Link href="/recording">Start recording</Link>
           </BharatButton>
         </div>
 

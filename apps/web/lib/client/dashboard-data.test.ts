@@ -3,12 +3,14 @@ import {
   fetchDashboardRecords,
   formatRecordingDuration,
   mapApiRecordingToDashboardRecord,
+  mapLocalRecordingToDashboardRecord,
   mergeDashboardRecords,
   searchPatientRecords,
   type DashboardApiRecord,
   type DashboardRecord,
   type LocalDashboardRecord
 } from "@/lib/client/dashboard-data";
+import { buildLocalRecordingMetadata } from "@/lib/client/local-recordings";
 
 const apiRecord: DashboardApiRecord = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -37,6 +39,28 @@ describe("dashboard data helpers", () => {
       doctorName: "Dr. Aparna",
       status: "recorded",
       recordedAt: apiRecord.recorded_at
+    });
+    expect(record.time).toContain("Today");
+  });
+
+  it("maps local recordings into offline dashboard records", () => {
+    const localRecording = buildLocalRecordingMetadata({
+      id: "local-recording",
+      patientId: " p-20999 ",
+      durationSeconds: 61,
+      recordedAt: "2026-04-23T06:20:00.000Z"
+    });
+
+    const record = mapLocalRecordingToDashboardRecord(localRecording, new Date("2026-04-23T09:00:00.000Z"));
+
+    expect(record).toMatchObject({
+      id: "local-recording",
+      patientId: "P-20999",
+      duration: "1:01",
+      doctorName: "You",
+      status: "recorded",
+      recordedAt: "2026-04-23T06:20:00.000Z",
+      offline: true
     });
     expect(record.time).toContain("Today");
   });

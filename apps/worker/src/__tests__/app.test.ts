@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import type { Doctor } from "@bharatdoc/shared";
+import type { Doctor, Recording } from "@bharatdoc/shared";
 import { createApp } from "../app.js";
 import type { WorkerDependencies } from "../types.js";
 
@@ -20,7 +20,23 @@ const activeDoctor: Doctor = {
   created_at: "2026-04-23T09:00:00.000Z"
 };
 
-function depsFor(doctor: Doctor | null): WorkerDependencies {
+const recording: Recording = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  doctor_id: activeDoctor.id,
+  clinic_id: activeDoctor.clinic_id!,
+  patient_id: "P-10483",
+  label: "Follow-up",
+  duration_seconds: 24,
+  audio_storage_path: null,
+  transcript: null,
+  summary: null,
+  pdf_storage_path: null,
+  status: "recorded",
+  recorded_at: "2026-04-23T06:20:00.000Z",
+  created_at: "2026-04-23T06:20:01.000Z"
+};
+
+function depsFor(doctor: Doctor | null, recordingResult: Recording | null = recording): WorkerDependencies {
   return {
     tokenVerifier: {
       verifyIdToken: vi.fn(async (token: string) => {
@@ -33,6 +49,21 @@ function depsFor(doctor: Doctor | null): WorkerDependencies {
     },
     doctors: {
       findByFirebaseUid: vi.fn(async () => doctor)
+    },
+    recordings: {
+      findRecordingForDoctor: vi.fn(async () => recordingResult),
+      markRecordingTranscribed: vi.fn(async (input) => ({
+        ...(recordingResult ?? recording),
+        audio_storage_path: input.audioStoragePath,
+        transcript: input.transcript,
+        status: "transcribed" as const
+      }))
+    },
+    audioStorage: {
+      uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm")
+    },
+    transcriptionClient: {
+      transcribe: vi.fn(async () => "Patient reports fever.")
     }
   };
 }
@@ -95,5 +126,76 @@ describe("worker app", () => {
         expect(body.doctor.id).toBe(activeDoctor.id);
         expect(body.doctor.firebase_uid).toBe(activeDoctor.firebase_uid);
       });
+  });
+
+  it("rejects transcription requests without bearer tokens before transcription work", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(deps.tokenVerifier.verifyIdToken).not.toHaveBeenCalled();
+    expect(deps.recordings.findRecordingForDoctor).not.toHaveBeenCalled();
+    expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+    expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
+  });
+
+  it("rejects transcription requests without audio", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUDIO_REQUIRED");
+      });
+  });
+
+  it("rejects transcription requests without recording ids", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("RECORDING_ID_REQUIRED");
+      });
+  });
+
+  it("transcribes uploaded audio for active doctors", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          recording_id: recording.id,
+          transcript: "Patient reports fever."
+        });
+      });
+
+    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalled();
+    expect(deps.transcriptionClient.transcribe).toHaveBeenCalled();
+    expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      audioStoragePath: "clinic/doctor/recording.webm",
+      transcript: "Patient reports fever."
+    });
   });
 });

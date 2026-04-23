@@ -5,8 +5,29 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
 
   await expect(page.getByText("Dr. Aparna Iyer")).toBeVisible();
   await expect(page.getByText("Sunrise Clinic, Pune")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Start recording/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Start recording/i })).toBeVisible();
   await expect(page.getByText("P-10482")).toBeVisible();
+});
+
+test("recording screen supports local draft flow", async ({ page }) => {
+  await page.goto("/recording?mockAudio=1");
+
+  await expect(page.getByRole("heading", { name: "New consultation" })).toBeVisible();
+  await page.getByLabel(/patient id/i).fill("P-10483");
+  await page.getByRole("button", { name: /start recording/i }).click();
+  await expect(page.getByText("Recording")).toBeVisible();
+  await expect(page.getByText("00:01")).toBeVisible({ timeout: 2000 });
+  await page.getByRole("button", { name: /stop recording/i }).click();
+  await expect(page.getByRole("heading", { name: "Recording complete" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /play recording/i })).toBeVisible();
+  await page.getByRole("button", { name: /save, transcribe later/i }).click();
+  await expect(page.getByText(/Recording saved locally/i)).toBeVisible();
+
+  await page.goto("/dashboard");
+
+  await expect(page.getByText("P-10483")).toBeVisible();
+  await expect(page.getByText(/1 recording saved locally/i)).toBeVisible();
+  await expect(page.getByRole("article").filter({ hasText: "P-10483" }).getByLabel("Stored offline")).toBeVisible();
 });
 
 test("root routes unauthenticated users to onboarding", async ({ page }) => {
