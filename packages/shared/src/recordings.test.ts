@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertLocalRecordingTransition,
   assertRecordingDuration,
+  canTransitionLocalRecordingState,
   canTransitionRecordingStatus,
   normalizePatientId,
   requirePatientId
@@ -11,6 +13,21 @@ describe("recording lifecycle helpers", () => {
     expect(canTransitionRecordingStatus("recorded", "transcribed")).toBe(true);
     expect(canTransitionRecordingStatus("summary_ready", "summary_ready")).toBe(true);
     expect(canTransitionRecordingStatus("pdf_saved", "recorded")).toBe(false);
+  });
+
+  it("models local recording capture transitions", () => {
+    expect(canTransitionLocalRecordingState("idle", "recording")).toBe(true);
+    expect(canTransitionLocalRecordingState("recording", "paused")).toBe(true);
+    expect(canTransitionLocalRecordingState("paused", "recording")).toBe(true);
+    expect(canTransitionLocalRecordingState("stopped", "transcribing")).toBe(true);
+    expect(canTransitionLocalRecordingState("transcribing", "transcribed")).toBe(true);
+    expect(canTransitionLocalRecordingState("transcribed", "recording")).toBe(false);
+  });
+
+  it("throws when local recording transitions skip required states", () => {
+    expect(() => assertLocalRecordingTransition("idle", "transcribing")).toThrow(
+      "Invalid local recording transition"
+    );
   });
 
   it("normalizes patient IDs for clinic search", () => {

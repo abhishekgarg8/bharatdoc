@@ -18,6 +18,15 @@ export function toHttpError(error: unknown): HttpError {
     return error;
   }
 
+  if (
+    error instanceof Error &&
+    error.name === "MulterError" &&
+    "code" in error &&
+    error.code === "LIMIT_FILE_SIZE"
+  ) {
+    return new HttpError(413, "Audio file exceeds the Phase 1 size limit.", "AUDIO_TOO_LARGE");
+  }
+
   if (error instanceof AccessError) {
     const status = error.code === "AUTH_REQUIRED" ? 401 : 403;
     return new HttpError(status, error.message, error.code);

@@ -6,7 +6,57 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
   await expect(page.getByText("Dr. Aparna Iyer")).toBeVisible();
   await expect(page.getByText("Sunrise Clinic, Pune")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start recording/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Search by Patient ID/i })).toHaveAttribute("href", "/search");
   await expect(page.getByText("P-10482")).toBeVisible();
+});
+
+test("clinic search finds records and opens completed consultations", async ({ page }) => {
+  await page.goto("/search");
+
+  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
+  await page.getByLabel("Patient ID").fill("P-10470");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByText("Results for P-10470")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open recording P-10470" })).toBeVisible();
+  await page.getByRole("link", { name: "Open recording P-10470" }).click();
+  await expect(page).toHaveURL(/\/recordings\/p-10470$/);
+  await expect(page.getByLabel("PDF saved")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
+});
+
+test("recording detail smoke generates and edits a summary", async ({ page }) => {
+  await page.goto("/recordings/p-10481");
+
+  await expect(page.getByRole("heading", { name: "P-10481" })).toBeVisible();
+  await expect(page.getByText(/I have had fever for two days/)).toBeVisible();
+  await page.getByRole("button", { name: /generate/i }).click();
+  await expect(page.getByRole("textbox", { name: "Summary" })).toHaveValue(/Chief Complaint/);
+  await page.getByRole("textbox", { name: "Summary" }).fill("Edited summary for patient fever.");
+  await page.getByRole("button", { name: /save/i }).click();
+  await expect(page.getByText("Summary saved.")).toBeVisible();
+  await page.getByRole("button", { name: "PDF" }).click();
+  await expect(page.getByText("PDF generated.")).toBeVisible();
+  await expect(page.getByLabel("PDF saved")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
+});
+
+test("local recording flow records, transcribes, and returns to dashboard", async ({ page }) => {
+  await page.goto("/recordings/new?mockRecorder=1");
+
+  await expect(page.getByRole("heading", { name: "Recording" })).toBeVisible();
+  await page.getByLabel("Patient ID").fill("P-10500");
+  await page.getByLabel("Label").fill("Walk-in fever review");
+  await page.getByRole("button", { name: /start recording/i }).click();
+  await expect(page.getByText("Recording started.")).toBeVisible();
+  await page.getByRole("button", { name: /stop/i }).click();
+  await expect(page.getByText("Recording saved on this device.")).toBeVisible();
+  await page.getByRole("button", { name: /transcribe/i }).click();
+  await expect(page.getByText("Transcript ready.")).toBeVisible();
+  await expect(page.getByText(/mild cough/)).toBeVisible();
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText("P-10500")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open recording P-10500" }).getByLabel("Stored offline")).toBeVisible();
 });
 
 test("root routes unauthenticated users to onboarding", async ({ page }) => {

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Doctor } from "@bharatdoc/shared";
 import {
   createRecordingMetadataForDoctor,
+  getRecordingDetailForDoctor,
   listDashboardRecordingsForDoctor,
+  saveRecordingSummaryForDoctor,
   searchPatientRecordingsForClinic,
   type RecordingListItem,
   type RecordingsRepository
@@ -32,10 +34,10 @@ const recording: RecordingListItem = {
   label: null,
   duration_seconds: 494,
   audio_storage_path: null,
-  transcript: null,
+  transcript: "Patient reports fever for two days.",
   summary: null,
   pdf_storage_path: null,
-  status: "recorded",
+  status: "transcribed",
   recorded_at: "2026-04-23T06:12:00.000Z",
   created_at: "2026-04-23T06:12:01.000Z",
   doctor_name: activeDoctor.name
@@ -54,7 +56,14 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
       patient_id: input.patientId,
       label: input.label,
       duration_seconds: input.durationSeconds,
+      status: "recorded" as const,
       recorded_at: input.recordedAt
+    })),
+    findRecordingForClinic: vi.fn(async () => recording),
+    updateRecordingSummary: vi.fn(async (input) => ({
+      ...recording,
+      summary: input.summary,
+      status: input.status
     }))
   };
 }
@@ -72,7 +81,7 @@ describe("recordings service", () => {
         label: null,
         duration_seconds: 494,
         doctor_name: "Dr. Aparna Iyer",
-        status: "recorded",
+        status: "transcribed",
         recorded_at: "2026-04-23T06:12:00.000Z"
       }
     ]);
@@ -107,6 +116,110 @@ describe("recordings service", () => {
       searchPatientRecordingsForClinic({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, "  ", repository)
     ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
     expect(repository.searchPatientRecordings).not.toHaveBeenCalled();
+  });
+
+  it("loads recording detail inside the active doctor's clinic", async () => {
+    const repository = createRepository();
+
+    await expect(
+      getRecordingDetailForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
+    ).resolves.toEqual({
+      id: recording.id,
+      patient_id: "P-10482",
+      label: null,
+      duration_seconds: 494,
+      doctor_name: "Dr. Aparna Iyer",
+      status: "transcribed",
+      recorded_at: "2026-04-23T06:12:00.000Z",
+      transcript: "Patient reports fever for two days.",
+      summary: null,
+      pdf_storage_path: null
+    });
+    expect(repository.findRecordingForClinic).toHaveBeenCalledWith(recording.id, activeDoctor.clinic_id);
+  });
+
+  it("saves edited summaries and advances transcribed recordings to summary ready", async () => {
+    const repository = createRepository();
+
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "  Chief Complaint: Fever  ",
+        repository
+      )
+    ).resolves.toMatchObject({
+      id: recording.id,
+      summary: "Chief Complaint: Fever",
+      status: "summary_ready"
+    });
+    expect(repository.updateRecordingSummary).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      clinicId: activeDoctor.clinic_id,
+      summary: "Chief Complaint: Fever",
+      status: "summary_ready"
+    });
+  });
+
+  it("preserves pdf saved status when saving edited summaries", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findRecordingForClinic).mockResolvedValueOnce({
+      ...recording,
+      status: "pdf_saved",
+      pdf_storage_path: "pdfs/p-10482.pdf"
+    });
+
+    await saveRecordingSummaryForDoctor(
+      { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+      recording.id,
+      "Updated summary",
+      repository
+    );
+
+    expect(repository.updateRecordingSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "pdf_saved" })
+    );
+  });
+
+  it("requires patient id, transcript, and summary text before saving summaries", async () => {
+    const missingPatientRepository = createRepository();
+    vi.mocked(missingPatientRepository.findRecordingForClinic).mockResolvedValueOnce({
+      ...recording,
+      patient_id: null
+    });
+
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "Summary",
+        missingPatientRepository
+      )
+    ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
+
+    const missingTranscriptRepository = createRepository();
+    vi.mocked(missingTranscriptRepository.findRecordingForClinic).mockResolvedValueOnce({
+      ...recording,
+      transcript: null
+    });
+
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "Summary",
+        missingTranscriptRepository
+      )
+    ).rejects.toMatchObject({ code: "TRANSCRIPT_REQUIRED" });
+
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "   ",
+        createRepository()
+      )
+    ).rejects.toMatchObject({ code: "SUMMARY_REQUIRED" });
   });
 
   it("creates recording metadata with normalized optional fields", async () => {

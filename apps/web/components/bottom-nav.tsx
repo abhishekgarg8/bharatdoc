@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { id: "home", label: "Home", href: "/dashboard", icon: Home },
-  { id: "search", label: "Search", href: "/dashboard", icon: Search },
+  { id: "search", label: "Search", href: "/search", icon: Search },
   { id: "settings", label: "Settings", href: "/settings", icon: Settings }
 ] as const;
 

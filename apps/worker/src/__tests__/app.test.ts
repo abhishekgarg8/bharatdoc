@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import type { Doctor } from "@bharatdoc/shared";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import { createApp } from "../app.js";
 import type { WorkerDependencies } from "../types.js";
 
@@ -20,7 +20,32 @@ const activeDoctor: Doctor = {
   created_at: "2026-04-23T09:00:00.000Z"
 };
 
-function depsFor(doctor: Doctor | null): WorkerDependencies {
+const recording: Recording = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  doctor_id: activeDoctor.id,
+  clinic_id: activeDoctor.clinic_id!,
+  patient_id: "P-10483",
+  label: "Follow-up",
+  duration_seconds: 24,
+  audio_storage_path: "clinic/doctor/recording.webm",
+  transcript: "Patient reports fever for two days.",
+  summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+  pdf_storage_path: null,
+  status: "summary_ready",
+  recorded_at: "2026-04-23T06:20:00.000Z",
+  created_at: "2026-04-23T06:20:01.000Z"
+};
+
+const clinic: Clinic = {
+  id: activeDoctor.clinic_id!,
+  name: "Sunrise Clinic",
+  clinic_code: "MED42X",
+  address: "Pune",
+  logo_storage_path: null,
+  created_at: "2026-04-23T05:00:00.000Z"
+};
+
+function depsFor(doctor: Doctor | null, recordingResult: Recording | null = recording): WorkerDependencies {
   return {
     tokenVerifier: {
       verifyIdToken: vi.fn(async (token: string) => {
@@ -33,6 +58,44 @@ function depsFor(doctor: Doctor | null): WorkerDependencies {
     },
     doctors: {
       findByFirebaseUid: vi.fn(async () => doctor)
+    },
+    clinics: {
+      findClinicById: vi.fn(async () => clinic)
+    },
+    recordings: {
+      findRecordingForDoctor: vi.fn(async () => recordingResult),
+      markRecordingTranscribed: vi.fn(async (input) => ({
+        ...(recordingResult ?? recording),
+        audio_storage_path: input.audioStoragePath,
+        transcript: input.transcript,
+        status: "transcribed" as const
+      })),
+      markRecordingSummarized: vi.fn(async (input) => ({
+        ...(recordingResult ?? recording),
+        summary: input.summary,
+        status: input.status
+      })),
+      markRecordingPdfSaved: vi.fn(async (input) => ({
+        ...(recordingResult ?? recording),
+        pdf_storage_path: input.pdfStoragePath,
+        status: "pdf_saved" as const
+      }))
+    },
+    transcriptionClient: {
+      transcribe: vi.fn(async () => "Patient reports fever for two days.")
+    },
+    summaryClient: {
+      summarize: vi.fn(async () => "Chief Complaint: Fever\nPlan: Fluids and paracetamol.")
+    },
+    audioStorage: {
+      uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm")
+    },
+    pdfRenderer: {
+      render: vi.fn(async () => Buffer.from("%PDF-1.4\n"))
+    },
+    pdfStorage: {
+      uploadRecordingPdf: vi.fn(async () => "clinic/doctor/recording.pdf"),
+      createSignedUrl: vi.fn(async () => "https://signed.example.com/recording.pdf")
     }
   };
 }
@@ -95,5 +158,219 @@ describe("worker app", () => {
         expect(body.doctor.id).toBe(activeDoctor.id);
         expect(body.doctor.firebase_uid).toBe(activeDoctor.firebase_uid);
       });
+  });
+
+  it("rejects transcription requests without bearer tokens before audio work", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(deps.tokenVerifier.verifyIdToken).not.toHaveBeenCalled();
+    expect(deps.recordings.findRecordingForDoctor).not.toHaveBeenCalled();
+    expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
+  });
+
+  it("rejects transcription requests without recording ids or audio", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("RECORDING_ID_REQUIRED");
+      });
+
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUDIO_REQUIRED");
+      });
+  });
+
+  it("transcribes uploaded audio for active doctors", async () => {
+    const deps = depsFor(activeDoctor, { ...recording, status: "recorded", transcript: null, summary: null });
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          recording_id: recording.id,
+          transcript: "Patient reports fever for two days.",
+          audio_storage_path: "clinic/doctor/recording.webm",
+          status: "transcribed"
+        });
+      });
+
+    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalledWith({
+      audio: expect.any(Buffer),
+      mimeType: "audio/webm",
+      clinicId: activeDoctor.clinic_id,
+      doctorId: activeDoctor.id,
+      recordingId: recording.id,
+      filename: "recording.webm"
+    });
+    expect(deps.transcriptionClient.transcribe).toHaveBeenCalledWith({
+      audio: expect.any(Buffer),
+      mimeType: "audio/webm",
+      filename: "recording.webm",
+      language: "auto"
+    });
+    expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      transcript: "Patient reports fever for two days.",
+      audioStoragePath: "clinic/doctor/recording.webm"
+    });
+  });
+
+  it("rejects transcription when patient id is missing", async () => {
+    await request(createApp(depsFor(activeDoctor, { ...recording, patient_id: null })))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("PATIENT_ID_REQUIRED");
+      });
+  });
+
+  it("rejects summary requests without bearer tokens before summary work", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/summarize")
+      .send({ recording_id: recording.id })
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(deps.tokenVerifier.verifyIdToken).not.toHaveBeenCalled();
+    expect(deps.recordings.findRecordingForDoctor).not.toHaveBeenCalled();
+    expect(deps.summaryClient.summarize).not.toHaveBeenCalled();
+  });
+
+  it("rejects summary requests without recording ids", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/summarize")
+      .set("Authorization", "Bearer valid-token")
+      .send({})
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("RECORDING_ID_REQUIRED");
+      });
+  });
+
+  it("summarizes transcribed recordings for active doctors", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/summarize")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          recording_id: recording.id,
+          summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+          status: "summary_ready"
+        });
+      });
+
+    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(deps.summaryClient.summarize).toHaveBeenCalled();
+    expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+      status: "summary_ready"
+    });
+  });
+
+  it("rejects PDF requests without bearer tokens before PDF work", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/generate-pdf")
+      .send({ recording_id: recording.id })
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(deps.tokenVerifier.verifyIdToken).not.toHaveBeenCalled();
+    expect(deps.recordings.findRecordingForDoctor).not.toHaveBeenCalled();
+    expect(deps.pdfRenderer.render).not.toHaveBeenCalled();
+  });
+
+  it("rejects PDF requests without recording ids", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/generate-pdf")
+      .set("Authorization", "Bearer valid-token")
+      .send({})
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("RECORDING_ID_REQUIRED");
+      });
+  });
+
+  it("generates PDFs for summarized recordings", async () => {
+    const deps = depsFor(activeDoctor);
+
+    await request(createApp(deps))
+      .post("/api/generate-pdf")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          recording_id: recording.id,
+          pdf_storage_path: "clinic/doctor/recording.pdf",
+          signed_url: "https://signed.example.com/recording.pdf",
+          status: "pdf_saved"
+        });
+      });
+
+    expect(deps.clinics.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
+    expect(deps.pdfRenderer.render).toHaveBeenCalledWith({
+      clinic,
+      doctor: activeDoctor,
+      recording,
+      generatedAt: expect.any(Date)
+    });
+    expect(deps.pdfStorage.uploadRecordingPdf).toHaveBeenCalled();
+    expect(deps.recordings.markRecordingPdfSaved).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      pdfStoragePath: "clinic/doctor/recording.pdf"
+    });
   });
 });

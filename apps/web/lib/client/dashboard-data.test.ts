@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createRecordingMetadata,
   fetchDashboardRecords,
   formatRecordingDuration,
   mapApiRecordingToDashboardRecord,
@@ -90,6 +91,29 @@ describe("dashboard data helpers", () => {
       headers: {
         Authorization: "Bearer id-token"
       }
+    });
+  });
+
+  it("creates recording metadata through the authenticated API", async () => {
+    const fetcher = vi.fn(async () => Response.json({ record: apiRecord }, { status: 201 })) as unknown as typeof fetch;
+    const input = {
+      id: apiRecord.id,
+      patient_id: "P-10482",
+      duration_seconds: 494,
+      recorded_at: apiRecord.recorded_at
+    };
+
+    await expect(createRecordingMetadata("id-token", input, fetcher)).resolves.toMatchObject({
+      id: apiRecord.id,
+      patientId: "P-10482"
+    });
+    expect(fetcher).toHaveBeenCalledWith("/api/recordings", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input)
     });
   });
 

@@ -2,6 +2,7 @@ import {
   assertActiveDoctor,
   assertRecordingDuration,
   normalizePatientId,
+  requirePatientId,
   RecordingCreateSchema,
   type Doctor,
   type Recording,
@@ -24,6 +25,19 @@ export interface DashboardRecording {
   recorded_at: string;
 }
 
+export interface RecordingDetail {
+  id: string;
+  patient_id: string | null;
+  label: string | null;
+  duration_seconds: number | null;
+  doctor_name: string;
+  status: RecordingStatus;
+  recorded_at: string;
+  transcript: string | null;
+  summary: string | null;
+  pdf_storage_path: string | null;
+}
+
 export interface CreateRecordingRow {
   id: string;
   doctorId: string;
@@ -39,6 +53,13 @@ export interface RecordingsRepository {
   listRecentRecordings(doctorId: string, limit: number): Promise<RecordingListItem[]>;
   searchPatientRecordings(clinicId: string, patientId: string, limit: number): Promise<RecordingListItem[]>;
   createRecording(input: CreateRecordingRow): Promise<RecordingListItem>;
+  findRecordingForClinic(recordingId: string, clinicId: string): Promise<RecordingListItem | null>;
+  updateRecordingSummary(input: {
+    recordingId: string;
+    clinicId: string;
+    summary: string;
+    status: Extract<RecordingStatus, "summary_ready" | "pdf_saved">;
+  }): Promise<RecordingListItem>;
 }
 
 function clampLimit(limit: number | undefined, fallback: number): number {
@@ -77,6 +98,44 @@ function requireSearchPatientId(patientId: string | null | undefined): string {
   return normalized;
 }
 
+function requireRecordingId(recordingId: string | null | undefined): string {
+  const trimmed = recordingId?.trim();
+
+  if (!trimmed) {
+    throw new AppError(400, "Recording ID is required.", "RECORDING_ID_REQUIRED");
+  }
+
+  return trimmed;
+}
+
+function requireWorkflowPatientId(patientId: string | null | undefined): string {
+  try {
+    return requirePatientId(patientId);
+  } catch {
+    throw new AppError(400, "Patient ID is required.", "PATIENT_ID_REQUIRED");
+  }
+}
+
+function requireTranscript(transcript: string | null | undefined): string {
+  const trimmed = transcript?.trim();
+
+  if (!trimmed) {
+    throw new AppError(400, "Transcript is required before summary editing.", "TRANSCRIPT_REQUIRED");
+  }
+
+  return trimmed;
+}
+
+function requireSummary(summary: string | null | undefined): string {
+  const trimmed = summary?.trim();
+
+  if (!trimmed) {
+    throw new AppError(400, "Summary cannot be empty.", "SUMMARY_REQUIRED");
+  }
+
+  return trimmed;
+}
+
 async function requireActiveDoctorContext(user: VerifiedUser, repository: RecordingsRepository): Promise<Doctor> {
   const doctor = await repository.findDoctorByFirebaseUid(user.uid);
 
@@ -99,6 +158,21 @@ export function toDashboardRecording(recording: RecordingListItem, fallbackDocto
   };
 }
 
+export function toRecordingDetail(recording: RecordingListItem, fallbackDoctorName: string): RecordingDetail {
+  return {
+    id: recording.id,
+    patient_id: recording.patient_id,
+    label: recording.label,
+    duration_seconds: recording.duration_seconds,
+    doctor_name: recording.doctor_name ?? fallbackDoctorName,
+    status: recording.status,
+    recorded_at: recording.recorded_at,
+    transcript: recording.transcript,
+    summary: recording.summary,
+    pdf_storage_path: recording.pdf_storage_path
+  };
+}
+
 export async function listDashboardRecordingsForDoctor(
   user: VerifiedUser,
   repository: RecordingsRepository,
@@ -109,6 +183,22 @@ export async function listDashboardRecordingsForDoctor(
 
   const recordings = await repository.listRecentRecordings(doctor.id, clampLimit(limit, 10));
   return recordings.map((recording) => toDashboardRecording(recording, doctor.name));
+}
+
+export async function getRecordingDetailForDoctor(
+  user: VerifiedUser,
+  recordingId: string | null | undefined,
+  repository: RecordingsRepository
+): Promise<RecordingDetail> {
+  const doctor = await requireActiveDoctorContext(user, repository);
+  const clinicId = requireClinicId(doctor);
+  const recording = await repository.findRecordingForClinic(requireRecordingId(recordingId), clinicId);
+
+  if (!recording) {
+    throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
+  }
+
+  return toRecordingDetail(recording, doctor.name);
 }
 
 export async function searchPatientRecordingsForClinic(
@@ -123,6 +213,34 @@ export async function searchPatientRecordingsForClinic(
   const recordings = await repository.searchPatientRecordings(clinicId, normalizedPatientId, clampLimit(limit, 25));
 
   return recordings.map((recording) => toDashboardRecording(recording, doctor.name));
+}
+
+export async function saveRecordingSummaryForDoctor(
+  user: VerifiedUser,
+  recordingId: string | null | undefined,
+  summary: string | null | undefined,
+  repository: RecordingsRepository
+): Promise<RecordingDetail> {
+  const doctor = await requireActiveDoctorContext(user, repository);
+  const clinicId = requireClinicId(doctor);
+  const recording = await repository.findRecordingForClinic(requireRecordingId(recordingId), clinicId);
+
+  if (!recording) {
+    throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
+  }
+
+  requireWorkflowPatientId(recording.patient_id);
+  requireTranscript(recording.transcript);
+
+  const status = recording.status === "pdf_saved" ? "pdf_saved" : "summary_ready";
+  const updated = await repository.updateRecordingSummary({
+    recordingId: recording.id,
+    clinicId,
+    summary: requireSummary(summary),
+    status
+  });
+
+  return toRecordingDetail(updated, doctor.name);
 }
 
 export async function createRecordingMetadataForDoctor(

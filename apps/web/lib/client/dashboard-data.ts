@@ -25,6 +25,18 @@ export interface DashboardRecordListResponse {
   records: DashboardApiRecord[];
 }
 
+export interface CreateRecordingMetadataInput {
+  id: string;
+  patient_id: string;
+  label?: string | null;
+  duration_seconds: number;
+  recorded_at: string;
+}
+
+export interface CreateRecordingMetadataResponse {
+  record: DashboardApiRecord;
+}
+
 export interface LocalDashboardRecord extends DashboardRecord {
   recordedAt: string;
   offline: true;
@@ -174,6 +186,24 @@ export async function fetchDashboardRecords(idToken: string, fetcher: typeof fet
   const payload = await parseJson<DashboardRecordListResponse>(response, "Unable to load recent recordings.");
 
   return payload.records.map((record) => mapApiRecordingToDashboardRecord(record));
+}
+
+export async function createRecordingMetadata(
+  idToken: string,
+  input: CreateRecordingMetadataInput,
+  fetcher: typeof fetch = fetch
+): Promise<DashboardRecord> {
+  const response = await fetcher("/api/recordings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  const payload = await parseJson<CreateRecordingMetadataResponse>(response, "Unable to save recording metadata.");
+
+  return mapApiRecordingToDashboardRecord(payload.record);
 }
 
 export async function searchPatientRecords(

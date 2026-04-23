@@ -95,6 +95,40 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       }
 
       return toRecordingListItem(data as RecordingWithDoctorRow);
+    },
+
+    async findRecordingForClinic(recordingId: string, clinicId: string): Promise<RecordingListItem | null> {
+      const { data, error } = await supabase
+        .from("recordings")
+        .select("*, doctors!inner(name)")
+        .eq("id", recordingId)
+        .eq("clinic_id", clinicId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? toRecordingListItem(data as RecordingWithDoctorRow) : null;
+    },
+
+    async updateRecordingSummary(input): Promise<RecordingListItem> {
+      const { data, error } = await supabase
+        .from("recordings")
+        .update({
+          summary: input.summary,
+          status: input.status
+        })
+        .eq("id", input.recordingId)
+        .eq("clinic_id", input.clinicId)
+        .select("*, doctors!inner(name)")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return toRecordingListItem(data as RecordingWithDoctorRow);
     }
   };
 }
