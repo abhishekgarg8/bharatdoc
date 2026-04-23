@@ -1,4 +1,5 @@
 import type { RecordingStatus } from "@bharatdoc/shared";
+import type { LocalRecordingMetadata } from "@/lib/client/local-recordings";
 
 export interface DashboardRecord {
   id: string;
@@ -130,6 +131,22 @@ export function mapApiRecordingToDashboardRecord(record: DashboardApiRecord, now
     doctorName: record.doctor_name,
     status: record.status,
     recordedAt: record.recorded_at
+  };
+}
+
+export function mapLocalRecordingToDashboardRecord(
+  record: LocalRecordingMetadata,
+  now = new Date()
+): LocalDashboardRecord {
+  return {
+    id: record.id,
+    patientId: record.patientId ?? record.label ?? "Unassigned",
+    time: formatRecordedAt(record.recordedAt, now),
+    duration: formatRecordingDuration(record.durationSeconds),
+    doctorName: "You",
+    status: record.status,
+    recordedAt: record.recordedAt,
+    offline: true
   };
 }
 
