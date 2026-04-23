@@ -19,6 +19,12 @@ export interface PhoneAuthClient {
   getCurrentIdToken(): Promise<string | null>;
 }
 
+interface GrecaptchaWindow extends Window {
+  grecaptcha?: {
+    reset(widgetId: number): void;
+  };
+}
+
 type RecaptchaVerifierWithInternals = RecaptchaVerifier & {
   render(): Promise<number>;
   clear(): void;
@@ -79,8 +85,9 @@ function getFirebaseAuth(): Auth | null {
 async function resetRecaptchaVerifier(verifier: RecaptchaVerifierWithInternals): Promise<void> {
   try {
     const widgetId = await verifier.render();
-    if (typeof window !== "undefined" && window.grecaptcha) {
-      window.grecaptcha.reset(widgetId);
+    const activeWindow = typeof window !== "undefined" ? (window as GrecaptchaWindow) : undefined;
+    if (activeWindow?.grecaptcha) {
+      activeWindow.grecaptcha.reset(widgetId);
     }
   } catch {
     // If render/reset fails, fall back to clearing and recreating the verifier on the next attempt.
