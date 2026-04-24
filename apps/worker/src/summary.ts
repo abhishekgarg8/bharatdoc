@@ -1,8 +1,7 @@
 import {
   renderSummaryPrompt,
   requirePatientId,
-  type Recording,
-  type RecordingStatus
+  type Recording
 } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
 import type { AuthContext, WorkerDependencies } from "./types.js";
@@ -14,7 +13,7 @@ export interface SummaryRequestInput {
 export interface SummaryResponse {
   recording_id: string;
   summary: string;
-  status: Extract<RecordingStatus, "summary_ready" | "pdf_saved">;
+  status: "summary_ready";
 }
 
 function requireClinicId(clinicId: string | null): string {
@@ -53,10 +52,6 @@ function requireTranscribableRecording(recording: Recording | null): Recording {
   return recording;
 }
 
-function nextSummaryStatus(recording: Recording): Extract<RecordingStatus, "summary_ready" | "pdf_saved"> {
-  return recording.status === "pdf_saved" ? "pdf_saved" : "summary_ready";
-}
-
 export async function summarizeRecording(
   auth: AuthContext,
   input: SummaryRequestInput,
@@ -74,18 +69,15 @@ export async function summarizeRecording(
     throw new HttpError(502, "Summary provider returned an empty response.", "SUMMARY_EMPTY");
   }
 
-  const status = nextSummaryStatus(recording);
-
   await deps.recordings.markRecordingSummarized({
     recordingId: recording.id,
     doctorId: auth.doctor.id,
-    summary,
-    status
+    summary
   });
 
   return {
     recording_id: recording.id,
     summary,
-    status
+    status: "summary_ready"
   };
 }

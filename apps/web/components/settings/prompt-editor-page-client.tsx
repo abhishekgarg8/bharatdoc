@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PromptEditorScreen } from "@/components/settings/prompt-editor-screen";
-import { PageLoading } from "@/components/session/page-loading";
+import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { fetchDoctorPreferences, type DoctorPreferences } from "@/lib/client/settings-api";
 
@@ -15,12 +15,13 @@ interface PromptEditorPageClientProps {
 export function PromptEditorPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: PromptEditorPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<DoctorPreferences | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,6 +50,10 @@ export function PromptEditorPageClient({
         if (isMounted) {
           setPreferences(nextPreferences);
         }
+      } catch {
+        if (isMounted && !demoOnMissingToken) {
+          setError("Unable to load summary prompt. Please sign in again.");
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -65,6 +70,10 @@ export function PromptEditorPageClient({
 
   if (loading) {
     return <PageLoading label="Loading summary prompt" />;
+  }
+
+  if (error) {
+    return <PageError message={error} />;
   }
 
   const screenProps = {

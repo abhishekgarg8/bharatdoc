@@ -21,7 +21,7 @@ export function RecordingDetailPageClient({
   recordingId,
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: RecordingDetailPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);

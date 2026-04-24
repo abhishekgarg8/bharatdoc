@@ -101,20 +101,25 @@ describe("local recording repository", () => {
     expect(finalized.audioBlob).toBeInstanceOf(Blob);
   });
 
-  it("requires patient IDs before finalizing for transcription", async () => {
+  it("allows finalizing audio before Patient ID is assigned", async () => {
     const repository = createMemoryLocalRecordingRepository();
     await repository.createDraft({ id: "draft-1" });
     await repository.updateDraft({ id: "draft-1", captureState: "recording", durationSeconds: 0 });
 
-    await expect(
-      repository.finalize({
-        id: "draft-1",
-        patientId: "  ",
-        durationSeconds: 10,
-        audioBlob: audioBlob(),
-        audioMimeType: "audio/webm"
-      })
-    ).rejects.toThrow("Patient ID is required");
+    const finalized = await repository.finalize({
+      id: "draft-1",
+      patientId: "  ",
+      durationSeconds: 10,
+      audioBlob: audioBlob(),
+      audioMimeType: "audio/webm"
+    });
+
+    expect(finalized).toMatchObject({
+      patientId: null,
+      captureState: "stopped",
+      syncState: "local"
+    });
+    expect(finalized.audioBlob).toBeInstanceOf(Blob);
   });
 
   it("tracks sync and transcription state", async () => {

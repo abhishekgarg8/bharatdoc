@@ -1,4 +1,4 @@
-import type { Clinic, Doctor, Recording, RecordingStatus } from "@bharatdoc/shared";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 
 export interface VerifiedAuthToken {
   uid: string;
@@ -29,7 +29,6 @@ export interface RecordingProcessingRepository {
     recordingId: string;
     doctorId: string;
     summary: string;
-    status: Extract<RecordingStatus, "summary_ready" | "pdf_saved">;
   }): Promise<Recording>;
   markRecordingPdfSaved(input: {
     recordingId: string;

@@ -56,7 +56,8 @@ function depsFor(recordingResult: Recording | null = recording, clinicResult: Cl
     markRecordingSummarized: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       summary: input.summary,
-      status: input.status
+      status: "summary_ready" as const,
+      pdf_storage_path: null
     })),
     markRecordingPdfSaved: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),

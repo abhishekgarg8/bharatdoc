@@ -31,16 +31,6 @@ function getSupabaseBrowserClient(): SupabaseClient {
   return browserClient;
 }
 
-async function readJsonOrThrow(response: Response): Promise<unknown> {
-  const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? "Authentication failed. Please try again.");
-  }
-
-  return body;
-}
-
 export function authErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -49,21 +39,37 @@ export function authErrorMessage(error: unknown): string {
   return "Authentication failed. Please try again.";
 }
 
-export function createSupabaseAuthClient(fetcher: typeof fetch = fetch): AuthClient {
+export function createSupabaseAuthClient(): AuthClient {
   return {
     async signUpWithPassword(credentials: PasswordCredentials): Promise<string> {
       const parsed = PasswordCredentialsSchema.parse(credentials);
-      await readJsonOrThrow(
-        await fetcher("/api/auth/password/signup", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(parsed)
-        })
-      );
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: parsed.email,
+        password: parsed.password,
+        options: {
+          data: {
+            email: parsed.email
+          }
+        }
+      });
 
-      return this.signInWithPassword(parsed);
+      if (error) {
+        const isDuplicate = /already|registered|exists/i.test(error.message);
+        throw new Error(isDuplicate ? "Email is already registered." : "Unable to create account. Please try again.");
+      }
+
+      if (!data.session?.access_token) {
+        const identities = data.user?.identities ?? [];
+
+        if (identities.length === 0) {
+          throw new Error("Email is already registered. Log in instead.");
+        }
+
+        throw new Error("Confirm your email before continuing.");
+      }
+
+      return data.session.access_token;
     },
 
     async signInWithPassword(credentials: PasswordCredentials): Promise<string> {

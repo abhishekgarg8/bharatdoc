@@ -30,4 +30,18 @@ describe("TranscriptionLanguageScreen", () => {
       body: JSON.stringify({ transcription_lang: "en" })
     });
   });
+
+  it("does not report language persistence when authentication is missing", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ preferences: { custom_prompt: null, transcription_lang: "en" } })
+    ) as unknown as typeof fetch;
+
+    render(<TranscriptionLanguageScreen fetcher={fetcher} />);
+    fireEvent.click(screen.getByText("English"));
+    fireEvent.click(screen.getByRole("button", { name: /save language/i }));
+
+    await screen.findByText("Unable to save transcription language.");
+    expect(screen.queryByText("Transcription language saved.")).not.toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

@@ -10,4 +10,10 @@ describe("supabase clinic admin repository source contract", () => {
       '.select("id, requested_at, doctors!clinic_join_requests_doctor_id_fkey(id, name, specialization, phone, created_at)")'
     );
   });
+
+  it("reviews join requests through the atomic database RPC", () => {
+    expect(source).toContain('supabase.rpc("review_clinic_join_request"');
+    expect(source).not.toContain('.update({ account_status: "active" })');
+    expect(source).not.toContain('.update({ account_status: "rejected" })');
+  });
 });

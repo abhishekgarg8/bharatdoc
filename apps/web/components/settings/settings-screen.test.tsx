@@ -58,6 +58,17 @@ describe("SettingsScreen", () => {
     });
   });
 
+  it("does not approve locally when authentication is missing", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    render(<SettingsScreen pendingApprovals={pendingApprovals} fetcher={fetcher} />);
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(screen.getByText("Unable to approve Dr. Meera Shah.")).toBeInTheDocument());
+    expect(screen.getByText("Dr. Meera Shah")).toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("rejects a pending doctor through the API and removes the card", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
@@ -114,5 +125,19 @@ describe("SettingsScreen", () => {
         address: null
       })
     });
+  });
+
+  it("does not save clinic profile locally when authentication is missing", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    render(<SettingsScreen pendingApprovals={pendingApprovals} fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
+    fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
+    fireEvent.click(screen.getByRole("button", { name: /save clinic/i }));
+
+    await waitFor(() => expect(screen.getByText("Unable to save clinic profile.")).toBeInTheDocument());
+    expect(screen.queryByText("Clinic profile saved.")).not.toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

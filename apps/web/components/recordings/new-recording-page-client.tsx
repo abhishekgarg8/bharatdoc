@@ -15,7 +15,7 @@ interface NewRecordingPageClientProps {
 export function NewRecordingPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true,
+  demoOnMissingToken = false,
   useDemoRecorder = false
 }: NewRecordingPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);

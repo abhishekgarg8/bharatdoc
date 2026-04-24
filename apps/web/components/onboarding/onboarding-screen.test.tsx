@@ -12,8 +12,8 @@ describe("OnboardingScreen", () => {
     render(<OnboardingScreen />);
 
     expect(screen.getByText("Welcome to BharatDoc")).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("");
+    expect(screen.getByLabelText("Password")).toHaveValue("");
     expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
   });
 
@@ -75,6 +75,8 @@ describe("OnboardingScreen", () => {
 
     render(<OnboardingScreen demoMode onNavigate={navigate} />);
 
+    expect(screen.getByLabelText("Email")).toHaveValue("aparna@example.com");
+    expect(screen.getByLabelText("Password")).toHaveValue("bharatdoc123");
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));

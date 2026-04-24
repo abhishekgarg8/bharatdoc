@@ -91,6 +91,24 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
         .single();
 
       if (error) {
+        if (error.code === "23505") {
+          const { data: existing, error: existingError } = await supabase
+            .from("recordings")
+            .select("*, doctors!inner(name)")
+            .eq("id", input.id)
+            .maybeSingle();
+
+          if (existingError) {
+            throw existingError;
+          }
+
+          const existingRecording = existing as RecordingWithDoctorRow | null;
+
+          if (existingRecording?.doctor_id === input.doctorId) {
+            return toRecordingListItem(existingRecording);
+          }
+        }
+
         throw error;
       }
 
@@ -112,15 +130,31 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       return data ? toRecordingListItem(data as RecordingWithDoctorRow) : null;
     },
 
+    async findRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null> {
+      const { data, error } = await supabase
+        .from("recordings")
+        .select("*, doctors!inner(name)")
+        .eq("id", recordingId)
+        .eq("doctor_id", doctorId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? toRecordingListItem(data as RecordingWithDoctorRow) : null;
+    },
+
     async updateRecordingSummary(input): Promise<RecordingListItem> {
       const { data, error } = await supabase
         .from("recordings")
         .update({
           summary: input.summary,
-          status: input.status
+          status: "summary_ready",
+          pdf_storage_path: null
         })
         .eq("id", input.recordingId)
-        .eq("clinic_id", input.clinicId)
+        .eq("doctor_id", input.doctorId)
         .select("*, doctors!inner(name)")
         .single();
 

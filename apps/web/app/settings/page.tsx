@@ -1,5 +1,11 @@
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
 
-export default function SettingsPage() {
-  return <SettingsPageClient />;
+interface SettingsPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function SettingsPage({ searchParams }: SettingsPageProps) {
+  return <SettingsPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
 }

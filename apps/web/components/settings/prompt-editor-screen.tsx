@@ -58,14 +58,15 @@ export function PromptEditorScreen({
     setSaving(true);
 
     try {
-      if (idToken) {
-        await updateDoctorPreferences(
-          idToken,
-          { custom_prompt: validation.prompt === DEFAULT_SUMMARY_PROMPT ? null : validation.prompt },
-          fetcher
-        );
+      if (!idToken) {
+        throw new Error("Authentication is required.");
       }
 
+      await updateDoctorPreferences(
+        idToken,
+        { custom_prompt: validation.prompt === DEFAULT_SUMMARY_PROMPT ? null : validation.prompt },
+        fetcher
+      );
       setMessage("Summary prompt saved.");
     } catch {
       setError("Unable to save summary prompt.");

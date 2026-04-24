@@ -46,6 +46,7 @@ interface SettingsScreenProps {
   pendingApprovals?: PendingApproval[];
   idToken?: string;
   fetcher?: typeof fetch;
+  allowLocalDemoWrites?: boolean;
 }
 
 const defaultDoctor: SettingsDoctorProfile = {
@@ -144,7 +145,8 @@ export function SettingsScreen({
   activeDoctors = defaultActiveDoctors,
   pendingApprovals = defaultPendingApprovals,
   idToken,
-  fetcher = fetch
+  fetcher = fetch,
+  allowLocalDemoWrites = false
 }: SettingsScreenProps) {
   const [pending, setPending] = useState(pendingApprovals);
   const [clinicState, setClinicState] = useState(clinic);
@@ -168,6 +170,10 @@ export function SettingsScreen({
     setMessage(null);
 
     try {
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
+      }
+
       if (idToken) {
         if (action === "approve") {
           await approvePendingDoctor(idToken, request.id, fetcher);
@@ -207,31 +213,32 @@ export function SettingsScreen({
     setSavingClinic(true);
 
     try {
-      if (idToken) {
-        const updatedClinic = await updateClinicProfile(
-          idToken,
-          {
-            name: normalizedName,
-            clinic_code: clinicCodeResult.data,
-            address: normalizedAddress || null
-          },
-          fetcher
-        );
-        setClinicState(updatedClinic);
-        setClinicForm({
-          name: updatedClinic.name,
-          address: updatedClinic.address ?? "",
-          code: updatedClinic.code
-        });
-      } else {
-        setClinicState((current) => ({
-          ...current,
-          name: normalizedName,
-          code: clinicCodeResult.data,
-          address: normalizedAddress || null
-        }));
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
       }
 
+      const updatedClinic = idToken
+        ? await updateClinicProfile(
+            idToken,
+            {
+              name: normalizedName,
+              clinic_code: clinicCodeResult.data,
+              address: normalizedAddress || null
+            },
+            fetcher
+          )
+        : {
+            ...clinicState,
+            name: normalizedName,
+            code: clinicCodeResult.data,
+            address: normalizedAddress || null
+          };
+      setClinicState(updatedClinic);
+      setClinicForm({
+        name: updatedClinic.name,
+        address: updatedClinic.address ?? "",
+        code: updatedClinic.code
+      });
       setMessage("Clinic profile saved.");
       setExpandedPanel(null);
     } catch {

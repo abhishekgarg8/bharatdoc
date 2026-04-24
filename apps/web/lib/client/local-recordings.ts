@@ -57,7 +57,7 @@ export interface AppendAudioChunkInput {
 
 export interface FinalizeLocalRecordingInput {
   id: string;
-  patientId: string;
+  patientId?: string | null;
   label?: string | null;
   durationSeconds: number;
   audioBlob: Blob;
@@ -224,15 +224,10 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
 
   async finalize(input: FinalizeLocalRecordingInput): Promise<LocalRecording> {
     const current = requireExisting(await this.get(input.id), input.id);
-    const patientId = normalizePatientId(input.patientId);
-
-    if (!patientId) {
-      throw new Error("Patient ID is required before transcription.");
-    }
 
     return this.save({
       ...current,
-      patientId,
+      patientId: normalizeOptionalPatientId(input.patientId),
       label: normalizeOptionalText(input.label),
       durationSeconds: assertRecordingDuration(input.durationSeconds),
       audioBlob: input.audioBlob,

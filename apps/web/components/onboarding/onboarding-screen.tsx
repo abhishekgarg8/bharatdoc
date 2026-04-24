@@ -37,6 +37,21 @@ function createDemoAuthClient(): AuthClient {
   };
 }
 
+const demoDefaults = {
+  email: "aparna@example.com",
+  password: "bharatdoc123",
+  profile: {
+    name: "Dr. Aparna Iyer",
+    specialization: "General Physician",
+    medicalRegNo: ""
+  },
+  clinicCode: "MED42X",
+  clinic: {
+    name: "Sunrise Clinic",
+    address: "24 Baner Road, Pune 411045"
+  }
+};
+
 export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
   const auth = useMemo(() => authClient ?? (demoMode ? createDemoAuthClient() : createSupabaseAuthClient()), [demoMode, authClient]);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
@@ -44,21 +59,14 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState("rehangupta82@gmail.com");
-  const [password, setPassword] = useState("testtest");
+  const [email, setEmail] = useState(demoMode ? demoDefaults.email : "");
+  const [password, setPassword] = useState(demoMode ? demoDefaults.password : "");
   const [idToken, setIdToken] = useState<string | null>(null);
-  const [profile, setProfile] = useState({
-    name: "Dr. Aparna Iyer",
-    specialization: "General Physician",
-    medicalRegNo: ""
-  });
+  const [profile, setProfile] = useState(demoMode ? demoDefaults.profile : { name: "", specialization: "", medicalRegNo: "" });
   const [clinicMode, setClinicMode] = useState<ClinicMode>("join_clinic");
-  const [clinicCode, setClinicCode] = useState("MED42X");
+  const [clinicCode, setClinicCode] = useState(demoMode ? demoDefaults.clinicCode : "");
   const [clinicLookup, setClinicLookup] = useState<ClinicLookupResponse | null>(null);
-  const [clinic, setClinic] = useState({
-    name: "Sunrise Clinic",
-    address: "24 Baner Road, Pune 411045"
-  });
+  const [clinic, setClinic] = useState(demoMode ? demoDefaults.clinic : { name: "", address: "" });
 
   async function handleCredentials() {
     setIsBusy(true);
@@ -166,7 +174,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
     try {
       if (demoMode) {
-        navigate(clinicMode === "join_clinic" ? "/pending-approval" : "/dashboard");
+        navigate(clinicMode === "join_clinic" ? "/pending-approval" : "/dashboard?demo=1");
       } else {
         const result = await registerAccount(idToken, input);
         navigate(destinationForRegistration(result));

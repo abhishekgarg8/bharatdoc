@@ -1,5 +1,11 @@
 import { DashboardPageClient } from "@/components/dashboard-page-client";
 
-export default function DashboardPage() {
-  return <DashboardPageClient />;
+interface DashboardPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
+  return <DashboardPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
 }

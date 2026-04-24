@@ -1,5 +1,11 @@
 import { PromptEditorPageClient } from "@/components/settings/prompt-editor-page-client";
 
-export default function PromptSettingsPage() {
-  return <PromptEditorPageClient />;
+interface PromptSettingsPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function PromptSettingsPage({ searchParams }: PromptSettingsPageProps) {
+  return <PromptEditorPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
 }

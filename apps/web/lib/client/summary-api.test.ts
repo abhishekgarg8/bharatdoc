@@ -64,13 +64,17 @@ describe("summary client API", () => {
       Response.json({
         recording: {
           ...apiRecording,
-          summary: "Edited summary"
+          summary: "Edited summary",
+          status: "summary_ready",
+          pdf_storage_path: null
         }
       })
     ) as unknown as typeof fetch;
 
     await expect(saveRecordingSummary("id-token", apiRecording.id, "Edited summary", fetcher)).resolves.toMatchObject({
-      summary: "Edited summary"
+      summary: "Edited summary",
+      status: "summary_ready",
+      pdfStoragePath: null
     });
     expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}/summary`, {
       method: "PATCH",

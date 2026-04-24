@@ -114,7 +114,8 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
         .from("recordings")
         .update({
           summary: input.summary,
-          status: input.status
+          status: "summary_ready",
+          pdf_storage_path: null
         })
         .eq("id", input.recordingId)
         .eq("doctor_id", input.doctorId)

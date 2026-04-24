@@ -79,7 +79,7 @@ describe("SettingsPageClient", () => {
     expect(screen.getAllByText("Dr. Meera Shah")).toHaveLength(2);
   });
 
-  it("uses demo settings when no token is available", async () => {
+  it("uses demo settings only when explicit demo fallback is enabled", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
@@ -87,9 +87,23 @@ describe("SettingsPageClient", () => {
       getCurrentIdToken: vi.fn(async () => null)
     };
 
-    render(<SettingsPageClient authClient={authClient} />);
+    render(<SettingsPageClient authClient={authClient} demoOnMissingToken />);
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
     expect(screen.getByText("MED42X")).toBeInTheDocument();
+  });
+
+  it("shows an error instead of demo settings when authenticated loading fails", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ error: { message: "failed" } }, { status: 500 })) as unknown as typeof fetch;
+
+    render(<SettingsPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Unable to load settings. Please sign in again.")).resolves.toBeInTheDocument();
   });
 });

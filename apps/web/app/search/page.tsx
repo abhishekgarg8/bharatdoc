@@ -1,5 +1,11 @@
 import { SearchPageClient } from "@/components/search/search-page-client";
 
-export default function SearchPage() {
-  return <SearchPageClient />;
+interface SearchPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function SearchPage({ searchParams }: SearchPageProps) {
+  return <SearchPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
 }

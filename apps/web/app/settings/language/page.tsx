@@ -1,5 +1,11 @@
 import { TranscriptionLanguagePageClient } from "@/components/settings/transcription-language-page-client";
 
-export default function LanguageSettingsPage() {
-  return <TranscriptionLanguagePageClient />;
+interface LanguageSettingsPageProps {
+  searchParams?: {
+    demo?: string;
+  };
+}
+
+export default function LanguageSettingsPage({ searchParams }: LanguageSettingsPageProps) {
+  return <TranscriptionLanguagePageClient demoOnMissingToken={searchParams?.demo === "1"} />;
 }

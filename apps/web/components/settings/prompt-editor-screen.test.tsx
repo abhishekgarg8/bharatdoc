@@ -33,6 +33,19 @@ describe("PromptEditorScreen", () => {
     });
   });
 
+  it("does not report prompt persistence when authentication is missing", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ preferences: { custom_prompt: "Summarize {{transcript}}", transcription_lang: "auto" } })
+    ) as unknown as typeof fetch;
+
+    render(<PromptEditorScreen initialPrompt="Summarize {{transcript}}" fetcher={fetcher} />);
+    fireEvent.click(screen.getByRole("button", { name: /save prompt/i }));
+
+    await screen.findByText("Unable to save summary prompt.");
+    expect(screen.queryByText("Summary prompt saved.")).not.toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("renders a sample prompt preview", async () => {
     render(<PromptEditorScreen initialPrompt="Summarize {{transcript}}" />);
 

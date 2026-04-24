@@ -8,6 +8,10 @@ const migration = readFileSync(
   resolve(dirname, "../../../supabase/migrations/202604230001_initial_schema.sql"),
   "utf8"
 );
+const reviewRpcMigration = readFileSync(
+  resolve(dirname, "../../../supabase/migrations/202604240001_review_clinic_join_request_rpc.sql"),
+  "utf8"
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -38,5 +42,11 @@ describe("initial Supabase migration contract", () => {
     for (const table of ["clinics", "doctors", "clinic_join_requests", "recordings"]) {
       expect(migration).toContain(`alter table public.${table} enable row level security`);
     }
+  });
+
+  it("adds an atomic join-request review RPC", () => {
+    expect(reviewRpcMigration).toContain("public.review_clinic_join_request");
+    expect(reviewRpcMigration).toContain("and status = 'pending'");
+    expect(reviewRpcMigration).toContain("get diagnostics changed_rows = row_count");
   });
 });

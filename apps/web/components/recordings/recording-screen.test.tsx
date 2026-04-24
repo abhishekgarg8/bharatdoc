@@ -125,7 +125,7 @@ describe("RecordingScreen", () => {
     expect((await repository.list())[0]).toMatchObject({ captureState: "stopped" });
   });
 
-  it("requires patient id before saving stopped audio", async () => {
+  it("saves stopped audio without Patient ID and requires it before transcription", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
 
@@ -135,6 +135,13 @@ describe("RecordingScreen", () => {
     await screen.findByText("Recording started.");
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
 
+    await expect(screen.findByText("Recording saved on this device.")).resolves.toBeInTheDocument();
+    expect((await repository.list())[0]).toMatchObject({
+      patientId: null,
+      captureState: "stopped"
+    });
+    expect((await repository.list())[0]!.audioBlob).toBeInstanceOf(Blob);
+    fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
     await expect(screen.findByText("Patient ID is required before transcription.")).resolves.toBeInTheDocument();
   });
 
@@ -211,6 +218,7 @@ describe("RecordingScreen", () => {
         fetcher={fetcher}
         localRepository={repository}
         recorderFactory={async () => recorder}
+        onNavigate={vi.fn()}
       />
     );
 
@@ -224,5 +232,61 @@ describe("RecordingScreen", () => {
     await expect(screen.findByText("Unable to transcribe recording.")).resolves.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
     expect((await repository.list())[0]).toMatchObject({ syncState: "failed", captureState: "failed" });
+  });
+
+  it("retries transcription with the persisted server recording id", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+    const apiRecord = {
+      id: "server-recording",
+      patient_id: "P-10482",
+      label: null,
+      duration_seconds: 42,
+      doctor_name: "Dr. Aparna",
+      status: "recorded",
+      recorded_at: "2026-04-23T06:12:00.000Z"
+    };
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ record: apiRecord }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ error: { code: "WORKER_DOWN" } }, { status: 502 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          recording_id: apiRecord.id,
+          transcript: "Retry transcript.",
+          audio_storage_path: "clinic/doctor/recording.webm",
+          status: "transcribed"
+        })
+      ) as unknown as typeof fetch;
+
+    render(
+      <RecordingScreen
+        idToken="id-token"
+        fetcher={fetcher}
+        localRepository={repository}
+        recorderFactory={async () => recorder}
+        onNavigate={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: "P-10482" } });
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+    await screen.findByText("Recording saved on this device.");
+    fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
+    await screen.findByText("Unable to transcribe recording.");
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+
+    await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/recordings", expect.any(Object));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/recordings/server-recording/transcription", expect.any(Object));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "/api/recordings/server-recording/transcription", expect.any(Object));
+    expect((await repository.list())[0]).toMatchObject({
+      serverRecordingId: "server-recording",
+      syncState: "transcribed",
+      transcript: "Retry transcript."
+    });
   });
 });

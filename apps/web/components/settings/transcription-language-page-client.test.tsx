@@ -23,4 +23,18 @@ describe("TranscriptionLanguagePageClient", () => {
 
     await expect(screen.findByRole("button", { name: /hinglish/i })).resolves.toHaveAttribute("aria-pressed", "true");
   });
+
+  it("shows an error instead of demo language when authenticated loading fails", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ error: { message: "failed" } }, { status: 500 })) as unknown as typeof fetch;
+
+    render(<TranscriptionLanguagePageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Unable to load language preferences. Please sign in again.")).resolves.toBeInTheDocument();
+  });
 });

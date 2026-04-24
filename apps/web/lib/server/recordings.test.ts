@@ -60,10 +60,12 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
       recorded_at: input.recordedAt
     })),
     findRecordingForClinic: vi.fn(async () => recording),
+    findRecordingForDoctor: vi.fn(async () => recording),
     updateRecordingSummary: vi.fn(async (input) => ({
       ...recording,
       summary: input.summary,
-      status: input.status
+      status: "summary_ready" as const,
+      pdf_storage_path: null
     }))
   };
 }
@@ -155,35 +157,54 @@ describe("recordings service", () => {
     });
     expect(repository.updateRecordingSummary).toHaveBeenCalledWith({
       recordingId: recording.id,
-      clinicId: activeDoctor.clinic_id,
-      summary: "Chief Complaint: Fever",
-      status: "summary_ready"
+      doctorId: activeDoctor.id,
+      summary: "Chief Complaint: Fever"
     });
   });
 
-  it("preserves pdf saved status when saving edited summaries", async () => {
+  it("invalidates stale PDFs when saving edited summaries", async () => {
     const repository = createRepository();
-    vi.mocked(repository.findRecordingForClinic).mockResolvedValueOnce({
+    vi.mocked(repository.findRecordingForDoctor).mockResolvedValueOnce({
       ...recording,
       status: "pdf_saved",
       pdf_storage_path: "pdfs/p-10482.pdf"
     });
 
-    await saveRecordingSummaryForDoctor(
-      { uid: "firebase-doctor", phoneNumber: "+919876543210" },
-      recording.id,
-      "Updated summary",
-      repository
-    );
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "Updated summary",
+        repository
+      )
+    ).resolves.toMatchObject({
+      status: "summary_ready",
+      pdf_storage_path: null
+    });
 
     expect(repository.updateRecordingSummary).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "pdf_saved" })
+      expect.objectContaining({ doctorId: activeDoctor.id })
     );
+  });
+
+  it("does not allow same-clinic doctors to edit recordings they do not own", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findRecordingForDoctor).mockResolvedValueOnce(null);
+
+    await expect(
+      saveRecordingSummaryForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        recording.id,
+        "Updated summary",
+        repository
+      )
+    ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
+    expect(repository.updateRecordingSummary).not.toHaveBeenCalled();
   });
 
   it("requires patient id, transcript, and summary text before saving summaries", async () => {
     const missingPatientRepository = createRepository();
-    vi.mocked(missingPatientRepository.findRecordingForClinic).mockResolvedValueOnce({
+    vi.mocked(missingPatientRepository.findRecordingForDoctor).mockResolvedValueOnce({
       ...recording,
       patient_id: null
     });
@@ -198,7 +219,7 @@ describe("recordings service", () => {
     ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
 
     const missingTranscriptRepository = createRepository();
-    vi.mocked(missingTranscriptRepository.findRecordingForClinic).mockResolvedValueOnce({
+    vi.mocked(missingTranscriptRepository.findRecordingForDoctor).mockResolvedValueOnce({
       ...recording,
       transcript: null
     });

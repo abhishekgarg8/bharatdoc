@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TranscriptionLanguageScreen } from "@/components/settings/transcription-language-screen";
-import { PageLoading } from "@/components/session/page-loading";
+import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { fetchDoctorPreferences, type DoctorPreferences } from "@/lib/client/settings-api";
 
@@ -15,12 +15,13 @@ interface TranscriptionLanguagePageClientProps {
 export function TranscriptionLanguagePageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: TranscriptionLanguagePageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<DoctorPreferences | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,6 +50,10 @@ export function TranscriptionLanguagePageClient({
         if (isMounted) {
           setPreferences(nextPreferences);
         }
+      } catch {
+        if (isMounted && !demoOnMissingToken) {
+          setError("Unable to load language preferences. Please sign in again.");
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -65,6 +70,10 @@ export function TranscriptionLanguagePageClient({
 
   if (loading) {
     return <PageLoading label="Loading language preferences" />;
+  }
+
+  if (error) {
+    return <PageError message={error} />;
   }
 
   const screenProps = {

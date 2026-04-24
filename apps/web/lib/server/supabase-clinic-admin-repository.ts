@@ -1,6 +1,7 @@
 import "server-only";
 import type { Clinic, Doctor } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AppError } from "@/lib/server/errors";
 import type {
   ActiveClinicDoctor,
   ClinicProfileUpdate,
@@ -31,6 +32,18 @@ interface PendingApprovalRow {
 
 function firstDoctor(row: PendingApprovalRow): PendingApproval["doctor"] {
   return Array.isArray(row.doctors) ? row.doctors[0]! : row.doctors;
+}
+
+function throwReviewError(error: { code?: string; message?: string }): never {
+  if (error.code === "P0002") {
+    throw new AppError(409, "Pending join request was already reviewed.", "JOIN_REQUEST_CONFLICT");
+  }
+
+  if (error.code === "22023") {
+    throw new AppError(400, "Join request review status is invalid.", "JOIN_REQUEST_STATUS_INVALID");
+  }
+
+  throw error;
 }
 
 export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): ClinicAdminRepository {
@@ -115,51 +128,30 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
     },
 
     async approveJoinRequest(requestId: string, doctorId: string, ownerId: string): Promise<void> {
-      const { error: requestError } = await supabase
-        .from("clinic_join_requests")
-        .update({
-          status: "approved",
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: ownerId
-        })
-        .eq("id", requestId);
+      const { error } = await supabase.rpc("review_clinic_join_request", {
+        p_request_id: requestId,
+        p_doctor_id: doctorId,
+        p_owner_id: ownerId,
+        p_status: "approved",
+        p_rejection_reason: null
+      });
 
-      if (requestError) {
-        throw requestError;
-      }
-
-      const { error: doctorError } = await supabase
-        .from("doctors")
-        .update({ account_status: "active" })
-        .eq("id", doctorId);
-
-      if (doctorError) {
-        throw doctorError;
+      if (error) {
+        throwReviewError(error);
       }
     },
 
     async rejectJoinRequest(requestId: string, doctorId: string, ownerId: string, reason: string | null): Promise<void> {
-      const { error: requestError } = await supabase
-        .from("clinic_join_requests")
-        .update({
-          status: "rejected",
-          rejection_reason: reason,
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: ownerId
-        })
-        .eq("id", requestId);
+      const { error } = await supabase.rpc("review_clinic_join_request", {
+        p_request_id: requestId,
+        p_doctor_id: doctorId,
+        p_owner_id: ownerId,
+        p_status: "rejected",
+        p_rejection_reason: reason
+      });
 
-      if (requestError) {
-        throw requestError;
-      }
-
-      const { error: doctorError } = await supabase
-        .from("doctors")
-        .update({ account_status: "rejected" })
-        .eq("id", doctorId);
-
-      if (doctorError) {
-        throw doctorError;
+      if (error) {
+        throwReviewError(error);
       }
     },
 

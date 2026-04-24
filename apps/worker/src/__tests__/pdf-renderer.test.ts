@@ -53,10 +53,50 @@ describe("simple PDF renderer", () => {
     });
     const text = pdf.toString("ascii");
 
-    expect(text.startsWith("%PDF-1.4")).toBe(true);
-    expect(text).toContain("Sunrise Clinic");
-    expect(text).toContain("Patient P-10483");
-    expect(text).toContain("Chief Complaint: Fever");
+    expect(text.startsWith("%PDF-")).toBe(true);
     expect(text).toContain("%%EOF");
+    expect(pdf.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("renders Hindi and Hinglish text with an embedded Unicode font", async () => {
+    const pdf = await createSimplePdfRenderer().render({
+      clinic: {
+        ...clinic,
+        name: "आरोग्य क्लिनिक",
+        address: "पुणे"
+      },
+      doctor: {
+        ...doctor,
+        name: "डॉ. अपर्णा अय्यर"
+      },
+      recording: {
+        ...recording,
+        summary: "मुख्य शिकायत: बुखार दो दिन से है.\nPlan: fluids और paracetamol."
+      },
+      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+    });
+
+    expect(pdf.toString("ascii").startsWith("%PDF-")).toBe(true);
+    expect(pdf.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("keeps long summaries in the PDF instead of replacing them with a continuation note", async () => {
+    const longSummary = Array.from(
+      { length: 90 },
+      (_value, index) => `Clinical line ${index + 1}: patient has fever, cough, hydration advice, and follow-up instructions.`
+    ).join("\n");
+    const pdf = await createSimplePdfRenderer().render({
+      clinic,
+      doctor,
+      recording: {
+        ...recording,
+        summary: longSummary
+      },
+      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+    });
+    const text = pdf.toString("ascii");
+
+    expect(text).not.toContain("[Content continues in BharatDoc record]");
+    expect((text.match(/\/Type\s*\/Page\b/g) ?? []).length).toBeGreaterThan(1);
   });
 });

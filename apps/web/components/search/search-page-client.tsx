@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SearchScreen } from "@/components/search/search-screen";
-import { PageLoading } from "@/components/session/page-loading";
+import { PageError, PageLoading } from "@/components/session/page-loading";
 import {
   demoDashboardRecords,
   fetchDashboardRecords,
@@ -19,12 +19,13 @@ interface SearchPageClientProps {
 export function SearchPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: SearchPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
-  const [records, setRecords] = useState<DashboardRecord[]>(demoDashboardRecords);
+  const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -55,7 +56,11 @@ export function SearchPageClient({
         }
       } catch {
         if (isMounted) {
-          setRecords(demoDashboardRecords);
+          if (demoOnMissingToken) {
+            setRecords(demoDashboardRecords);
+          } else {
+            setError("Unable to load search records. Please sign in again.");
+          }
         }
       } finally {
         if (isMounted) {
@@ -73,6 +78,10 @@ export function SearchPageClient({
 
   if (loading) {
     return <PageLoading label="Loading search" />;
+  }
+
+  if (error) {
+    return <PageError message={error} />;
   }
 
   const searchProps = {

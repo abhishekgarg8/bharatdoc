@@ -75,6 +75,39 @@ describe("TranscriptSummaryScreen", () => {
     expect(save).toHaveBeenCalledWith(recording.id, "Edited summary");
   });
 
+  it("hides stale PDF links after summary edits", async () => {
+    const save = vi.fn(async (_recordingId: string, summary: string) => ({
+      ...recording,
+      summary,
+      status: "summary_ready" as const,
+      pdfStoragePath: null
+    }));
+
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          summary: "Initial summary",
+          status: "pdf_saved",
+          pdfStoragePath: "clinic/doctor/old.pdf"
+        }}
+        onSaveSummary={save}
+      />
+    );
+
+    expect(screen.getByLabelText("PDF saved")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Summary" }), {
+      target: { value: "Edited summary" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Summary saved.")).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText("PDF saved")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open PDF" })).not.toBeInTheDocument();
+  });
+
   it("generates PDFs after a summary is saved", async () => {
     const generatePdf = vi.fn(async () => ({
       recording_id: recording.id,

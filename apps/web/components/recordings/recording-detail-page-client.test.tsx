@@ -41,7 +41,7 @@ describe("RecordingDetailPageClient", () => {
     });
   });
 
-  it("renders demo recording detail when no token is available", async () => {
+  it("renders demo recording detail only when explicit demo fallback is enabled", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
@@ -49,9 +49,24 @@ describe("RecordingDetailPageClient", () => {
       getCurrentIdToken: vi.fn(async () => null)
     };
 
-    render(<RecordingDetailPageClient recordingId="p-10481" authClient={authClient} />);
+    render(<RecordingDetailPageClient recordingId="p-10481" authClient={authClient} demoOnMissingToken />);
 
     await expect(screen.findByRole("heading", { name: "P-10481" })).resolves.toBeInTheDocument();
     expect(screen.getByText(/I have had fever for two days/)).toBeInTheDocument();
+  });
+
+  it("shows an error instead of demo detail when authenticated loading fails", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ error: { message: "failed" } }, { status: 500 })) as unknown as typeof fetch;
+
+    render(<RecordingDetailPageClient recordingId="p-10481" authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Unable to load recording.")).resolves.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "P-10481" })).not.toBeInTheDocument();
   });
 });

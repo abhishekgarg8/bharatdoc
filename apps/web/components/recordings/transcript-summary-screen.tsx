@@ -84,6 +84,8 @@ export function TranscriptSummaryScreen({
       setSummary(result.summary);
       setSavedSummary(result.summary);
       setStatus(result.status);
+      setPdfStoragePath(null);
+      setPdfUrl(null);
       setActiveTab("summary");
       setMessage("Summary generated.");
     } catch {
@@ -105,7 +107,6 @@ export function TranscriptSummaryScreen({
     setSaving(true);
 
     try {
-      const nextStatus: RecordingDetailRecord["status"] = status === "pdf_saved" ? "pdf_saved" : "summary_ready";
       const updated = onSaveSummary
         ? await onSaveSummary(recording.id, summary)
         : idToken
@@ -113,12 +114,15 @@ export function TranscriptSummaryScreen({
           : {
               ...recording,
               summary,
-              status: nextStatus
+              status: "summary_ready" as const,
+              pdfStoragePath: null
             };
 
       setSummary(updated.summary ?? summary);
       setSavedSummary(updated.summary ?? summary);
       setStatus(updated.status);
+      setPdfStoragePath(updated.pdfStoragePath ?? null);
+      setPdfUrl(null);
       setMessage("Summary saved.");
     } catch {
       setError("Unable to save summary.");

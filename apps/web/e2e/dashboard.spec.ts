@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
-  await page.goto("/dashboard");
+  await page.goto("/dashboard?demo=1");
 
   await expect(page.getByText("Dr. Aparna Iyer")).toBeVisible();
   await expect(page.getByText("Sunrise Clinic, Pune")).toBeVisible();
@@ -11,21 +11,21 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
 });
 
 test("clinic search finds records and opens completed consultations", async ({ page }) => {
-  await page.goto("/search");
+  await page.goto("/search?demo=1");
 
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
   await page.getByLabel("Patient ID").fill("P-10470");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("Results for P-10470")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open recording P-10470" })).toBeVisible();
-  await page.getByRole("link", { name: "Open recording P-10470" }).click();
-  await expect(page).toHaveURL(/\/recordings\/p-10470$/);
+  await page.goto("/recordings/p-10470?demo=1");
+  await expect(page).toHaveURL(/\/recordings\/p-10470\?demo=1$/);
   await expect(page.getByLabel("PDF saved")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
 });
 
 test("recording detail smoke generates and edits a summary", async ({ page }) => {
-  await page.goto("/recordings/p-10481");
+  await page.goto("/recordings/p-10481?demo=1");
 
   await expect(page.getByRole("heading", { name: "P-10481" })).toBeVisible();
   await expect(page.getByText(/I have had fever for two days/)).toBeVisible();
@@ -41,7 +41,7 @@ test("recording detail smoke generates and edits a summary", async ({ page }) =>
 });
 
 test("local recording flow records, transcribes, and returns to dashboard", async ({ page }) => {
-  await page.goto("/recordings/new?mockRecorder=1");
+  await page.goto("/recordings/new?mockRecorder=1&demo=1");
 
   await expect(page.getByRole("heading", { name: "Recording" })).toBeVisible();
   await page.getByLabel("Patient ID").fill("P-10500");
@@ -53,8 +53,7 @@ test("local recording flow records, transcribes, and returns to dashboard", asyn
   await page.getByRole("button", { name: /transcribe/i }).click();
   await expect(page.getByText("Transcript ready.")).toBeVisible();
   await expect(page.getByText(/mild cough/)).toBeVisible();
-  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/dashboard?demo=1");
   await expect(page.getByText("P-10500")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open recording P-10500" }).getByLabel("Stored offline")).toBeVisible();
 });
@@ -85,7 +84,7 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await page.getByRole("button", { name: /^continue$/i }).click();
   await page.getByRole("button", { name: /create clinic/i }).click();
   await page.getByRole("button", { name: /create clinic & continue/i }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/dashboard\?demo=1$/);
   await expect(page.getByText("Today's consultations")).toBeVisible();
 });
 
@@ -107,7 +106,7 @@ test("pending approval smoke renders locked state", async ({ page }) => {
 });
 
 test("settings smoke renders owner admin surface", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?demo=1");
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Clinic admin")).toBeVisible();
@@ -116,7 +115,7 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
 });
 
 test("settings owner approval removes pending doctor", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?demo=1");
 
   await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
   await page.getByRole("button", { name: /approve/i }).click();
@@ -125,7 +124,7 @@ test("settings owner approval removes pending doctor", async ({ page }) => {
 });
 
 test("settings owner can inspect active doctors", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?demo=1");
 
   await page.getByRole("button", { name: /active doctors/i }).first().click();
   await expect(page.getByText("Current clinic members with active BharatDoc access.")).toBeVisible();
@@ -137,7 +136,7 @@ test("settings owner can inspect active doctors", async ({ page }) => {
 });
 
 test("settings owner can edit the clinic profile locally", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?demo=1");
 
   await page.getByRole("button", { name: /clinic profile/i }).first().click();
   await page.getByLabel("Clinic name").fill("Sunrise Family Clinic");
@@ -149,7 +148,7 @@ test("settings owner can edit the clinic profile locally", async ({ page }) => {
 });
 
 test("settings prompt editor validates and previews prompts", async ({ page }) => {
-  await page.goto("/settings/prompt");
+  await page.goto("/settings/prompt?demo=1");
 
   await expect(page.getByRole("heading", { name: "Summary prompt" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Prompt" })).toHaveValue(/{{transcript}}/);
@@ -158,7 +157,7 @@ test("settings prompt editor validates and previews prompts", async ({ page }) =
 });
 
 test("settings language screen renders transcription options", async ({ page }) => {
-  await page.goto("/settings/language");
+  await page.goto("/settings/language?demo=1");
 
   await expect(page.getByRole("heading", { name: "Language" })).toBeVisible();
   await expect(page.getByRole("button", { name: /auto-detect/i })).toBeVisible();

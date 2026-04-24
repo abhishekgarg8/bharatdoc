@@ -7,7 +7,7 @@ import {
   type SettingsClinicProfile,
   type SettingsDoctorProfile
 } from "@/components/settings/settings-screen";
-import { PageLoading } from "@/components/session/page-loading";
+import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import {
   fetchClinicAdminSnapshot,
@@ -58,7 +58,7 @@ function toSettingsActiveDoctors(
 export function SettingsPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: SettingsPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +67,7 @@ export function SettingsPageClient({
   const [clinic, setClinic] = useState<SettingsClinicProfile | null>(null);
   const [activeDoctors, setActiveDoctors] = useState<SettingsActiveDoctor[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -111,10 +112,14 @@ export function SettingsPageClient({
         }
       } catch {
         if (isMounted) {
-          setDoctor(null);
-          setClinic(null);
-          setActiveDoctors([]);
-          setPendingApprovals([]);
+          if (demoOnMissingToken) {
+            setDoctor(null);
+            setClinic(null);
+            setActiveDoctors([]);
+            setPendingApprovals([]);
+          } else {
+            setError("Unable to load settings. Please sign in again.");
+          }
         }
       } finally {
         if (isMounted) {
@@ -134,8 +139,13 @@ export function SettingsPageClient({
     return <PageLoading label="Loading settings" />;
   }
 
+  if (error) {
+    return <PageError message={error} />;
+  }
+
   const screenProps = {
     fetcher,
+    allowLocalDemoWrites: demoOnMissingToken && !idToken,
     ...(idToken ? { idToken } : {}),
     ...(doctor ? { doctor } : {}),
     ...(clinic ? { clinic } : {}),

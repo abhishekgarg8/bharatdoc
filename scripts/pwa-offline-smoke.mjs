@@ -22,7 +22,7 @@ async function main() {
   const page = await context.newPage();
 
   try {
-    await page.goto(`${baseUrl}/dashboard`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/dashboard?demo=1`, { waitUntil: "networkidle" });
     await page.waitForFunction(async () => {
       if (!("serviceWorker" in navigator)) {
         return false;
@@ -32,15 +32,15 @@ async function main() {
       return true;
     });
     await page.reload({ waitUntil: "networkidle" });
-    await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/settings?demo=1`, { waitUntil: "networkidle" });
 
     await context.setOffline(true);
 
-    await page.goto(`${baseUrl}/dashboard`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/dashboard?demo=1`, { waitUntil: "domcontentloaded" });
     await page.getByText("Today's consultations").waitFor();
     await page.screenshot({ path: path.join(outputDir, "dashboard-offline-mobile.png"), fullPage: true });
 
-    await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/settings?demo=1`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await page.screenshot({ path: path.join(outputDir, "settings-offline-mobile.png"), fullPage: true });
 

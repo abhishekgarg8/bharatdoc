@@ -4,8 +4,11 @@ interface RecordingDetailPageProps {
   params: {
     id: string;
   };
+  searchParams?: {
+    demo?: string;
+  };
 }
 
-export default function RecordingDetailPage({ params }: RecordingDetailPageProps) {
-  return <RecordingDetailPageClient recordingId={params.id} />;
+export default function RecordingDetailPage({ params, searchParams }: RecordingDetailPageProps) {
+  return <RecordingDetailPageClient recordingId={params.id} demoOnMissingToken={searchParams?.demo === "1"} />;
 }

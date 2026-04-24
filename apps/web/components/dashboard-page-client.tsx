@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DashboardScreen } from "@/components/dashboard-screen";
-import { PageLoading } from "@/components/session/page-loading";
+import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import {
   demoDashboardRecords,
@@ -20,12 +20,13 @@ interface DashboardPageClientProps {
 export function DashboardPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = true
+  demoOnMissingToken = false
 }: DashboardPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<MeResponse["doctor"] | null>(null);
-  const [records, setRecords] = useState<DashboardRecord[]>(demoDashboardRecords);
+  const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -58,7 +59,11 @@ export function DashboardPageClient({
         }
       } catch {
         if (isMounted) {
-          setRecords(demoDashboardRecords);
+          if (demoOnMissingToken) {
+            setRecords(demoDashboardRecords);
+          } else {
+            setError("Unable to load dashboard. Please sign in again.");
+          }
         }
       } finally {
         if (isMounted) {
@@ -76,6 +81,10 @@ export function DashboardPageClient({
 
   if (loading) {
     return <PageLoading label="Loading dashboard" />;
+  }
+
+  if (error) {
+    return <PageError message={error} />;
   }
 
   const screenProps = {

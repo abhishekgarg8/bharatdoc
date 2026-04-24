@@ -281,13 +281,32 @@ export function RecordingScreen({
     }
   }
 
-  async function transcribeNow() {
-    const audioBlob = recording ? localRecordingAudioBlob(recording) : null;
+  async function persistEditableMetadata(currentRecording: LocalRecording): Promise<LocalRecording> {
+    const updated = await repository.updateDraft({
+      id: currentRecording.id,
+      patientId,
+      label
+    });
+    setRecording(updated);
+    return updated;
+  }
 
-    if (!audioBlob || !recording?.audioMimeType) {
+  async function transcribeNow() {
+    let workingRecording = recording;
+
+    if (workingRecording && (phase === "stopped" || phase === "failed")) {
+      workingRecording = await persistEditableMetadata(workingRecording);
+    }
+
+    const audioBlob = workingRecording ? localRecordingAudioBlob(workingRecording) : null;
+    const audioMimeType = workingRecording?.audioMimeType ?? null;
+
+    if (!workingRecording || !audioBlob || !audioMimeType) {
       setError("Stop and save audio before transcription.");
       return;
     }
+
+    const localRecordingId = workingRecording.id;
 
     const normalizedPatientId = normalizePatientId(patientId);
 
@@ -301,40 +320,52 @@ export function RecordingScreen({
     setPhase("transcribing");
 
     try {
-      await repository.markTranscribing(recording.id);
+      workingRecording = await repository.markTranscribing(localRecordingId);
+      setRecording(workingRecording);
 
       if (idToken) {
-        const serverRecord = await createRecordingMetadata(
-          idToken,
-          {
-            id: recording.serverRecordingId ?? recording.id,
-            patient_id: normalizedPatientId,
-            label: label.trim() || null,
-            duration_seconds: recording.durationSeconds,
-            recorded_at: recording.recordedAt
-          },
-          fetcher
-        );
-        await repository.markSynced(recording.id, serverRecord.id);
+        let serverRecordingId = workingRecording.serverRecordingId;
+
+        if (!serverRecordingId) {
+          const serverRecord = await createRecordingMetadata(
+            idToken,
+            {
+              id: workingRecording.id,
+              patient_id: normalizedPatientId,
+              label: label.trim() || null,
+              duration_seconds: workingRecording.durationSeconds,
+              recorded_at: workingRecording.recordedAt
+            },
+            fetcher
+          );
+          const synced = await repository.markSynced(workingRecording.id, serverRecord.id);
+          setRecording(synced);
+          workingRecording = synced;
+          serverRecordingId = serverRecord.id;
+        }
+
         const result = await transcribeRecordingAudio(
           idToken,
-          serverRecord.id,
+          serverRecordingId,
           audioBlob,
-          recording.audioMimeType,
+          audioMimeType,
           fetcher
         );
-        const updated = await repository.markTranscribed(recording.id, result.transcript);
+        const updated = await repository.markTranscribed(workingRecording.id, result.transcript);
         setRecording(updated);
-        navigate(`/recordings/${serverRecord.id}`);
+        navigate(`/recordings/${serverRecordingId}`);
       } else {
-        const updated = await repository.markTranscribed(recording.id, DEMO_TRANSCRIPT);
+        const updated = await repository.markTranscribed(workingRecording.id, DEMO_TRANSCRIPT);
         setRecording(updated);
       }
 
       setPhase("transcribed");
       setMessage("Transcript ready.");
     } catch {
-      await repository.markFailed(recording.id, "Unable to transcribe recording.");
+      if (workingRecording) {
+        const failed = await repository.markFailed(workingRecording.id, "Unable to transcribe recording.");
+        setRecording(failed);
+      }
       setPhase("failed");
       setError("Unable to transcribe recording.");
     }
@@ -412,6 +443,11 @@ export function RecordingScreen({
                   className="mt-2 min-h-12 w-full rounded-xl border border-rule bg-paper-deep px-3 font-mono text-base font-bold text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
                   value={patientId}
                   onChange={(event) => setPatientId(event.target.value)}
+                  onBlur={() => {
+                    if (recording && (phase === "stopped" || phase === "failed")) {
+                      void persistEditableMetadata(recording);
+                    }
+                  }}
                   disabled={!canEditPatient}
                   placeholder="P-10482"
                   aria-label="Patient ID"
@@ -425,6 +461,11 @@ export function RecordingScreen({
                   className="mt-2 min-h-12 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
+                  onBlur={() => {
+                    if (recording && (phase === "stopped" || phase === "failed")) {
+                      void persistEditableMetadata(recording);
+                    }
+                  }}
                   disabled={!canEditPatient}
                   placeholder="Follow-up, walk-in, fever review"
                   aria-label="Label"

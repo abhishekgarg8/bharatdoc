@@ -43,10 +43,11 @@ export function TranscriptionLanguageScreen({
     setError(null);
 
     try {
-      if (idToken) {
-        await updateDoctorPreferences(idToken, { transcription_lang: selectedLanguage }, fetcher);
+      if (!idToken) {
+        throw new Error("Authentication is required.");
       }
 
+      await updateDoctorPreferences(idToken, { transcription_lang: selectedLanguage }, fetcher);
       setMessage("Transcription language saved.");
     } catch {
       setError("Unable to save transcription language.");

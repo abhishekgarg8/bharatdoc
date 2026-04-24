@@ -64,7 +64,7 @@ describe("DashboardPageClient", () => {
     });
   });
 
-  it("falls back to demo dashboard when no token is available", async () => {
+  it("uses demo dashboard only when explicit demo fallback is enabled", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
@@ -72,9 +72,24 @@ describe("DashboardPageClient", () => {
       getCurrentIdToken: vi.fn(async () => null)
     };
 
-    render(<DashboardPageClient authClient={authClient} />);
+    render(<DashboardPageClient authClient={authClient} demoOnMissingToken />);
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
     expect(screen.getByText("P-10482")).toBeInTheDocument();
+  });
+
+  it("shows an error instead of demo records when authenticated loading fails", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ error: { message: "failed" } }, { status: 500 })) as unknown as typeof fetch;
+
+    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Unable to load dashboard. Please sign in again.")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
   });
 });

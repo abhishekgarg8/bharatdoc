@@ -73,7 +73,8 @@ function depsFor(doctor: Doctor | null, recordingResult: Recording | null = reco
       markRecordingSummarized: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
         summary: input.summary,
-        status: input.status
+        status: "summary_ready" as const,
+        pdf_storage_path: null
       })),
       markRecordingPdfSaved: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
@@ -310,8 +311,7 @@ describe("worker app", () => {
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
-      status: "summary_ready"
+      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol."
     });
   });
 

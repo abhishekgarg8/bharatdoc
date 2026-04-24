@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { authErrorMessage, createSupabaseAuthClient } from "@/lib/client/auth-client";
 
 const supabaseMocks = vi.hoisted(() => {
+  const signUp = vi.fn();
   const signInWithPassword = vi.fn();
   const getSession = vi.fn();
   const signOut = vi.fn();
   const createClient = vi.fn(() => ({
     auth: {
       getSession,
+      signUp,
       signInWithPassword,
       signOut
     }
@@ -16,6 +18,7 @@ const supabaseMocks = vi.hoisted(() => {
   return {
     createClient,
     getSession,
+    signUp,
     signInWithPassword,
     signOut
   };
@@ -28,39 +31,53 @@ vi.mock("@supabase/supabase-js", () => ({
 afterEach(() => {
   supabaseMocks.createClient.mockClear();
   supabaseMocks.getSession.mockReset();
+  supabaseMocks.signUp.mockReset();
   supabaseMocks.signInWithPassword.mockReset();
   supabaseMocks.signOut.mockReset();
   vi.unstubAllEnvs();
 });
 
 describe("Supabase auth client", () => {
-  it("signs up through the server endpoint and returns a Supabase access token", async () => {
+  it("signs up through the browser Supabase client and returns an access token", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
-    supabaseMocks.signInWithPassword.mockResolvedValue({
+    supabaseMocks.signUp.mockResolvedValue({
       data: { session: { access_token: "access-token" } },
       error: null
     });
-    const fetcher = vi.fn(async () => Response.json({ email: "doctor@example.com" }));
 
     await expect(
-      createSupabaseAuthClient(fetcher as unknown as typeof fetch).signUpWithPassword({
+      createSupabaseAuthClient().signUpWithPassword({
         email: "Doctor@Example.com",
         password: "bharatdoc123"
       })
     ).resolves.toBe("access-token");
 
-    expect(fetcher).toHaveBeenCalledWith(
-      "/api/auth/password/signup",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ email: "doctor@example.com", password: "bharatdoc123" })
-      })
-    );
-    expect(supabaseMocks.signInWithPassword).toHaveBeenCalledWith({
+    expect(supabaseMocks.signUp).toHaveBeenCalledWith({
       email: "doctor@example.com",
-      password: "bharatdoc123"
+      password: "bharatdoc123",
+      options: {
+        data: {
+          email: "doctor@example.com"
+        }
+      }
     });
+  });
+
+  it("does not continue signup when Supabase requires email confirmation", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.signUp.mockResolvedValue({
+      data: { user: { identities: [{ id: "identity" }] }, session: null },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().signUpWithPassword({
+        email: "doctor@example.com",
+        password: "bharatdoc123"
+      })
+    ).rejects.toThrow("Confirm your email before continuing.");
   });
 
   it("returns the current access token from the persisted Supabase session", async () => {

@@ -48,7 +48,8 @@ function depsFor(recordingResult: Recording | null = recording, summary = "Chief
     markRecordingSummarized: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       summary: input.summary,
-      status: input.status
+      status: "summary_ready" as const,
+      pdf_storage_path: null
     })),
     markRecordingPdfSaved: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
@@ -88,8 +89,7 @@ describe("worker summary service", () => {
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever",
-      status: "summary_ready"
+      summary: "Chief Complaint: Fever"
     });
   });
 
@@ -165,7 +165,7 @@ describe("worker summary service", () => {
     expect(deps.recordings.markRecordingSummarized).not.toHaveBeenCalled();
   });
 
-  it("preserves pdf_saved status when regenerating a summary after PDF generation", async () => {
+  it("invalidates saved PDFs when regenerating a summary after PDF generation", async () => {
     const pdfRecording: Recording = { ...recording, status: "pdf_saved", pdf_storage_path: "pdfs/p-10483.pdf" };
     const deps = depsFor(pdfRecording, "Updated summary");
 
@@ -175,10 +175,14 @@ describe("worker summary service", () => {
         { recordingId: pdfRecording.id },
         deps
       )
-    ).resolves.toMatchObject({ status: "pdf_saved" });
+    ).resolves.toMatchObject({ status: "summary_ready" });
 
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "pdf_saved" })
+      expect.objectContaining({
+        recordingId: pdfRecording.id,
+        doctorId: activeDoctor.id,
+        summary: "Updated summary"
+      })
     );
   });
 });

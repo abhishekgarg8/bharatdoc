@@ -54,11 +54,11 @@ export interface RecordingsRepository {
   searchPatientRecordings(clinicId: string, patientId: string, limit: number): Promise<RecordingListItem[]>;
   createRecording(input: CreateRecordingRow): Promise<RecordingListItem>;
   findRecordingForClinic(recordingId: string, clinicId: string): Promise<RecordingListItem | null>;
+  findRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null>;
   updateRecordingSummary(input: {
     recordingId: string;
-    clinicId: string;
+    doctorId: string;
     summary: string;
-    status: Extract<RecordingStatus, "summary_ready" | "pdf_saved">;
   }): Promise<RecordingListItem>;
 }
 
@@ -222,8 +222,8 @@ export async function saveRecordingSummaryForDoctor(
   repository: RecordingsRepository
 ): Promise<RecordingDetail> {
   const doctor = await requireActiveDoctorContext(user, repository);
-  const clinicId = requireClinicId(doctor);
-  const recording = await repository.findRecordingForClinic(requireRecordingId(recordingId), clinicId);
+  requireClinicId(doctor);
+  const recording = await repository.findRecordingForDoctor(requireRecordingId(recordingId), doctor.id);
 
   if (!recording) {
     throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
@@ -232,12 +232,10 @@ export async function saveRecordingSummaryForDoctor(
   requireWorkflowPatientId(recording.patient_id);
   requireTranscript(recording.transcript);
 
-  const status = recording.status === "pdf_saved" ? "pdf_saved" : "summary_ready";
   const updated = await repository.updateRecordingSummary({
     recordingId: recording.id,
-    clinicId,
-    summary: requireSummary(summary),
-    status
+    doctorId: doctor.id,
+    summary: requireSummary(summary)
   });
 
   return toRecordingDetail(updated, doctor.name);

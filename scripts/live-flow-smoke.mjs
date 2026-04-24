@@ -38,8 +38,8 @@ function createSupabaseClients() {
 }
 
 async function createPasswordToken(clients, emailPrefix) {
-  const email = `${emailPrefix.trim().toLowerCase()}@bharatdoc.test`;
-  const password = `Smoke-${emailPrefix}-${randomUUID()}`;
+  const email = `${emailPrefix.trim().toLowerCase()}@gmail.com`;
+  const password = `Smoke-${randomUUID().slice(0, 18)}A1`;
   const { error: createError } = await clients.admin.auth.admin.createUser({
     email,
     password,
