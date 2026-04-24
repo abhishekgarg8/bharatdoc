@@ -5,6 +5,8 @@ import { listPendingApprovalsForOwner } from "@/lib/server/clinic-admin";
 import { createSupabaseClinicAdminRepository } from "@/lib/server/supabase-clinic-admin-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
+export const preferredRegion = "bom1";
+
 export async function GET(request: Request) {
   try {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());

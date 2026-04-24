@@ -25,46 +25,32 @@ describe("production demo route gate", () => {
     vi.unstubAllEnvs();
   });
 
-  it("ignores demo query strings unless the explicit demo env flag is enabled", () => {
+  it("keeps demo query handling out of static server page props", () => {
     expect(isExplicitDemoModeEnabled({ demo: "1" })).toBe(false);
 
-    expect(propsFor(DashboardPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(false);
-    expect(propsFor(SearchPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(false);
-    expect(propsFor(SettingsPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(false);
-    expect(
-      propsFor(NewRecordingPage({ searchParams: { demo: "1", mockRecorder: "1" } }) as ReactElement)
-        .demoOnMissingToken
-    ).toBe(false);
-    expect(
-      propsFor(NewRecordingPage({ searchParams: { demo: "1", mockRecorder: "1" } }) as ReactElement)
-        .useDemoRecorder
-    ).toBe(false);
+    expect(propsFor(DashboardPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(SearchPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(SettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(NewRecordingPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
     expect(
       propsFor(
         RecordingDetailPage({
-          params: { id: "p-10481" },
-          searchParams: { demo: "1" }
+          params: { id: "p-10481" }
         }) as ReactElement
       ).demoOnMissingToken
-    ).toBe(false);
-    expect(propsFor(PromptSettingsPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(
-      false
-    );
-    expect(propsFor(LanguageSettingsPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(
-      false
-    );
-    expect(propsFor(OnboardingPage({ searchParams: { demo: "1" } }) as ReactElement).demoMode).toBe(false);
+    ).toBeUndefined();
+    expect(propsFor(PromptSettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(LanguageSettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(OnboardingPage() as ReactElement).demoMode).toBeUndefined();
   });
 
-  it("allows local/test demo mode only when the explicit demo env flag is enabled", () => {
+  it("allows the client-side demo helper only when the explicit demo env flag is enabled", () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "true");
 
     expect(isExplicitDemoModeEnabled({ demo: "1" })).toBe(true);
-    expect(propsFor(DashboardPage({ searchParams: { demo: "1" } }) as ReactElement).demoOnMissingToken).toBe(true);
-    expect(
-      propsFor(NewRecordingPage({ searchParams: { demo: "1", mockRecorder: "1" } }) as ReactElement)
-        .useDemoRecorder
-    ).toBe(true);
-    expect(propsFor(OnboardingPage({ searchParams: { demo: "1" } }) as ReactElement).demoMode).toBe(true);
+    expect(propsFor(DashboardPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
+    expect(propsFor(OnboardingPage() as ReactElement).demoMode).toBeUndefined();
   });
 });

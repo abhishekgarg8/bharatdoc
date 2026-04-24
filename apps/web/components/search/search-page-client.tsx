@@ -5,11 +5,12 @@ import { SearchScreen } from "@/components/search/search-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import {
   demoDashboardRecords,
-  fetchDashboardRecords,
+  fetchDashboardSnapshot,
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
-import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
 
 interface SearchPageClientProps {
   authClient?: AuthClient;
@@ -21,14 +22,16 @@ interface SearchPageClientProps {
 export function SearchPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
+  demoOnMissingToken,
   onNavigate
 }: SearchPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
-  const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
+  const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export function SearchPageClient({
       }
 
       if (!token) {
-        if (demoOnMissingToken) {
+        if (allowDemoFallback) {
           setLoading(false);
         } else {
           navigate("/onboarding");
@@ -55,13 +58,13 @@ export function SearchPageClient({
       let didRedirect = false;
 
       try {
-        const me = await fetchCurrentDoctor(token, fetcher);
+        const snapshot = await fetchDashboardSnapshot(token, fetcher);
 
         if (!isMounted) {
           return;
         }
 
-        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+        const inactiveDestination = destinationForInactiveDoctor(snapshot.doctor);
 
         if (inactiveDestination) {
           didRedirect = true;
@@ -69,14 +72,12 @@ export function SearchPageClient({
           return;
         }
 
-        const nextRecords = await fetchDashboardRecords(token, fetcher);
-
         if (isMounted) {
-          setRecords(nextRecords);
+          setRecords(snapshot.records);
         }
       } catch {
         if (isMounted) {
-          if (demoOnMissingToken) {
+          if (allowDemoFallback) {
             setRecords(demoDashboardRecords);
           } else {
             setError("Unable to load search records. Please sign in again.");
@@ -94,7 +95,7 @@ export function SearchPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate]);
+  }, [allowDemoFallback, client, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading search" />;

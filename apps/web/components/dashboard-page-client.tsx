@@ -6,10 +6,12 @@ import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import {
   demoDashboardRecords,
-  fetchDashboardRecords,
+  fetchDashboardSnapshot,
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
-import { destinationForInactiveDoctor, fetchCurrentDoctor, type MeResponse } from "@/lib/client/session";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
+import type { Doctor } from "@bharatdoc/shared";
 
 interface DashboardPageClientProps {
   authClient?: AuthClient;
@@ -21,14 +23,16 @@ interface DashboardPageClientProps {
 export function DashboardPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
+  demoOnMissingToken,
   onNavigate
 }: DashboardPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
-  const [doctor, setDoctor] = useState<MeResponse["doctor"] | null>(null);
-  const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
+  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,7 +46,7 @@ export function DashboardPageClient({
       }
 
       if (!idToken) {
-        if (demoOnMissingToken) {
+        if (allowDemoFallback) {
           setLoading(false);
         } else {
           navigate("/onboarding");
@@ -53,13 +57,13 @@ export function DashboardPageClient({
       let didRedirect = false;
 
       try {
-        const me = await fetchCurrentDoctor(idToken, fetcher);
+        const snapshot = await fetchDashboardSnapshot(idToken, fetcher);
 
         if (!isMounted) {
           return;
         }
 
-        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+        const inactiveDestination = destinationForInactiveDoctor(snapshot.doctor);
 
         if (inactiveDestination) {
           didRedirect = true;
@@ -67,15 +71,13 @@ export function DashboardPageClient({
           return;
         }
 
-        const nextRecords = await fetchDashboardRecords(idToken, fetcher);
-
         if (isMounted) {
-          setDoctor(me.doctor);
-          setRecords(nextRecords);
+          setDoctor(snapshot.doctor);
+          setRecords(snapshot.records);
         }
       } catch {
         if (isMounted) {
-          if (demoOnMissingToken) {
+          if (allowDemoFallback) {
             setRecords(demoDashboardRecords);
           } else {
             setError("Unable to load dashboard. Please sign in again.");
@@ -93,7 +95,7 @@ export function DashboardPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate]);
+  }, [allowDemoFallback, client, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading dashboard" />;

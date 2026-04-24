@@ -1,4 +1,4 @@
-import type { RecordingStatus } from "@bharatdoc/shared";
+import type { Doctor, RecordingStatus } from "@bharatdoc/shared";
 
 export interface DashboardRecord {
   id: string;
@@ -23,6 +23,16 @@ export interface DashboardApiRecord {
 
 export interface DashboardRecordListResponse {
   records: DashboardApiRecord[];
+}
+
+export interface DashboardSnapshotResponse {
+  doctor: Doctor;
+  records: DashboardApiRecord[];
+}
+
+export interface DashboardSnapshot {
+  doctor: Doctor;
+  records: DashboardRecord[];
 }
 
 export interface CreateRecordingMetadataInput {
@@ -186,6 +196,23 @@ export async function fetchDashboardRecords(idToken: string, fetcher: typeof fet
   const payload = await parseJson<DashboardRecordListResponse>(response, "Unable to load recent recordings.");
 
   return payload.records.map((record) => mapApiRecordingToDashboardRecord(record));
+}
+
+export async function fetchDashboardSnapshot(
+  idToken: string,
+  fetcher: typeof fetch = fetch
+): Promise<DashboardSnapshot> {
+  const response = await fetcher("/api/dashboard", {
+    headers: {
+      Authorization: `Bearer ${idToken}`
+    }
+  });
+  const payload = await parseJson<DashboardSnapshotResponse>(response, "Unable to load dashboard.");
+
+  return {
+    doctor: payload.doctor,
+    records: payload.records.map((record) => mapApiRecordingToDashboardRecord(record))
+  };
 }
 
 export async function createRecordingMetadata(

@@ -1,12 +1,7 @@
 import { DashboardPageClient } from "@/components/dashboard-page-client";
-import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
-interface DashboardPageProps {
-  searchParams?: {
-    demo?: string;
-  };
-}
+export const dynamic = "force-static";
 
-export default function DashboardPage({ searchParams }: DashboardPageProps) {
-  return <DashboardPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
+export default function DashboardPage() {
+  return <DashboardPageClient />;
 }

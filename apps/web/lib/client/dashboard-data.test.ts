@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRecordingMetadata,
   fetchDashboardRecords,
+  fetchDashboardSnapshot,
   formatRecordingDuration,
   mapApiRecordingToDashboardRecord,
   mergeDashboardRecords,
@@ -10,6 +11,7 @@ import {
   type DashboardRecord,
   type LocalDashboardRecord
 } from "@/lib/client/dashboard-data";
+import type { Doctor } from "@bharatdoc/shared";
 
 const apiRecord: DashboardApiRecord = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -19,6 +21,22 @@ const apiRecord: DashboardApiRecord = {
   doctor_name: "Dr. Aparna",
   status: "recorded",
   recorded_at: "2026-04-23T06:12:00.000Z"
+};
+
+const doctor: Doctor = {
+  id: "11111111-1111-4111-8111-111111111111",
+  firebase_uid: "firebase-doctor",
+  clinic_id: "22222222-2222-4222-8222-222222222222",
+  role: "doctor",
+  account_status: "active",
+  name: "Dr. Aparna",
+  specialization: "General Physician",
+  medical_reg_no: null,
+  phone: "+919876543210",
+  profile_photo_path: null,
+  custom_prompt: null,
+  transcription_lang: "auto",
+  created_at: "2026-04-23T09:00:00.000Z"
 };
 
 describe("dashboard data helpers", () => {
@@ -88,6 +106,26 @@ describe("dashboard data helpers", () => {
 
     await expect(fetchDashboardRecords("id-token", fetcher)).resolves.toHaveLength(1);
     expect(fetcher).toHaveBeenCalledWith("/api/recordings", {
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+  });
+
+  it("fetches dashboard snapshot with doctor context and records in one request", async () => {
+    const fetcher = vi.fn(async () => Response.json({ doctor, records: [apiRecord] })) as unknown as typeof fetch;
+
+    await expect(fetchDashboardSnapshot("id-token", fetcher)).resolves.toMatchObject({
+      doctor,
+      records: [
+        {
+          id: apiRecord.id,
+          patientId: "P-10482",
+          doctorName: "Dr. Aparna"
+        }
+      ]
+    });
+    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
       headers: {
         Authorization: "Bearer id-token"
       }

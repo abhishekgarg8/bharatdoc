@@ -25,6 +25,11 @@ export interface DashboardRecording {
   recorded_at: string;
 }
 
+export interface DashboardSnapshot {
+  doctor: Doctor;
+  records: DashboardRecording[];
+}
+
 export interface RecordingDetail {
   id: string;
   patient_id: string | null;
@@ -185,6 +190,30 @@ export async function listDashboardRecordingsForDoctor(
 
   const recordings = await repository.listRecentRecordings(doctor.id, clampLimit(limit, 10));
   return recordings.map((recording) => toDashboardRecording(recording, doctor.name));
+}
+
+export async function getDashboardSnapshotForUser(
+  user: VerifiedUser,
+  repository: RecordingsRepository,
+  limit?: number
+): Promise<DashboardSnapshot> {
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
+
+  if (!doctor) {
+    throw new AppError(404, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");
+  }
+
+  if (doctor.account_status !== "active") {
+    return { doctor, records: [] };
+  }
+
+  requireClinicId(doctor);
+
+  const recordings = await repository.listRecentRecordings(doctor.id, clampLimit(limit, 10));
+  return {
+    doctor,
+    records: recordings.map((recording) => toDashboardRecording(recording, doctor.name))
+  };
 }
 
 export async function getRecordingDetailForDoctor(

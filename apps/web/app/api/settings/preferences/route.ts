@@ -5,6 +5,8 @@ import { getDoctorPreferencesForUser, updateDoctorPreferencesForUser } from "@/l
 import { createSupabaseSettingsRepository } from "@/lib/server/supabase-settings-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
+export const preferredRegion = "bom1";
+
 export async function GET(request: Request) {
   try {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());

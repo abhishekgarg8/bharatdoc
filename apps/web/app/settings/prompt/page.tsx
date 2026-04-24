@@ -1,12 +1,7 @@
 import { PromptEditorPageClient } from "@/components/settings/prompt-editor-page-client";
-import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
-interface PromptSettingsPageProps {
-  searchParams?: {
-    demo?: string;
-  };
-}
+export const dynamic = "force-static";
 
-export default function PromptSettingsPage({ searchParams }: PromptSettingsPageProps) {
-  return <PromptEditorPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
+export default function PromptSettingsPage() {
+  return <PromptEditorPageClient />;
 }

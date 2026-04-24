@@ -2,76 +2,33 @@
 
 Fresh review date: April 24, 2026.
 
-Scope: current codebase checked against `implementation-plan.md`, `Plan/BharatDoc_PRD.md`, web app route/client code, server APIs, worker APIs, Supabase repositories/migrations, smoke scripts, and env docs.
+Scope: current codebase checked against `implementation-plan.md`, `Plan/BharatDoc_PRD.md`, web route/client code, server APIs, worker APIs, Supabase repositories/migrations, local recording logic, smoke scripts, and env validation.
 
 Notes:
-- Older P1 findings around default demo fallbacks, blank Patient ID transcription, retry idempotency, stale PDFs, Unicode/multi-page PDF rendering, same-clinic summary edits, and non-atomic approval/rejection are materially fixed in the current code.
-- This file lists active gaps only.
+- Active gaps only are listed below.
+- Older P1 findings around default demo fallbacks, unauthenticated settings false-success, blank Patient ID stop loss, transcription metadata retry idempotency, stale PDFs after summary edits, Unicode/multi-page PDF rendering, same-clinic summary edits, approval/rejection atomicity, direct Railway transcription upload, and worker CORS allowlisting are materially fixed in the current code.
+- The review was read-only for source code. This file was updated because the request explicitly asked for gaps to be added here.
 
-Resolution update, April 24, 2026:
-- P1-1 is remediated: browser transcription audio now uploads directly to Railway `/api/transcribe`; the Vercel upload proxy route was removed; worker CORS is allowlisted by `WORKER_CORS_ORIGINS`.
-- P1-2 is remediated in `Plan/env.template.txt` and env validation docs.
-- P1-3 is reconciled in `implementation-plan.md`, `Plan/implementation-log.md`, and `docs/staging-smoke.md`. Local live smoke passed; staging smoke remains blocked until `STAGING_WEB_URL` and `STAGING_WORKER_URL` are set.
+## P1 Findings
 
-## Resolved P1 Findings
-
-### P1-1. Web transcription upload still runs through Vercel instead of Railway
+### P1-1. Re-transcription can leave stale summary/PDF artifacts attached to a changed transcript
 
 Files:
-- `Plan/BharatDoc_PRD.md:398`
-- `apps/web/app/api/recordings/[id]/transcription/route.ts:13`
-- `apps/web/lib/server/worker-transcription-proxy.ts:50`
-- `apps/web/components/recordings/recording-screen.tsx:346`
+- `apps/worker/src/transcription.ts:89`
+- `apps/worker/src/repositories.ts:92`
 
 Problem:
-- The PRD says `Upload audio -> Whisper transcription` is handled by Railway because it is timeout-sensitive.
-- The browser currently posts the audio blob to a Next/Vercel API route first.
-- That route calls `request.formData()`, holds the audio in the Vercel function, then forwards it to Railway.
-- This keeps large/slow audio upload on Vercel, which can hit request body, memory, and execution time limits before Railway ever receives the recording.
+- The worker transcription path accepts any doctor-owned recording and then updates `audio_storage_path`, `transcript`, and `status = 'transcribed'`.
+- It does not constrain the current recording status to `recorded`.
+- It does not clear `summary` or `pdf_storage_path`.
+- A direct or retried `/api/transcribe` call against a recording that already reached `summary_ready` or `pdf_saved` can change the transcript while leaving old summary/PDF content in the row.
+- That reintroduces a clinical integrity problem: derived documentation can remain attached to source text it no longer represents.
 
 Fix:
-- Move browser audio upload directly to Railway, with the Supabase bearer token sent to the worker.
-- Or upload audio directly to Supabase Storage using a signed upload path, then send the storage path to Railway for transcription.
-- Add explicit tests/smoke coverage for realistic mobile audio sizes, not only tiny test blobs.
-- If direct browser-to-worker upload is used, fix worker CORS allowlisting at the same time.
-
-### P1-2. Vercel env template omits secrets required by web API routes
-
-Files:
-- `Plan/env.template.txt:10`
-- `packages/shared/src/env.ts:5`
-- `apps/web/lib/server/supabase.ts:5`
-
-Problem:
-- The Vercel `.env.local` section lists only `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, and `RAILWAY_WORKER_URL`.
-- `WebEnvSchema` also requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-- Web API routes call `createSupabaseServerClient()`, so onboarding, recordings, settings, clinic admin, search, and worker proxy routes can fail if deployment follows the template literally.
-
-Fix:
-- Add server-only Vercel variables to the web env template: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-- Clearly label them as Vercel server runtime secrets, not `NEXT_PUBLIC_*` browser values.
-- Keep the Railway worker env section separate, because Railway also needs its own `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-- Add a deployment checklist that validates required Vercel and Railway env vars before smoke tests.
-
-### P1-3. Phase 1 is marked verified while live smoke is still blocked
-
-Files:
-- `implementation-plan.md:84`
-- `Plan/implementation-log.md:478`
-- `scripts/live-flow-smoke.mjs`
-- `scripts/staging-smoke.mjs`
-
-Problem:
-- `implementation-plan.md` marks remote migration application, live auth smoke, full live AI smoke, and browser screenshot review complete.
-- `Plan/implementation-log.md` says `pnpm smoke:live-flow` still fails because Supabase cannot find `public.clinics` and `public.doctors` in the PostgREST schema cache.
-- Staging smoke is also blocked by missing `STAGING_WEB_URL` and `STAGING_WORKER_URL`.
-- These cannot all be true, so the current Phase 1 validation status is unreliable.
-
-Fix:
-- Fix the linked Supabase environment so PostgREST sees `clinics`, `doctors`, `clinic_join_requests`, and `recordings`.
-- Re-run `pnpm smoke:live-flow` against the configured backend.
-- Set staging URLs and run `pnpm smoke:staging`.
-- Update the implementation plan/log with exact command output and screenshot paths.
+- Make transcription state transitions explicit.
+- Either reject transcription unless the recording is still `recorded`, or clear all derived fields (`summary`, `pdf_storage_path`) when transcript/audio changes.
+- Prefer a database update predicate such as `where status = 'recorded'` or a versioned transcript/summary/PDF model.
+- Add tests for re-transcribing `summary_ready` and `pdf_saved` recordings.
 
 ## P2 Findings
 
@@ -95,38 +52,37 @@ Fix:
 ### P2-2. Dashboard still uses hardcoded clinic/admin context
 
 Files:
-- `apps/web/components/dashboard-page-client.tsx:106`
+- `apps/web/components/dashboard-page-client.tsx:108`
 - `apps/web/components/dashboard-screen.tsx:37`
 
 Problem:
 - `DashboardPageClient` passes `pendingApprovalsCount: doctor?.role === "owner" ? 1 : 0`.
-- It renders clinic context as `"Your clinic"` instead of the actual clinic name.
+- It renders clinic context as `"Your clinic"` instead of the real clinic name.
 - `DashboardScreen` still defaults to demo doctor/clinic data and a default pending approval count of `1`.
-- The top settings icon renders as a plain button with no navigation.
+- The top settings icon renders as a plain button without navigation.
 
 Fix:
-- Load real clinic profile and pending approval count for owners.
-- Return clinic name from `/api/me` or fetch a lightweight clinic context endpoint.
-- Default all badge counts to `0`.
+- Return clinic name and owner pending approval count from `/api/dashboard` or a lightweight clinic context endpoint.
+- Default badge counts to `0`.
 - Make the settings icon navigate to `/settings`.
 - Add tests for owners with zero pending approvals and doctors with no badge.
 
 ### P2-3. Dashboard recent list is doctor-scoped, not clinic-scoped
 
 Files:
-- `apps/web/lib/server/recordings.ts:180`
+- `apps/web/lib/server/recordings.ts:195`
 - `apps/web/lib/server/supabase-recordings-repository.ts:46`
 
 Problem:
-- The dashboard service calls `listRecentRecordings(doctor.id, ...)`.
+- `getDashboardSnapshotForUser()` calls `listRecentRecordings(doctor.id, ...)`.
 - The Supabase query filters by `doctor_id`.
-- The PRD dashboard calls for recent recordings with doctor name in a clinic-scoped view.
-- Doctors can search across the clinic, but the dashboard recent list only shows their own records.
+- The PRD dashboard language and UI show doctor names in recent records, which implies a clinic-scoped recent consultation view.
+- Search is clinic-scoped, but dashboard recent records only show the current doctor's recordings.
 
 Fix:
-- Decide explicitly whether Dashboard should be doctor-scoped or clinic-scoped.
+- Decide explicitly whether Dashboard is doctor-scoped or clinic-scoped.
 - If clinic-scoped, query by `clinic_id`, retain doctor names, and add cross-doctor tests.
-- If doctor-scoped is intentional, update the PRD and UI copy so the product contract is not ambiguous.
+- If doctor-scoped is intentional, update the PRD and UI copy.
 
 ### P2-4. Patient ID search is exact-only and result cards miss required context
 
@@ -134,27 +90,24 @@ Files:
 - `apps/web/lib/server/supabase-recordings-repository.ts:61`
 - `apps/web/components/search/search-screen.tsx:140`
 - `apps/web/components/dashboard-record-card.tsx:10`
-- `apps/web/lib/client/dashboard-data.ts:1`
 
 Problem:
 - The PRD requires exact or prefix Patient ID search.
 - Current Supabase query uses `.eq("patient_id", patientId)`.
-- Search results reuse the generic dashboard card and do not expose clinic name, consultation label, PDF availability/link, or explicit clinic-scope header text like the PRD describes.
+- Search results reuse the generic dashboard card and do not expose clinic name, consultation label, PDF availability/link, or richer search-specific context.
 
 Fix:
 - Support exact and prefix matching while preserving clinic scoping and newest-first ordering.
 - Add search-specific DTO fields for clinic name, label, and PDF status/link.
-- Render a search-specific result card instead of the generic dashboard card.
+- Render a search-specific result card.
 - Add tests for exact, prefix, empty, cross-clinic, and PDF-ready cases.
 
 ### P2-5. Clinic-scoped detail view exposes edit/AI actions that only the owning doctor can perform
 
 Files:
-- `apps/web/lib/server/recordings.ts:190`
-- `apps/web/components/recordings/transcript-summary-screen.tsx:62`
-- `apps/web/lib/server/recordings.ts:224`
-- `apps/worker/src/summary.ts`
-- `apps/worker/src/pdf-generation.ts`
+- `apps/web/lib/server/recordings.ts:219`
+- `apps/web/components/recordings/transcript-summary-screen.tsx:290`
+- `apps/web/components/recordings/transcript-summary-screen.tsx:333`
 
 Problem:
 - Recording detail loads by clinic scope, so a doctor can open another doctor's recording from search.
@@ -170,8 +123,8 @@ Fix:
 ### P2-6. Existing local records can mask newer server status on Dashboard
 
 Files:
-- `apps/web/lib/client/dashboard-data.ts:153`
-- `apps/web/lib/client/local-recordings.ts`
+- `apps/web/lib/client/dashboard-data.ts:163`
+- `apps/web/lib/client/local-recordings.ts:373`
 
 Problem:
 - `mergeDashboardRecords` iterates local records before server records when IDs match.
@@ -186,8 +139,8 @@ Fix:
 ### P2-7. Recording screen misses clinic and offline/reconnect context
 
 Files:
-- `apps/web/components/recordings/new-recording-page-client.tsx:17`
-- `apps/web/components/recordings/recording-screen.tsx:391`
+- `apps/web/components/recordings/new-recording-page-client.tsx:96`
+- `apps/web/components/recordings/recording-screen.tsx:402`
 
 Problem:
 - The PRD calls for clinic name on the recording screen as read-only context.
@@ -199,31 +152,32 @@ Fix:
 - Detect offline/online state and show explicit offline save/transcribe messaging.
 - Keep transcription manual, but make pending local recordings visible on reconnect.
 
-### P2-8. iOS MP4/AAC recording MIME path is missing
+### P2-8. iOS MP4/AAC recording path and filename handling are incomplete
 
-File:
-- `apps/web/lib/client/audio-recorder.ts:80`
+Files:
+- `apps/web/lib/client/audio-recorder.ts:88`
+- `apps/web/lib/client/transcription-api.ts:33`
 
 Problem:
 - Recorder MIME negotiation only chooses `audio/webm` or `audio/wav`.
 - The PRD calls out WebM/Opus for Android and MP4/AAC for iOS.
-- Safari/iOS can fail or degrade without an `audio/mp4`/AAC path.
+- Direct worker upload names any non-MP4 recording `recording.webm`, even if the MIME type is `audio/wav`.
 
 Fix:
-- Try supported MIME types in order, including `audio/webm;codecs=opus`, `audio/webm`, `audio/mp4;codecs=mp4a.40.2`, `audio/mp4`, then a safe fallback.
+- Try supported MIME types in order, including `audio/webm;codecs=opus`, `audio/webm`, `audio/mp4;codecs=mp4a.40.2`, `audio/mp4`, `audio/wav`.
 - Keep filename extensions aligned with MIME type.
-- Add unit coverage for Safari/iOS support matrices.
+- Add unit coverage for Safari/iOS support matrices and WAV fallback naming.
 
-### P2-9. Large transcription files are rejected instead of split
+### P2-9. Large transcription files are rejected instead of split or explained before upload
 
 Files:
-- `apps/worker/src/transcription.ts:44`
-- `packages/shared/src/constants.ts`
+- `apps/worker/src/transcription.ts:49`
+- `packages/shared/src/constants.ts:14`
 
 Problem:
 - The PRD says large audio files over 25 MB should be split into chunks with overlap and stitched.
 - Current worker rejects audio above `MAX_AUDIO_BYTES_PHASE_1`.
-- This is acceptable only if Phase 1 requirements and UX explicitly say large recordings are unsupported.
+- The UI does not warn doctors before upload that larger recordings are unsupported.
 
 Fix:
 - Implement chunk splitting and transcript stitching for oversized files.
@@ -233,7 +187,7 @@ Fix:
 ### P2-10. Owner admin is missing removal/reapproval audit flows and recording counts
 
 Files:
-- `Plan/BharatDoc_PRD.md:329`
+- `Plan/BharatDoc_PRD.md:302`
 - `apps/web/lib/server/clinic-admin.ts:20`
 - `apps/web/lib/server/supabase-clinic-admin-repository.ts:85`
 - `apps/web/components/settings/settings-screen.tsx:333`
@@ -251,9 +205,9 @@ Fix:
 ### P2-11. Clinic code is editable even though the PRD says read-only
 
 Files:
-- `Plan/BharatDoc_PRD.md:341`
+- `Plan/BharatDoc_PRD.md:307`
 - `apps/web/components/settings/settings-screen.tsx:408`
-- `apps/web/lib/server/clinic-admin.ts:43`
+- `apps/web/lib/server/clinic-admin.ts:205`
 
 Problem:
 - The PRD says clinic code is displayed read-only and tap-to-copy.
@@ -270,8 +224,6 @@ Fix:
 Files:
 - `apps/web/components/onboarding/pending-approval-screen.tsx:6`
 - `apps/web/components/onboarding/access-rejected-screen.tsx:6`
-- `apps/web/app/pending-approval/page.tsx`
-- `apps/web/app/access-rejected/page.tsx`
 
 Problem:
 - Pending approval screen hardcodes `Sunrise Clinic`, `MED42X`, owner name, and requested date.
@@ -305,7 +257,6 @@ File:
 
 Problem:
 - `Test sample` only interpolates the prompt with a hardcoded transcript.
-- The PRD asks for sample transcript testing of prompt behavior.
 - The current UI can make doctors think they are testing AI output when they are only previewing the rendered prompt.
 
 Fix:
@@ -316,15 +267,14 @@ Fix:
 ### P2-15. Auth source of truth and contact-field naming are inconsistent
 
 Files:
-- `Plan/BharatDoc_PRD.md:67`
+- `Plan/BharatDoc_PRD.md:319`
 - `packages/shared/src/schemas.ts:28`
 - `supabase/migrations/202604230001_initial_schema.sql:13`
-- `apps/web/lib/server/auth.ts:3`
-- `apps/web/lib/server/supabase-auth.ts:7`
+- `apps/web/lib/server/supabase-auth.ts:26`
 
 Problem:
 - The current implementation uses Supabase email/password auth.
-- The PRD still describes Firebase phone OTP and Firebase public env keys.
+- The PRD still describes Firebase phone OTP.
 - Active schemas and migrations still name the auth identifier `firebase_uid` and the contact field `phone`.
 - `supabase-auth.ts` stores Supabase email in a field named `phoneNumber`, which flows into `doctors.phone` and phone-labelled UI.
 
@@ -336,7 +286,7 @@ Fix:
 ### P2-16. Public clinic-code lookup has no abuse guard
 
 Files:
-- `apps/web/app/api/clinics/lookup/route.ts:6`
+- `apps/web/app/api/clinics/lookup/route.ts:8`
 - `apps/web/lib/server/onboarding.ts:62`
 
 Problem:
@@ -350,12 +300,31 @@ Fix:
 - Keep response data minimal until the user is authenticated.
 - Add tests for throttled repeated invalid lookups.
 
-### P2-17. Browser and staging smoke coverage is still demo/shell-heavy
+### P2-17. Non-dashboard protected pages still do serial auth/resource requests
 
 Files:
-- `apps/web/e2e/dashboard.spec.ts`
+- `apps/web/components/settings/settings-page-client.tsx:101`
+- `apps/web/components/settings/prompt-editor-page-client.tsx:56`
+- `apps/web/components/settings/transcription-language-page-client.tsx:56`
+- `apps/web/components/recordings/recording-detail-page-client.tsx:63`
+- `apps/web/components/recordings/new-recording-page-client.tsx:52`
+
+Problem:
+- Dashboard/search were collapsed into `/api/dashboard`, but settings, prompt, language, recording detail, and new recording still fetch `/api/me` before fetching route-specific data or rendering the target screen.
+- Each call verifies the Supabase token remotely.
+- This keeps avoidable request waterfalls on important production screens.
+
+Fix:
+- Return doctor/account-state context from the route-specific APIs.
+- Or add combined page-bootstrap endpoints for settings, preferences, and recording detail.
+- Add latency tests or smoke timing logs for protected page bootstraps.
+
+### P2-18. Browser and staging smoke coverage is still demo/shell-heavy
+
+Files:
+- `apps/web/e2e/dashboard.spec.ts:3`
 - `scripts/pwa-offline-smoke.mjs:24`
-- `scripts/staging-smoke.mjs:1`
+- `scripts/staging-smoke.mjs:58`
 - `Plan/implementation-log.md:478`
 
 Problem:
@@ -366,30 +335,14 @@ Problem:
 
 Fix:
 - Keep demo E2E tests, but add authenticated production-mode browser tests with mocked Supabase/API responses.
-- Add one local or staging smoke path that exercises real auth, real API routes, worker proxying/direct upload, and PDF signed URL reload behavior.
+- Add one local or staging smoke path that exercises real auth, real API routes, worker upload, summary/PDF generation, and PDF signed URL reload behavior.
 - Link latest smoke output and screenshots from the implementation log.
-
-### P2-18. Worker CORS is unrestricted
-
-File:
-- `apps/worker/src/app.ts:20`
-
-Problem:
-- The Railway worker calls `app.use(cors())` with no origin allowlist.
-- Bearer auth still protects data, but any browser origin can attempt worker API requests.
-- For a clinical-records worker, browser-origin access should be limited to the deployed web app and local development origins.
-
-Fix:
-- Add a worker env var such as `WORKER_ALLOWED_ORIGINS`.
-- Configure CORS to allow only Vercel/staging/local origins.
-- Keep `/health` available for platform checks if needed.
-- Add worker tests for allowed and rejected origins.
 
 ### P2-19. Generic server errors are returned to clients verbatim
 
 Files:
-- `apps/web/lib/server/errors.ts:31`
-- `apps/worker/src/http-errors.ts:27`
+- `apps/web/lib/server/errors.ts:36`
+- `apps/worker/src/http-errors.ts:39`
 
 Problem:
 - Unknown `Error` objects are converted to API responses with `error.message`.

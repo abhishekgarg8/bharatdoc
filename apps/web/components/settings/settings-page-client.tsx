@@ -9,6 +9,7 @@ import {
 } from "@/components/settings/settings-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import {
   fetchClinicAdminSnapshot,
   type PendingApproval
@@ -59,11 +60,13 @@ function toSettingsActiveDoctors(
 export function SettingsPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
+  demoOnMissingToken,
   onNavigate
 }: SettingsPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [doctor, setDoctor] = useState<SettingsDoctorProfile | null>(null);
@@ -83,7 +86,7 @@ export function SettingsPageClient({
       }
 
       if (!token) {
-        if (demoOnMissingToken) {
+        if (allowDemoFallback) {
           setLoading(false);
         } else {
           navigate("/onboarding");
@@ -125,7 +128,7 @@ export function SettingsPageClient({
         }
       } catch {
         if (isMounted) {
-          if (demoOnMissingToken) {
+          if (allowDemoFallback) {
             setDoctor(null);
             setClinic(null);
             setActiveDoctors([]);
@@ -146,7 +149,7 @@ export function SettingsPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate]);
+  }, [allowDemoFallback, client, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading settings" />;
@@ -156,7 +159,7 @@ export function SettingsPageClient({
     return <PageError message={error} />;
   }
 
-  if (demoOnMissingToken && !idToken && !doctor) {
+  if (allowDemoFallback && !idToken && !doctor) {
     return <SettingsScreen fetcher={fetcher} allowLocalDemoWrites demoMode />;
   }
 

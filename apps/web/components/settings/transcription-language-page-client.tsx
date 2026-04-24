@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TranscriptionLanguageScreen } from "@/components/settings/transcription-language-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 import { fetchDoctorPreferences, type DoctorPreferences } from "@/lib/client/settings-api";
 
@@ -17,11 +18,13 @@ interface TranscriptionLanguagePageClientProps {
 export function TranscriptionLanguagePageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
+  demoOnMissingToken,
   onNavigate
 }: TranscriptionLanguagePageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<DoctorPreferences | null>(null);
@@ -38,7 +41,7 @@ export function TranscriptionLanguagePageClient({
       }
 
       if (!token) {
-        if (demoOnMissingToken) {
+        if (allowDemoFallback) {
           setLoading(false);
         } else {
           navigate("/onboarding");
@@ -71,7 +74,7 @@ export function TranscriptionLanguagePageClient({
           setPreferences(nextPreferences);
         }
       } catch {
-        if (isMounted && !demoOnMissingToken) {
+        if (isMounted && !allowDemoFallback) {
           setError("Unable to load language preferences. Please sign in again.");
         }
       } finally {
@@ -86,7 +89,7 @@ export function TranscriptionLanguagePageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate]);
+  }, [allowDemoFallback, client, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading language preferences" />;

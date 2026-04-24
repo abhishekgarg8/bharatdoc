@@ -1,12 +1,7 @@
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
-import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
-interface SettingsPageProps {
-  searchParams?: {
-    demo?: string;
-  };
-}
+export const dynamic = "force-static";
 
-export default function SettingsPage({ searchParams }: SettingsPageProps) {
-  return <SettingsPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
+export default function SettingsPage() {
+  return <SettingsPageClient />;
 }

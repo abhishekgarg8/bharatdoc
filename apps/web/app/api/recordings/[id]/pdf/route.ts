@@ -4,6 +4,8 @@ import { errorResponse } from "@/lib/server/errors";
 import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { proxyPdfRequest } from "@/lib/server/worker-pdf-proxy";
 
+export const preferredRegion = "bom1";
+
 interface RouteContext {
   params: {
     id: string;

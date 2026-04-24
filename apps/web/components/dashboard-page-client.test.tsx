@@ -41,12 +41,8 @@ describe("DashboardPageClient", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
 
-      if (url === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
-      if (url === "/api/recordings") {
-        return Response.json({ records: [apiRecord] });
+      if (url === "/api/dashboard") {
+        return Response.json({ doctor: activeDoctor, records: [apiRecord] });
       }
 
       return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
@@ -56,12 +52,11 @@ describe("DashboardPageClient", () => {
 
     await expect(screen.findAllByText("Dr. Nisha Shah")).resolves.toHaveLength(2);
     expect(screen.getByText("P-20001")).toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledWith("/api/me", {
+    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
       headers: { Authorization: "Bearer id-token" }
     });
-    expect(fetcher).toHaveBeenCalledWith("/api/recordings", {
-      headers: { Authorization: "Bearer id-token" }
-    });
+    expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
+    expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
   });
 
   it("uses demo dashboard only when explicit demo fallback is enabled", async () => {
@@ -102,8 +97,8 @@ describe("DashboardPageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" } });
+      if (input.toString() === "/api/dashboard") {
+        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" }, records: [] });
       }
 
       return Response.json({ records: [apiRecord] });
@@ -112,6 +107,9 @@ describe("DashboardPageClient", () => {
     render(<DashboardPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
+      headers: { Authorization: "Bearer id-token" }
+    });
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
   });
 });

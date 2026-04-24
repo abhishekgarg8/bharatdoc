@@ -1,12 +1,7 @@
 import { TranscriptionLanguagePageClient } from "@/components/settings/transcription-language-page-client";
-import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
-interface LanguageSettingsPageProps {
-  searchParams?: {
-    demo?: string;
-  };
-}
+export const dynamic = "force-static";
 
-export default function LanguageSettingsPage({ searchParams }: LanguageSettingsPageProps) {
-  return <TranscriptionLanguagePageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
+export default function LanguageSettingsPage() {
+  return <TranscriptionLanguagePageClient />;
 }

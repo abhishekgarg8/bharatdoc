@@ -7,6 +7,7 @@ import { BharatButton } from "@/components/bharat-button";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { createSupabaseAuthClient, authErrorMessage, type AuthClient } from "@/lib/client/auth-client";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForRegistration, lookupClinic, registerAccount, type ClinicLookupResponse } from "@/lib/client/onboarding-api";
 import { destinationForDoctorStatus, fetchCurrentDoctor } from "@/lib/client/session";
 
@@ -53,20 +54,25 @@ const demoDefaults = {
 };
 
 export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
-  const auth = useMemo(() => authClient ?? (demoMode ? createDemoAuthClient() : createSupabaseAuthClient()), [demoMode, authClient]);
+  const queryDemoMode = useExplicitDemoMode();
+  const effectiveDemoMode = demoMode || queryDemoMode;
+  const auth = useMemo(
+    () => authClient ?? (effectiveDemoMode ? createDemoAuthClient() : createSupabaseAuthClient()),
+    [effectiveDemoMode, authClient]
+  );
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
   const [step, setStep] = useState<OnboardingStep>("credentials");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState(demoMode ? demoDefaults.email : "");
-  const [password, setPassword] = useState(demoMode ? demoDefaults.password : "");
+  const [email, setEmail] = useState(effectiveDemoMode ? demoDefaults.email : "");
+  const [password, setPassword] = useState(effectiveDemoMode ? demoDefaults.password : "");
   const [idToken, setIdToken] = useState<string | null>(null);
-  const [profile, setProfile] = useState(demoMode ? demoDefaults.profile : { name: "", specialization: "", medicalRegNo: "" });
+  const [profile, setProfile] = useState(effectiveDemoMode ? demoDefaults.profile : { name: "", specialization: "", medicalRegNo: "" });
   const [clinicMode, setClinicMode] = useState<ClinicMode>("join_clinic");
-  const [clinicCode, setClinicCode] = useState(demoMode ? demoDefaults.clinicCode : "");
+  const [clinicCode, setClinicCode] = useState(effectiveDemoMode ? demoDefaults.clinicCode : "");
   const [clinicLookup, setClinicLookup] = useState<ClinicLookupResponse | null>(null);
-  const [clinic, setClinic] = useState(demoMode ? demoDefaults.clinic : { name: "", address: "" });
+  const [clinic, setClinic] = useState(effectiveDemoMode ? demoDefaults.clinic : { name: "", address: "" });
 
   async function handleCredentials() {
     setIsBusy(true);
@@ -83,7 +89,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
       setEmail(credentials.email);
       setIdToken(token);
 
-      if (demoMode || authMode === "signup") {
+      if (effectiveDemoMode || authMode === "signup") {
         setStep("profile");
         return;
       }
@@ -123,7 +129,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
     try {
       setClinicLookup(
-        demoMode
+        effectiveDemoMode
           ? {
               clinic_id: "demo-clinic",
               clinic_name: "Sunrise Clinic",
@@ -173,7 +179,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
           };
 
     try {
-      if (demoMode) {
+      if (effectiveDemoMode) {
         navigate(clinicMode === "join_clinic" ? "/pending-approval" : "/dashboard?demo=1");
       } else {
         const result = await registerAccount(idToken, input);

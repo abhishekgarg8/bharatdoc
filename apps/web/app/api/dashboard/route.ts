@@ -1,7 +1,7 @@
 import { verifyRequestUser } from "@/lib/server/auth";
-import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
-import { searchPatientRecordingsForClinic } from "@/lib/server/recordings";
+import { getDashboardSnapshotForUser } from "@/lib/server/recordings";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
@@ -11,15 +11,11 @@ export async function GET(request: Request) {
   try {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const url = new URL(request.url);
+    const limit = Number(url.searchParams.get("limit") ?? "10");
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
-    const records = await searchPatientRecordingsForClinic(
-      user,
-      url.searchParams.get("patient_id"),
-      repository,
-      Number(url.searchParams.get("limit") ?? "25")
-    );
+    const snapshot = await getDashboardSnapshotForUser(user, repository, limit);
 
-    return Response.json({ records });
+    return Response.json(snapshot);
   } catch (error) {
     return errorResponse(error);
   }

@@ -91,6 +91,14 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] P1-2: Align Vercel/Railway env docs with required web API route secrets.
 - [x] P1-3: Reconcile validation records with current live-smoke and staging-smoke status.
 
+### 10. Production latency remediation
+
+- [x] Make protected app shells static by moving explicit demo query handling from server pages into client-only hooks.
+- [x] Pin Vercel API route functions to the Mumbai region with `preferredRegion = "bom1"`.
+- [x] Collapse dashboard and search startup from `/api/me` plus `/api/recordings` into one `/api/dashboard` request.
+- [ ] Deploy and verify the direct Railway transcription path in production. Skipped in this pass because Railway deployment is being handled separately.
+- [x] Verify the latency remediation with focused tests, full web unit tests, lint, typecheck, production build, and browser screenshot smoke.
+
 ## Testing Discipline
 
 - No implementation step is considered complete without matching tests in the same pass.

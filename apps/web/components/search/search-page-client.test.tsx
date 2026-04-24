@@ -41,12 +41,8 @@ describe("SearchPageClient", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
 
-      if (url === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
-      if (url === "/api/recordings") {
-        return Response.json({ records: [apiRecord] });
+      if (url === "/api/dashboard") {
+        return Response.json({ doctor: activeDoctor, records: [apiRecord] });
       }
 
       if (url === "/api/patients/search?patient_id=P-20001") {
@@ -63,6 +59,11 @@ describe("SearchPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
 
     await expect(screen.findByText("Results for P-20001")).resolves.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
+      headers: { Authorization: "Bearer id-token" }
+    });
+    expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
+    expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
     expect(fetcher).toHaveBeenCalledWith("/api/patients/search?patient_id=P-20001", {
       headers: { Authorization: "Bearer id-token" }
     });
@@ -105,8 +106,8 @@ describe("SearchPageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" } });
+      if (input.toString() === "/api/dashboard") {
+        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" }, records: [] });
       }
 
       return Response.json({ records: [apiRecord] });
@@ -115,6 +116,9 @@ describe("SearchPageClient", () => {
     render(<SearchPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
+      headers: { Authorization: "Bearer id-token" }
+    });
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
   });
 });

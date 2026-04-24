@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Doctor } from "@bharatdoc/shared";
 import {
   createRecordingMetadataForDoctor,
+  getDashboardSnapshotForUser,
   getRecordingDetailForDoctor,
   listDashboardRecordingsForDoctor,
   saveRecordingSummaryForDoctor,
@@ -97,6 +98,36 @@ describe("recordings service", () => {
     await expect(
       listDashboardRecordingsForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
     ).rejects.toMatchObject({ code: "ACCOUNT_INACTIVE" });
+  });
+
+  it("returns doctor context and records in one dashboard snapshot", async () => {
+    const repository = createRepository();
+
+    await expect(
+      getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
+    ).resolves.toMatchObject({
+      doctor: activeDoctor,
+      records: [
+        {
+          id: recording.id,
+          patient_id: "P-10482",
+          doctor_name: "Dr. Aparna Iyer"
+        }
+      ]
+    });
+    expect(repository.listRecentRecordings).toHaveBeenCalledWith(activeDoctor.id, 10);
+  });
+
+  it("returns inactive doctor context without loading dashboard recordings", async () => {
+    const repository = createRepository({ ...activeDoctor, account_status: "pending_approval" });
+
+    await expect(
+      getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
+    ).resolves.toMatchObject({
+      doctor: { account_status: "pending_approval" },
+      records: []
+    });
+    expect(repository.listRecentRecordings).not.toHaveBeenCalled();
   });
 
   it("searches patient recordings inside the active doctor's clinic", async () => {

@@ -5,6 +5,8 @@ import { registerDoctorAccount } from "@/lib/server/onboarding";
 import { createSupabaseOnboardingRepository } from "@/lib/server/supabase-onboarding-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
+export const preferredRegion = "bom1";
+
 export async function POST(request: Request) {
   try {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());

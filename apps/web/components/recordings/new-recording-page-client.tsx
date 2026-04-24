@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { useExplicitDemoMode, useExplicitMockRecorder } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 
 interface NewRecordingPageClientProps {
@@ -17,12 +18,16 @@ interface NewRecordingPageClientProps {
 export function NewRecordingPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
-  useDemoRecorder = false,
+  demoOnMissingToken,
+  useDemoRecorder,
   onNavigate
 }: NewRecordingPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const queryMockRecorder = useExplicitMockRecorder();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
+  const shouldUseDemoRecorder = useDemoRecorder ?? (allowDemoFallback && queryMockRecorder);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +42,7 @@ export function NewRecordingPageClient({
         return;
       }
 
-      if (!token && !demoOnMissingToken) {
+      if (!token && !allowDemoFallback) {
         navigate("/onboarding");
         return;
       }
@@ -63,7 +68,7 @@ export function NewRecordingPageClient({
 
         setIdToken(token ?? undefined);
       } catch {
-        if (isMounted && !demoOnMissingToken) {
+        if (isMounted && !allowDemoFallback) {
           setError("Unable to prepare recorder. Please sign in again.");
         }
       } finally {
@@ -78,7 +83,7 @@ export function NewRecordingPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate]);
+  }, [allowDemoFallback, client, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Preparing recorder" />;
@@ -90,7 +95,7 @@ export function NewRecordingPageClient({
 
   const recordingProps = {
     fetcher,
-    useDemoRecorder,
+    useDemoRecorder: shouldUseDemoRecorder,
     ...(idToken ? { idToken } : {})
   };
 

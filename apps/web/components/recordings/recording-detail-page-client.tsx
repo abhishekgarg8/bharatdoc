@@ -8,6 +8,7 @@ import {
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 import { fetchRecordingDetail } from "@/lib/client/summary-api";
 
@@ -23,11 +24,13 @@ export function RecordingDetailPageClient({
   recordingId,
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false,
+  demoOnMissingToken,
   onNavigate
 }: RecordingDetailPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const queryDemoMode = useExplicitDemoMode();
+  const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [recording, setRecording] = useState<RecordingDetailRecord | null>(null);
@@ -44,7 +47,7 @@ export function RecordingDetailPageClient({
       }
 
       if (!token) {
-        if (demoOnMissingToken) {
+        if (allowDemoFallback) {
           setRecording(findDemoRecordingDetail(recordingId));
           setLoading(false);
         } else {
@@ -93,7 +96,7 @@ export function RecordingDetailPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, navigate, recordingId]);
+  }, [allowDemoFallback, client, fetcher, navigate, recordingId]);
 
   if (loading) {
     return <PageLoading label="Loading recording" />;

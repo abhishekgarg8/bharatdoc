@@ -5,6 +5,8 @@ import { createSupabaseOnboardingRepository } from "@/lib/server/supabase-onboar
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 import { AppError } from "@/lib/server/errors";
 
+export const preferredRegion = "bom1";
+
 export async function GET(request: Request) {
   try {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());

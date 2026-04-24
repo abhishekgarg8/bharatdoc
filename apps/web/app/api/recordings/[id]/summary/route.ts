@@ -7,6 +7,8 @@ import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-record
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 import { proxySummaryRequest } from "@/lib/server/worker-summary-proxy";
 
+export const preferredRegion = "bom1";
+
 interface RouteContext {
   params: {
     id: string;
