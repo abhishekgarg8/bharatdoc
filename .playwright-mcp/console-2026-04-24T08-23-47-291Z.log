@@ -1,0 +1,2 @@
+[   15919ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bharatdoc-web.vercel.app/api/clinic/admin:0
+[   16546ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bharatdoc-web.vercel.app/api/me:0

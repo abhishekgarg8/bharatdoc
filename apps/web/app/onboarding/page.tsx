@@ -1,4 +1,5 @@
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface OnboardingPageProps {
   searchParams?: {
@@ -7,5 +8,5 @@ interface OnboardingPageProps {
 }
 
 export default function OnboardingPage({ searchParams }: OnboardingPageProps) {
-  return <OnboardingScreen demoMode={searchParams?.demo === "1"} />;
+  return <OnboardingScreen demoMode={isExplicitDemoModeEnabled(searchParams)} />;
 }

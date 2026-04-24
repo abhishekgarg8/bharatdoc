@@ -1,4 +1,4 @@
-import { MAX_AUDIO_BYTES_PHASE_1, type Recording } from "@bharatdoc/shared";
+import { MAX_AUDIO_BYTES_PHASE_1, requirePatientId, type Recording } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
 import type { AuthContext, WorkerDependencies } from "./types.js";
 
@@ -65,6 +65,14 @@ function requireTranscribableRecording(recording: Recording | null): Recording {
   return recording;
 }
 
+function requireTranscriptionPatientId(recording: Recording): void {
+  try {
+    requirePatientId(recording.patient_id);
+  } catch {
+    throw new HttpError(400, "Patient ID is required before transcription.", "PATIENT_ID_REQUIRED");
+  }
+}
+
 export async function transcribeRecording(
   auth: AuthContext,
   input: TranscribeRecordingInput,
@@ -76,6 +84,8 @@ export async function transcribeRecording(
   const recording = requireTranscribableRecording(
     await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
   );
+  requireTranscriptionPatientId(recording);
+
   const audioStoragePath = await deps.audioStorage.uploadRecordingAudio({
     audio: audio.buffer,
     mimeType: audio.mimetype,

@@ -1,4 +1,5 @@
 import { NewRecordingPageClient } from "@/components/recordings/new-recording-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface NewRecordingPageProps {
   searchParams?: {
@@ -8,10 +9,12 @@ interface NewRecordingPageProps {
 }
 
 export default function NewRecordingPage({ searchParams }: NewRecordingPageProps) {
+  const demoMode = isExplicitDemoModeEnabled(searchParams);
+
   return (
     <NewRecordingPageClient
-      demoOnMissingToken={searchParams?.demo === "1"}
-      useDemoRecorder={searchParams?.mockRecorder === "1"}
+      demoOnMissingToken={demoMode}
+      useDemoRecorder={demoMode && searchParams?.mockRecorder === "1"}
     />
   );
 }

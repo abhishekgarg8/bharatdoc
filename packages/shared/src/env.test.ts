@@ -14,8 +14,35 @@ describe("environment validation", () => {
       })
     ).toMatchObject({
       NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
-      NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/"
+      NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/",
+      NEXT_PUBLIC_ENABLE_DEMO_MODE: "false"
     });
+  });
+
+  it("accepts explicit local demo mode only as a boolean-like flag", () => {
+    expect(
+      parseWebEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_ENABLE_DEMO_MODE: "true",
+        RAILWAY_WORKER_URL: "https://worker.example.com",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
+      })
+    ).toMatchObject({
+      NEXT_PUBLIC_ENABLE_DEMO_MODE: "true"
+    });
+
+    expect(() =>
+      parseWebEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_ENABLE_DEMO_MODE: "1",
+        RAILWAY_WORKER_URL: "https://worker.example.com",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
+      })
+    ).toThrow();
   });
 
   it("defaults worker model settings", () => {

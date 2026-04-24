@@ -1,4 +1,5 @@
 import { PromptEditorPageClient } from "@/components/settings/prompt-editor-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface PromptSettingsPageProps {
   searchParams?: {
@@ -7,5 +8,5 @@ interface PromptSettingsPageProps {
 }
 
 export default function PromptSettingsPage({ searchParams }: PromptSettingsPageProps) {
-  return <PromptEditorPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
+  return <PromptEditorPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
 }

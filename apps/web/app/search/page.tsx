@@ -1,4 +1,5 @@
 import { SearchPageClient } from "@/components/search/search-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface SearchPageProps {
   searchParams?: {
@@ -7,5 +8,5 @@ interface SearchPageProps {
 }
 
 export default function SearchPage({ searchParams }: SearchPageProps) {
-  return <SearchPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
+  return <SearchPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
 }

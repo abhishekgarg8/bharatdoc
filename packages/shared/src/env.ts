@@ -6,6 +6,7 @@ export const WebEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: nonEmpty,
   NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_ENABLE_DEMO_MODE: z.enum(["true", "false"]).default("false"),
   RAILWAY_WORKER_URL: z.string().url(),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: nonEmpty

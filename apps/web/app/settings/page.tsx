@@ -1,4 +1,5 @@
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface SettingsPageProps {
   searchParams?: {
@@ -7,5 +8,5 @@ interface SettingsPageProps {
 }
 
 export default function SettingsPage({ searchParams }: SettingsPageProps) {
-  return <SettingsPageClient demoOnMissingToken={searchParams?.demo === "1"} />;
+  return <SettingsPageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
 }

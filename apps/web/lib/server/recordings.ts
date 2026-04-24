@@ -85,11 +85,6 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
   return normalized ? normalized : null;
 }
 
-function normalizeOptionalPatientId(value: string | null | undefined): string | null {
-  const normalized = normalizePatientId(value ?? "");
-  return normalized ? normalized : null;
-}
-
 function requireSearchPatientId(patientId: string | null | undefined): string {
   const normalized = normalizePatientId(patientId ?? "");
 
@@ -261,11 +256,12 @@ export async function createRecordingMetadataForDoctor(
   const clinicId = requireClinicId(doctor);
   const recordingInput = RecordingCreateSchema.parse(input);
   const durationSeconds = assertRecordingDuration(recordingInput.duration_seconds);
+  const patientId = requireWorkflowPatientId(recordingInput.patient_id);
   const recording = await repository.createRecording({
     id: recordingInput.id,
     doctorId: doctor.id,
     clinicId,
-    patientId: normalizeOptionalPatientId(recordingInput.patient_id),
+    patientId,
     label: normalizeOptionalText(recordingInput.label),
     durationSeconds,
     recordedAt: recordingInput.recorded_at

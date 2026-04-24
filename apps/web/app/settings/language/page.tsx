@@ -1,4 +1,5 @@
 import { TranscriptionLanguagePageClient } from "@/components/settings/transcription-language-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface LanguageSettingsPageProps {
   searchParams?: {
@@ -7,5 +8,5 @@ interface LanguageSettingsPageProps {
 }
 
 export default function LanguageSettingsPage({ searchParams }: LanguageSettingsPageProps) {
-  return <TranscriptionLanguagePageClient demoOnMissingToken={searchParams?.demo === "1"} />;
+  return <TranscriptionLanguagePageClient demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
 }

@@ -3,7 +3,7 @@
 import { ArrowLeft, Mic, Pause, Play, RotateCcw, Save, Square, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MAX_RECORDING_SECONDS, type LocalRecordingCaptureState } from "@bharatdoc/shared";
+import { MAX_RECORDING_SECONDS, normalizePatientId, type LocalRecordingCaptureState } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { createRecordingMetadata } from "@/lib/client/dashboard-data";
 import {
@@ -298,6 +298,12 @@ export function RecordingScreen({
       workingRecording = await persistEditableMetadata(workingRecording);
     }
 
+    if (!normalizePatientId(workingRecording?.patientId ?? patientId)) {
+      setError("Patient ID is required before transcription.");
+      setMessage(null);
+      return;
+    }
+
     const audioBlob = workingRecording ? localRecordingAudioBlob(workingRecording) : null;
     const audioMimeType = workingRecording?.audioMimeType ?? null;
 
@@ -380,6 +386,7 @@ export function RecordingScreen({
   const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped";
   const transcript = recording?.transcript;
   const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
+  const canTranscribe = Boolean(normalizePatientId(patientId));
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
@@ -503,7 +510,7 @@ export function RecordingScreen({
                 <Save className="h-4 w-4" />
                 Later
               </Link>
-              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow}>
+              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow} disabled={!canTranscribe}>
                 Retry
               </BharatButton>
             </>
@@ -537,7 +544,7 @@ export function RecordingScreen({
                 <Save className="h-4 w-4" />
                 Later
               </Link>
-              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow}>
+              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow} disabled={!canTranscribe}>
                 Transcribe
               </BharatButton>
             </>

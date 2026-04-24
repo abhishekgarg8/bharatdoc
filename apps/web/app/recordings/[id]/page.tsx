@@ -1,4 +1,5 @@
 import { RecordingDetailPageClient } from "@/components/recordings/recording-detail-page-client";
+import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface RecordingDetailPageProps {
   params: {
@@ -10,5 +11,5 @@ interface RecordingDetailPageProps {
 }
 
 export default function RecordingDetailPage({ params, searchParams }: RecordingDetailPageProps) {
-  return <RecordingDetailPageClient recordingId={params.id} demoOnMissingToken={searchParams?.demo === "1"} />;
+  return <RecordingDetailPageClient recordingId={params.id} demoOnMissingToken={isExplicitDemoModeEnabled(searchParams)} />;
 }
