@@ -248,8 +248,10 @@ describe("worker app", () => {
     });
   });
 
-  it("allows transcription when patient id is missing", async () => {
-    await request(createApp(depsFor(activeDoctor, { ...recording, patient_id: null })))
+  it("rejects transcription when patient id is missing before audio work", async () => {
+    const deps = depsFor(activeDoctor, { ...recording, patient_id: null });
+
+    await request(createApp(deps))
       .post("/api/transcribe")
       .set("Authorization", "Bearer valid-token")
       .field("recording_id", recording.id)
@@ -257,14 +259,14 @@ describe("worker app", () => {
         filename: "recording.webm",
         contentType: "audio/webm"
       })
-      .expect(200)
+      .expect(400)
       .expect(({ body }) => {
-        expect(body).toMatchObject({
-          recording_id: recording.id,
-          transcript: "Patient reports fever for two days.",
-          status: "transcribed"
-        });
+        expect(body.error.code).toBe("PATIENT_ID_REQUIRED");
       });
+
+    expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+    expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
+    expect(deps.recordings.markRecordingTranscribed).not.toHaveBeenCalled();
   });
 
   it("rejects summary requests without bearer tokens before summary work", async () => {

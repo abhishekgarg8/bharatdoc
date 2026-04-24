@@ -62,6 +62,20 @@ async function createPasswordToken(clients, emailPrefix) {
   return data.session.access_token;
 }
 
+async function assertPostgrestTablesVisible(clients) {
+  const requiredTables = ["clinics", "doctors", "clinic_join_requests", "recordings"];
+
+  for (const table of requiredTables) {
+    const { error } = await clients.admin.from(table).select("id", { count: "exact", head: true }).limit(1);
+
+    if (error) {
+      throw new Error(`Supabase table public.${table} is not visible through PostgREST: ${error.message}`);
+    }
+  }
+
+  console.log(`PostgREST schema visible for: ${requiredTables.map((table) => `public.${table}`).join(", ")}.`);
+}
+
 async function apiRequest(baseUrl, pathname, { method = "GET", token, json, formData } = {}) {
   const headers = {};
 
@@ -131,6 +145,7 @@ async function main() {
   const doctorEmailPrefix = `smoke_doctor_${runId}`.toLowerCase();
 
   console.log(`Live flow smoke against ${baseUrl}`);
+  await assertPostgrestTablesVisible(clients);
 
   const [ownerToken, doctorToken] = await Promise.all([
     createPasswordToken(clients, ownerEmailPrefix),

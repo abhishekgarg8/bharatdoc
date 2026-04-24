@@ -292,6 +292,25 @@ describe("recordings service", () => {
     });
   });
 
+  it("requires Patient ID before creating server recording metadata for transcription", async () => {
+    const repository = createRepository();
+
+    await expect(
+      createRecordingMetadataForDoctor(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          patient_id: "   ",
+          label: "Follow-up",
+          duration_seconds: 502,
+          recorded_at: "2026-04-23T06:20:00.000Z"
+        },
+        repository
+      )
+    ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
+    expect(repository.createRecording).not.toHaveBeenCalled();
+  });
+
   it("requires active doctors to belong to a clinic before writing recordings", async () => {
     const repository = createRepository({ ...activeDoctor, clinic_id: null });
 

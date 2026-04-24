@@ -175,7 +175,7 @@ describe("transcribeRecording", () => {
     ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
   });
 
-  it("allows transcription before patient id is assigned", async () => {
+  it("requires Patient ID before transcription work starts", async () => {
     const deps = depsFor({ ...recording, patient_id: null });
 
     await expect(
@@ -184,12 +184,10 @@ describe("transcribeRecording", () => {
         { recordingId: recording.id, audio: fileInput() },
         deps
       )
-    ).resolves.toMatchObject({
-      recording_id: recording.id,
-      transcript: "Patient reports fever.",
-      status: "transcribed"
-    });
-    expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalled();
+    ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
+    expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+    expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
+    expect(deps.recordings.markRecordingTranscribed).not.toHaveBeenCalled();
   });
 
   it("does not mark recordings when upload or transcription fails", async () => {

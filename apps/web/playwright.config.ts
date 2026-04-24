@@ -10,7 +10,7 @@ export default defineConfig({
     ...devices["Pixel 5"]
   },
   webServer: {
-    command: "pnpm dev",
+    command: "NEXT_PUBLIC_ENABLE_DEMO_MODE=true pnpm dev",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
     timeout: 120000

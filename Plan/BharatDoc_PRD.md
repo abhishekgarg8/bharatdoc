@@ -657,15 +657,16 @@ Two separate `.env` files are required — one for the Vercel Next.js frontend, 
 #### `.env.local` — Vercel / Next.js Frontend
 
 ```
-# Firebase Auth (public — safe to expose to browser)
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-
 # Supabase (public anon key — safe to expose to browser)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Supabase server runtime secrets for Next.js API routes (never NEXT_PUBLIC)
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+
 NEXT_PUBLIC_SITE_URL=https://bharatdoc-web.vercel.app/
+NEXT_PUBLIC_ENABLE_DEMO_MODE=false
 
 # Railway worker base URL (used server-side in Next.js API routes only)
 RAILWAY_WORKER_URL=
@@ -680,22 +681,17 @@ OPENAI_API_KEY=
 # Supabase elevated key (for server-side writes and storage uploads)
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-
-# Firebase Admin SDK — paste entire service account JSON as a single escaped line
-FIREBASE_ADMIN_SDK_JSON=
 ```
 
 #### Provisioning Guide
 
 | Key | Service | Where to Find |
 |-----|---------|--------------|
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase | Console → Project Settings → General → Web API Key |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase | Console → Project Settings → `your-project.firebaseapp.com` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase | Console → Project Settings → Project ID |
-| `FIREBASE_ADMIN_SDK_JSON` | Firebase | Console → Project Settings → Service Accounts → Generate new private key → paste full JSON as one line |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase | Dashboard → Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase | Dashboard → Settings → API → `anon` public key |
 | `NEXT_PUBLIC_SITE_URL` | Vercel/Supabase Auth | Public app URL for email confirmation and magic-link redirects |
+| `NEXT_PUBLIC_ENABLE_DEMO_MODE` | Vercel | Keep `false`/unset in production; set `true` only for local demos/test previews |
+| `SUPABASE_URL` | Supabase | Dashboard → Settings → API → Project URL; required in both Vercel and Railway |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Dashboard → Settings → API → `service_role` secret key |
 | `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys → Create new secret key |
 | `RAILWAY_WORKER_URL` | Railway | Railway dashboard → your worker service → Settings → Public URL |
