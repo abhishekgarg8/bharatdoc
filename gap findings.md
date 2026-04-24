@@ -66,6 +66,45 @@ Fix:
 - Reconcile `implementation-plan.md` and `Plan/implementation-log.md` with exact pass/fail evidence.
 - Keep screenshots or smoke output paths linked from the implementation log.
 
+### P1-4. Owner approval RPC is exposed too broadly
+
+Files:
+- `supabase/migrations/202604240001_review_clinic_join_request_rpc.sql`
+- `apps/web/lib/server/supabase-clinic-admin-repository.ts`
+
+Problem:
+- `review_clinic_join_request` is a `security definer` function.
+- The function trusts caller-supplied `p_owner_id`, `p_request_id`, and `p_doctor_id`.
+- The migration does not revoke default `EXECUTE` privileges from `public`, `anon`, or `authenticated`.
+- If this RPC is callable through Supabase with the anon key, it can bypass the Next.js owner checks and directly approve/reject join requests.
+
+Fix:
+- Add a migration that revokes execute from `public`, `anon`, and `authenticated`.
+- Grant execute only to the server-side role that actually needs it, or remove `security definer` and enforce owner identity inside the function using Supabase auth claims.
+- Do not trust `p_owner_id` as authority unless it is verified against the authenticated caller.
+- Add a migration contract test that checks the revoke/grant statements.
+
+### P1-5. App routes do not consistently enforce active account status
+
+Files:
+- `apps/web/components/recordings/new-recording-page-client.tsx`
+- `apps/web/components/settings/settings-page-client.tsx`
+- `apps/web/components/dashboard-page-client.tsx`
+- `apps/web/components/search/search-page-client.tsx`
+- `apps/web/components/recordings/recording-detail-page-client.tsx`
+
+Problem:
+- `/recordings/new` only checks that a Supabase token exists, then renders the recorder.
+- `/settings` fetches `/api/me` and renders profile/settings even if the doctor is `pending_approval` or `rejected`.
+- Other app routes rely on downstream API failures and show generic sign-in errors instead of routing pending/rejected users to the locked screens.
+- The PRD says `pending_approval` and `rejected` accounts should not access app features.
+
+Fix:
+- Add a shared client-side account gate for protected app routes.
+- Fetch `/api/me` before rendering app surfaces and redirect by `account_status`.
+- Keep `/pending-approval` and `/access-rejected` as the only allowed destinations for inactive accounts.
+- Add tests for pending/rejected users deep-linking to dashboard, settings, recording, search, prompt, language, and detail routes.
+
 ## P2 Findings
 
 ### P2-1. Onboarding writes are still not transactional
@@ -226,3 +265,77 @@ Fix:
 - Prefer server records when a local record already has `serverRecordingId`.
 - Or clear/update local records after successful server sync.
 - Add tests for server `pdf_saved` beating stale local `transcribed`.
+
+### P2-11. Dashboard recent list is doctor-scoped, not clinic-scoped
+
+Files:
+- `apps/web/lib/server/recordings.ts`
+- `apps/web/lib/server/supabase-recordings-repository.ts`
+- `apps/web/lib/server/recordings.test.ts`
+
+Problem:
+- The dashboard service calls `listRecentRecordings(doctor.id, ...)`.
+- The Supabase query filters by `doctor_id`.
+- The PRD dashboard calls for recent recordings with doctor name in a clinic-scoped view.
+- Doctors can search across the clinic, but the dashboard recent list only shows their own records.
+
+Fix:
+- Decide explicitly whether Dashboard should be doctor-scoped or clinic-scoped.
+- If clinic-scoped, query by `clinic_id`, retain doctor names, and add cross-doctor tests.
+- If doctor-scoped is intentional, update the PRD and UI copy so the product contract is not ambiguous.
+
+### P2-12. Auth source of truth still mixes Firebase phone and Supabase email
+
+Files:
+- `Plan/BharatDoc_PRD.md`
+- `Plan/implementation-log.md`
+- `packages/shared/src/schemas.ts`
+- `supabase/migrations/202604230001_initial_schema.sql`
+- `apps/web/lib/server/supabase-auth.ts`
+
+Problem:
+- The current implementation plan and code use Supabase email/password auth.
+- The PRD and implementation log still describe Firebase phone OTP, Firebase JWTs, and Firebase admin env.
+- Active schemas and migrations still name the auth identifier `firebase_uid` and the contact field `phone`.
+- `supabase-auth.ts` stores the Supabase email in a field named `phoneNumber`, which then flows into the `doctors.phone` column and phone-labelled UI.
+
+Fix:
+- Pick the Phase 1 auth source of truth: Supabase email/password or Firebase phone OTP.
+- Update PRD, implementation log, env docs, schemas, migration names/comments, and UI labels to match.
+- If Supabase email/password remains the decision, rename/display contact fields as email or neutral contact fields.
+- Add contract tests around registration contact fields so email is not accidentally validated as a phone number later.
+
+### P2-13. Browser and offline smoke coverage is still demo-heavy
+
+Files:
+- `apps/web/e2e/dashboard.spec.ts`
+- `scripts/pwa-offline-smoke.mjs`
+- `scripts/live-flow-smoke.mjs`
+- `Plan/implementation-log.md`
+
+Problem:
+- Most Playwright flows run with `?demo=1`.
+- The PWA offline smoke also warms and verifies demo routes only.
+- The live flow smoke exists, but the implementation log says it is blocked in the configured environment.
+- Production-only regressions in session gating, real settings data, signed PDF reloads, admin writes, and Supabase-backed search can pass the browser suite.
+
+Fix:
+- Keep demo E2E tests, but add authenticated production-mode browser tests with mocked Supabase/API responses.
+- Add one local or staging smoke path that exercises real auth, real API routes, and PDF signed URL reload behavior.
+- Make the implementation log link to the latest smoke output and screenshots.
+
+### P2-14. Worker CORS is unrestricted
+
+File:
+- `apps/worker/src/app.ts`
+
+Problem:
+- The Railway worker calls `app.use(cors())` with no origin allowlist.
+- Bearer auth still protects data, but any browser origin can attempt requests to the worker API.
+- For a clinical-records worker, the browser attack surface should be limited to the deployed web app and local development origins.
+
+Fix:
+- Add a worker env var such as `WORKER_ALLOWED_ORIGINS`.
+- Configure CORS to allow only Vercel/staging/local origins.
+- Keep `/health` available for platform checks if needed.
+- Add worker tests for allowed and rejected origins.
