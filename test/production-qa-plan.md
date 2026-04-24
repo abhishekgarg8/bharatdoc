@@ -10,6 +10,9 @@ Screenshots: `test/screenshots/`
 
 - Owner alias: `abhishekgarg8+bdqa-owner-20260424160852@gmail.com`
 - Doctor alias: `abhishekgarg8+bdqa-doctor-20260424160852@gmail.com`
+- Confirmed-owner fallback alias: `abhishekgarg8+bdqa-owner-admin-20260424160852@gmail.com`
+- Confirmed-doctor fallback alias: `abhishekgarg8+bdqa-doctor-admin-20260424160852@gmail.com`
+- Fresh production owner alias: `abhishekgarg8+bdqa-owner-prod-20260424190352@gmail.com`
 
 ## Test Cases
 
@@ -31,3 +34,12 @@ Screenshots: `test/screenshots/`
 - [ ] T16 Auth/session behavior: logout or clear session, verify redirects, log back in, and confirm session persistence after reload.
 - [ ] T17 Responsive visual QA: capture core screens at mobile viewport and desktop viewport, checking overflow, clipped text, overlapping elements, and unusable controls.
 - [ ] T18 Console/network QA: review browser console and key API responses for production errors during the run.
+
+## Run Notes
+
+- T01 completed with screenshots `t01-home-onboarding-mobile.png`, `t01-dashboard-redirect-mobile.png`, and `t01-onboarding-desktop.png`.
+- T02 is blocked in production. The owner signup reaches email confirmation and login, but create-clinic registration fails with `400 {"error":{"code":"VALIDATION_ERROR","message":"Request validation failed."}}` from `/api/auth/register`.
+- The same authenticated session also receives `400` from `/api/me`, so protected production API routes are not healthy enough to complete owner onboarding.
+- API probing with the current UI payload, the payload without `medical_reg_no`, a camelCase profile variant, and the old flat PRD payload all returned the same `VALIDATION_ERROR`.
+- Production browser bundle uses Supabase project `jtezgoegatwbvdqeogiy`; local `.env` points at `lnsccuqehnvafgmsahft`, so local admin-created fallback users cannot sign into production.
+- Tests T03-T18 remain unchecked because they depend on completing production onboarding or accessing a valid active doctor account.
