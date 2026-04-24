@@ -6,8 +6,8 @@ Scope: current codebase checked against `implementation-plan.md`, `Plan/BharatDo
 
 Notes:
 - Active gaps only are listed below.
-- Older P1 findings around default demo fallbacks, unauthenticated settings false-success, blank Patient ID stop loss, transcription metadata retry idempotency, stale PDFs after summary edits, Unicode/multi-page PDF rendering, same-clinic summary edits, approval/rejection atomicity, direct Railway transcription upload, and worker CORS allowlisting are materially fixed in the current code.
-- The review was read-only for source code. This file was updated because the request explicitly asked for gaps to be added here.
+- Previously closed findings have been pruned from this file.
+- Source code review was read-only; this Markdown file was updated because the request explicitly asked for gaps to be maintained here.
 
 ## P1 Findings
 

@@ -47,3 +47,5 @@ Screenshots: `test/screenshots/`
 - Rerun after project-id correction: production still blocks T02 at login. The deployed browser bundle now uses `NEXT_PUBLIC_SUPABASE_URL=https://jtezgoegatwbvdqeogiy.supabase.co`, but its embedded anon JWT still has `ref: "lnsccuqehnvafgmsahft"`.
 - The production login request now fails at Supabase with `401 Invalid API key`, captured in `t02-rerun-owner-failure.png`.
 - Current local `.env` has the same mismatch: `SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` point to `jtezgoegatwbvdqeogiy`, while `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still for `lnsccuqehnvafgmsahft`.
+- 2026-04-24 rerun with `abhishekgarg8+bdqa-owner-rerun-20260424194557@gmail.com`: production signup fails before email confirmation with `401 {"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}` from `https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/signup`.
+- Screenshot evidence: `t02-rerun-owner-signup-filled.png` and `t02-rerun-owner-signup-after-submit.png`.

@@ -19,7 +19,17 @@ Date: 2026-04-24
 
 ## Blocking Finding
 
-**P0: Production onboarding cannot create an owner clinic.**
+**P0: Production auth is using a Supabase URL/key mismatch.**
+
+Latest rerun after the project-id correction:
+
+- `NEXT_PUBLIC_SUPABASE_URL` in the deployed bundle points to `https://jtezgoegatwbvdqeogiy.supabase.co`.
+- The deployed anon JWT payload still has `ref: "lnsccuqehnvafgmsahft"`.
+- Fresh production signup with `abhishekgarg8+bdqa-owner-rerun-20260424194557@gmail.com` fails before email confirmation.
+- Supabase response: `401 {"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}`.
+- Evidence: `test/screenshots/t02-rerun-owner-signup-after-submit.png`.
+
+Previous blocker before the rerun:
 
 After a confirmed production email/password login, the UI reaches the profile and clinic steps. Submitting the create-clinic form fails with:
 
@@ -72,5 +82,7 @@ Likely cause:
 - `test/screenshots/t02-owner-prod-profile-filled.png`
 - `test/screenshots/t02-owner-prod-clinic-filled.png`
 - `test/screenshots/t02-owner-prod-failure.png`
+- `test/screenshots/t02-rerun-owner-signup-filled.png`
+- `test/screenshots/t02-rerun-owner-signup-after-submit.png`
 - `test/screenshots/t02-rerun-owner-login-filled.png`
 - `test/screenshots/t02-rerun-owner-failure.png`
