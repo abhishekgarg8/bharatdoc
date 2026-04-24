@@ -73,10 +73,12 @@ describe("SettingsPageClient", () => {
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
     expect(screen.getByText("Clinic admin")).toBeInTheDocument();
     expect(screen.getByText("MED42X")).toBeInTheDocument();
+    expect(screen.getByText("No doctors waiting")).toBeInTheDocument();
+    expect(screen.getByText("No pending join requests.")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: /active doctors/i })[0]!);
     await expect(screen.findByText("Current clinic members with active BharatDoc access.")).resolves.toBeInTheDocument();
-    expect(screen.getAllByText("Dr. Meera Shah")).toHaveLength(2);
+    expect(screen.getAllByText("Dr. Meera Shah")).toHaveLength(1);
   });
 
   it("uses demo settings only when explicit demo fallback is enabled", async () => {

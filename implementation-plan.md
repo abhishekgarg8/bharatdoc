@@ -42,10 +42,10 @@ Testing is a first-class requirement: every implementation step lands with unit/
 
 - [x] Replace Firebase phone OTP with Supabase email/password signup and login.
 - [x] Implement Supabase Auth token verification for Vercel API routes and the Railway worker.
-- Owner path creates clinic, owner doctor row, active account, and clinic code.
+- [x] Owner path creates clinic, owner doctor row, active account, and clinic code.
 - Doctor path looks up clinic code, creates pending doctor row, and creates join request.
 - Add unit/API tests for owner creation, doctor join, duplicate pending request, invalid clinic code, pending gate, and rejected gate.
-- Browser-test full owner onboarding and doctor pending approval with screenshots.
+- [ ] Browser-test full owner onboarding and doctor pending approval with screenshots.
 
 ### 5. Owner admin and Settings
 

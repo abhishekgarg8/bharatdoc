@@ -143,14 +143,18 @@ export function SettingsPageClient({
     return <PageError message={error} />;
   }
 
+  if (demoOnMissingToken && !idToken && !doctor) {
+    return <SettingsScreen fetcher={fetcher} allowLocalDemoWrites />;
+  }
+
   const screenProps = {
     fetcher,
-    allowLocalDemoWrites: demoOnMissingToken && !idToken,
+    allowLocalDemoWrites: false,
+    activeDoctors,
+    pendingApprovals,
     ...(idToken ? { idToken } : {}),
     ...(doctor ? { doctor } : {}),
-    ...(clinic ? { clinic } : {}),
-    ...(activeDoctors.length > 0 ? { activeDoctors } : {}),
-    ...(pendingApprovals.length > 0 ? { pendingApprovals } : {})
+    ...(clinic ? { clinic } : {})
   };
 
   return <SettingsScreen {...screenProps} />;
