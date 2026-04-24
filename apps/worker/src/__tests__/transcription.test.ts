@@ -157,7 +157,7 @@ describe("transcribeRecording", () => {
     ).rejects.toMatchObject({ code: "AUDIO_TYPE_INVALID" });
   });
 
-  it("rejects missing clinics, missing recordings, and recordings without patient ids", async () => {
+  it("rejects missing clinics and missing recordings", async () => {
     await expect(
       transcribeRecording(
         { doctor: { ...activeDoctor, clinic_id: null }, token: { uid: activeDoctor.firebase_uid } },
@@ -173,14 +173,23 @@ describe("transcribeRecording", () => {
         depsFor(null)
       )
     ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
+  });
+
+  it("allows transcription before patient id is assigned", async () => {
+    const deps = depsFor({ ...recording, patient_id: null });
 
     await expect(
       transcribeRecording(
         { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
         { recordingId: recording.id, audio: fileInput() },
-        depsFor({ ...recording, patient_id: null })
+        deps
       )
-    ).rejects.toMatchObject({ code: "PATIENT_ID_REQUIRED" });
+    ).resolves.toMatchObject({
+      recording_id: recording.id,
+      transcript: "Patient reports fever.",
+      status: "transcribed"
+    });
+    expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalled();
   });
 
   it("does not mark recordings when upload or transcription fails", async () => {

@@ -3,7 +3,7 @@
 import { ArrowLeft, Mic, Pause, Play, RotateCcw, Save, Square, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MAX_RECORDING_SECONDS, normalizePatientId, type LocalRecordingCaptureState } from "@bharatdoc/shared";
+import { MAX_RECORDING_SECONDS, type LocalRecordingCaptureState } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { createRecordingMetadata } from "@/lib/client/dashboard-data";
 import {
@@ -308,13 +308,6 @@ export function RecordingScreen({
 
     const localRecordingId = workingRecording.id;
 
-    const normalizedPatientId = normalizePatientId(patientId);
-
-    if (!normalizedPatientId) {
-      setError("Patient ID is required before transcription.");
-      return;
-    }
-
     setError(null);
     setMessage(null);
     setPhase("transcribing");
@@ -331,7 +324,7 @@ export function RecordingScreen({
             idToken,
             {
               id: workingRecording.id,
-              patient_id: normalizedPatientId,
+              patient_id: workingRecording.patientId,
               label: label.trim() || null,
               duration_seconds: workingRecording.durationSeconds,
               recorded_at: workingRecording.recordedAt

@@ -125,7 +125,7 @@ describe("RecordingScreen", () => {
     expect((await repository.list())[0]).toMatchObject({ captureState: "stopped" });
   });
 
-  it("saves stopped audio without Patient ID and requires it before transcription", async () => {
+  it("saves stopped audio without Patient ID and allows transcription", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
 
@@ -142,16 +142,21 @@ describe("RecordingScreen", () => {
     });
     expect((await repository.list())[0]!.audioBlob).toBeInstanceOf(Blob);
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
-    await expect(screen.findByText("Patient ID is required before transcription.")).resolves.toBeInTheDocument();
+    await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
+    expect((await repository.list())[0]).toMatchObject({
+      patientId: null,
+      captureState: "transcribed",
+      syncState: "transcribed"
+    });
   });
 
-  it("syncs authenticated recordings and navigates to the server detail page", async () => {
+  it("syncs authenticated recordings without Patient ID and navigates to the server detail page", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
     const navigate = vi.fn();
     const apiRecord = {
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      patient_id: "P-10482",
+      patient_id: null,
       label: "Follow-up",
       duration_seconds: 42,
       doctor_name: "Dr. Aparna",
@@ -180,7 +185,7 @@ describe("RecordingScreen", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: "P-10482" } });
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Follow-up" } });
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await screen.findByText("Recording started.");
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
@@ -196,6 +201,10 @@ describe("RecordingScreen", () => {
         headers: expect.objectContaining({ Authorization: "Bearer id-token" })
       })
     );
+    expect(JSON.parse(String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body))).toMatchObject({
+      patient_id: null,
+      label: "Follow-up"
+    });
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       `/api/recordings/${apiRecord.id}/transcription`,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
@@ -107,5 +107,39 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} fetcher={fetcher} />);
 
     await expect(screen.findByText("Unable to load settings. Please sign in again.")).resolves.toBeInTheDocument();
+  });
+
+  it("redirects rejected users away from settings", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor: {
+          id: "doctor-1",
+          firebase_uid: "firebase-owner",
+          clinic_id: "clinic-1",
+          role: "doctor",
+          account_status: "rejected",
+          name: "Dr. Aparna Iyer",
+          specialization: "General Physician",
+          medical_reg_no: null,
+          phone: "+919876543210",
+          profile_photo_path: null,
+          custom_prompt: null,
+          transcription_lang: "auto",
+          created_at: "2026-04-23T09:00:00.000Z"
+        }
+      })
+    ) as unknown as typeof fetch;
+
+    render(<SettingsPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
+    expect(fetcher).not.toHaveBeenCalledWith("/api/clinic/admin", expect.anything());
   });
 });

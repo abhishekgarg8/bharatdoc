@@ -18,6 +18,14 @@ export function destinationForDoctorStatus(status: MeResponse["doctor"]["account
   return "/access-rejected";
 }
 
+export function destinationForInactiveDoctor(doctor: Doctor): string | null {
+  if (doctor.account_status === "active") {
+    return null;
+  }
+
+  return destinationForDoctorStatus(doctor.account_status);
+}
+
 export async function fetchCurrentDoctor(idToken: string, fetcher: typeof fetch = fetch): Promise<MeResponse> {
   const response = await fetcher("/api/me", {
     headers: {

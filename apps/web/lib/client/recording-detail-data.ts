@@ -13,6 +13,7 @@ export interface RecordingDetailRecord {
   transcript: string | null;
   summary: string | null;
   pdfStoragePath: string | null;
+  pdfSignedUrl: string | null;
 }
 
 export interface RecordingDetailApiRecord {
@@ -26,6 +27,7 @@ export interface RecordingDetailApiRecord {
   transcript: string | null;
   summary: string | null;
   pdf_storage_path: string | null;
+  pdf_signed_url: string | null;
 }
 
 export const demoGeneratedSummary = `Chief Complaint
@@ -56,7 +58,8 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     transcript:
       "Doctor: What brings you in today?\nPatient: I have had fever for two days and a mild cough.\nDoctor: Any breathlessness or chest pain?\nPatient: No, only weakness.\nDoctor: Please take fluids and paracetamol. Come back if fever continues beyond two days.",
     summary: null,
-    pdfStoragePath: null
+    pdfStoragePath: null,
+    pdfSignedUrl: null
   },
   {
     id: "p-10478",
@@ -70,7 +73,8 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     transcript:
       "Patient reports acidity after meals and irregular sleep. Doctor advised meal timing changes and antacid trial.",
     summary: "Chief Complaint\nAcidity after meals.\n\nPlan\nMeal timing changes and antacid trial.",
-    pdfStoragePath: null
+    pdfStoragePath: null,
+    pdfSignedUrl: null
   },
   {
     id: "p-10470",
@@ -83,7 +87,8 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     recordedAt: "2026-04-22T12:50:00.000Z",
     transcript: "Patient reports recurring headache and eye strain after screen use.",
     summary: "Chief Complaint\nRecurring headache and eye strain.\n\nPlan\nHydration, reduced screen exposure, and eye check-up.",
-    pdfStoragePath: "demo/p-10470.pdf"
+    pdfStoragePath: "demo/p-10470.pdf",
+    pdfSignedUrl: demoPdfSignedUrl
   }
 ];
 
@@ -99,7 +104,8 @@ export function mapApiRecordingToDetail(recording: RecordingDetailApiRecord, now
     recordedAt: recording.recorded_at,
     transcript: recording.transcript,
     summary: recording.summary,
-    pdfStoragePath: recording.pdf_storage_path
+    pdfStoragePath: recording.pdf_storage_path,
+    pdfSignedUrl: recording.pdf_signed_url
   };
 }
 

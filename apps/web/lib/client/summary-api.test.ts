@@ -16,7 +16,8 @@ const apiRecording = {
   recorded_at: "2026-04-23T05:25:00.000Z",
   transcript: "Patient reports fever.",
   summary: "Chief Complaint: Fever",
-  pdf_storage_path: null
+  pdf_storage_path: null,
+  pdf_signed_url: null
 };
 
 describe("summary client API", () => {
@@ -66,7 +67,8 @@ describe("summary client API", () => {
           ...apiRecording,
           summary: "Edited summary",
           status: "summary_ready",
-          pdf_storage_path: null
+          pdf_storage_path: null,
+          pdf_signed_url: null
         }
       })
     ) as unknown as typeof fetch;

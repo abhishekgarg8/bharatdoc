@@ -15,7 +15,8 @@ describe("recording detail data", () => {
           recorded_at: "2026-04-23T05:25:00.000Z",
           transcript: "Patient reports fever.",
           summary: "Chief Complaint: Fever",
-          pdf_storage_path: null
+          pdf_storage_path: null,
+          pdf_signed_url: null
         },
         new Date("2026-04-23T10:00:00.000Z")
       )
@@ -27,6 +28,30 @@ describe("recording detail data", () => {
       status: "summary_ready",
       transcript: "Patient reports fever.",
       summary: "Chief Complaint: Fever"
+    });
+  });
+
+  it("maps real saved PDF signed URLs without demo fallback", () => {
+    expect(
+      mapApiRecordingToDetail(
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          patient_id: "P-10483",
+          label: "Follow-up",
+          duration_seconds: 723,
+          doctor_name: "Dr. Aparna Iyer",
+          status: "pdf_saved",
+          recorded_at: "2026-04-23T05:25:00.000Z",
+          transcript: "Patient reports fever.",
+          summary: "Chief Complaint: Fever",
+          pdf_storage_path: "clinic/doctor/recording.pdf",
+          pdf_signed_url: "https://signed.example.com/recording.pdf"
+        },
+        new Date("2026-04-23T10:00:00.000Z")
+      )
+    ).toMatchObject({
+      pdfStoragePath: "clinic/doctor/recording.pdf",
+      pdfSignedUrl: "https://signed.example.com/recording.pdf"
     });
   });
 

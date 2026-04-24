@@ -163,6 +163,16 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       }
 
       return toRecordingListItem(data as RecordingWithDoctorRow);
+    },
+
+    async createPdfSignedUrl(path: string): Promise<string> {
+      const { data, error } = await supabase.storage.from("pdfs").createSignedUrl(path, 30 * 60);
+
+      if (error) {
+        throw error;
+      }
+
+      return data.signedUrl;
     }
   };
 }

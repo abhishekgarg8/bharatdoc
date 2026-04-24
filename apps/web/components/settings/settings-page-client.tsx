@@ -13,12 +13,13 @@ import {
   fetchClinicAdminSnapshot,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
-import { fetchCurrentDoctor } from "@/lib/client/session";
+import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 
 interface SettingsPageClientProps {
   authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
 function toSettingsDoctor(doctor: Awaited<ReturnType<typeof fetchCurrentDoctor>>["doctor"]): SettingsDoctorProfile {
@@ -58,9 +59,11 @@ function toSettingsActiveDoctors(
 export function SettingsPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false
+  demoOnMissingToken = false,
+  onNavigate
 }: SettingsPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
+  const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [doctor, setDoctor] = useState<SettingsDoctorProfile | null>(null);
@@ -83,17 +86,27 @@ export function SettingsPageClient({
         if (demoOnMissingToken) {
           setLoading(false);
         } else {
-          window.location.assign("/onboarding");
+          navigate("/onboarding");
         }
         return;
       }
 
       setIdToken(token);
 
+      let didRedirect = false;
+
       try {
         const me = await fetchCurrentDoctor(token, fetcher);
 
         if (!isMounted) {
+          return;
+        }
+
+        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+
+        if (inactiveDestination) {
+          didRedirect = true;
+          navigate(inactiveDestination);
           return;
         }
 
@@ -122,7 +135,7 @@ export function SettingsPageClient({
           }
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !didRedirect) {
           setLoading(false);
         }
       }
@@ -133,7 +146,7 @@ export function SettingsPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher]);
+  }, [client, demoOnMissingToken, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading settings" />;
@@ -144,7 +157,7 @@ export function SettingsPageClient({
   }
 
   if (demoOnMissingToken && !idToken && !doctor) {
-    return <SettingsScreen fetcher={fetcher} allowLocalDemoWrites />;
+    return <SettingsScreen fetcher={fetcher} allowLocalDemoWrites demoMode />;
   }
 
   const screenProps = {

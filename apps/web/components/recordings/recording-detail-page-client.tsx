@@ -8,6 +8,7 @@ import {
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 import { fetchRecordingDetail } from "@/lib/client/summary-api";
 
 interface RecordingDetailPageClientProps {
@@ -15,15 +16,18 @@ interface RecordingDetailPageClientProps {
   authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
 export function RecordingDetailPageClient({
   recordingId,
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false
+  demoOnMissingToken = false,
+  onNavigate
 }: RecordingDetailPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
+  const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [recording, setRecording] = useState<RecordingDetailRecord | null>(null);
@@ -44,14 +48,30 @@ export function RecordingDetailPageClient({
           setRecording(findDemoRecordingDetail(recordingId));
           setLoading(false);
         } else {
-          window.location.assign("/onboarding");
+          navigate("/onboarding");
         }
         return;
       }
 
       setIdToken(token);
 
+      let didRedirect = false;
+
       try {
+        const me = await fetchCurrentDoctor(token, fetcher);
+
+        if (!isMounted) {
+          return;
+        }
+
+        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+
+        if (inactiveDestination) {
+          didRedirect = true;
+          navigate(inactiveDestination);
+          return;
+        }
+
         const detail = await fetchRecordingDetail(token, recordingId, fetcher);
 
         if (isMounted) {
@@ -62,7 +82,7 @@ export function RecordingDetailPageClient({
           setError("Unable to load recording.");
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !didRedirect) {
           setLoading(false);
         }
       }
@@ -73,7 +93,7 @@ export function RecordingDetailPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher, recordingId]);
+  }, [client, demoOnMissingToken, fetcher, navigate, recordingId]);
 
   if (loading) {
     return <PageLoading label="Loading recording" />;

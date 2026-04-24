@@ -17,9 +17,31 @@ const pendingApprovals: PendingApproval[] = [
   }
 ];
 
+const ownerDoctor = {
+  name: "Dr. Aparna Iyer",
+  specialization: "General Physician",
+  phone: "+91 98765 43210",
+  role: "owner" as const
+};
+
+const doctorProfile = {
+  name: "Dr. Nisha Shah",
+  specialization: "General Physician",
+  phone: "+91 98765 43211",
+  role: "doctor" as const
+};
+
+const clinic = {
+  id: "demo-clinic",
+  name: "Sunrise Clinic",
+  code: "MED42X",
+  address: "24 Baner Road, Pune 411045",
+  activeDoctorsCount: 1
+};
+
 describe("SettingsScreen", () => {
   it("renders profile, clinic admin, transcription, and account groups", () => {
-    render(<SettingsScreen pendingApprovals={pendingApprovals} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
@@ -32,7 +54,7 @@ describe("SettingsScreen", () => {
   });
 
   it("shows active doctor details when the owner expands the clinic team", async () => {
-    render(<SettingsScreen pendingApprovals={pendingApprovals} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
 
     fireEvent.click(screen.getByRole("button", { name: /active doctors/i }));
 
@@ -44,7 +66,7 @@ describe("SettingsScreen", () => {
   it("approves a pending doctor through the API and removes the card", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
-    render(<SettingsScreen pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     await waitFor(() => expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument());
@@ -61,7 +83,7 @@ describe("SettingsScreen", () => {
   it("does not approve locally when authentication is missing", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
-    render(<SettingsScreen pendingApprovals={pendingApprovals} fetcher={fetcher} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} fetcher={fetcher} />);
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     await waitFor(() => expect(screen.getByText("Unable to approve Dr. Meera Shah.")).toBeInTheDocument());
@@ -72,7 +94,7 @@ describe("SettingsScreen", () => {
   it("rejects a pending doctor through the API and removes the card", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
-    render(<SettingsScreen pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
     fireEvent.click(screen.getByRole("button", { name: /reject/i }));
 
     await waitFor(() => expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument());
@@ -104,7 +126,7 @@ describe("SettingsScreen", () => {
       return Response.json({ ok: true });
     }) as unknown as typeof fetch;
 
-    render(<SettingsScreen pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
 
     fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
     fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
@@ -130,7 +152,7 @@ describe("SettingsScreen", () => {
   it("does not save clinic profile locally when authentication is missing", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
-    render(<SettingsScreen pendingApprovals={pendingApprovals} fetcher={fetcher} />);
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} fetcher={fetcher} />);
 
     fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
     fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
@@ -139,5 +161,23 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(screen.getByText("Unable to save clinic profile.")).toBeInTheDocument());
     expect(screen.queryByText("Clinic profile saved.")).not.toBeInTheDocument();
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("does not render demo owner admin data for non-owner settings", () => {
+    render(<SettingsScreen doctor={doctorProfile} activeDoctors={[]} pendingApprovals={[]} />);
+
+    expect(screen.getByText("Dr. Nisha Shah")).toBeInTheDocument();
+    expect(screen.queryByText("Clinic admin")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("shows zero pending approvals without falling back to demo requests", () => {
+    render(<SettingsScreen doctor={ownerDoctor} clinic={clinic} activeDoctors={[]} pendingApprovals={[]} />);
+
+    expect(screen.getByText("No doctors waiting")).toBeInTheDocument();
+    expect(screen.getByText("No pending join requests.")).toBeInTheDocument();
+    expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 });

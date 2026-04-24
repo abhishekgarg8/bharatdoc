@@ -8,4 +8,10 @@ describe("BottomNav", () => {
 
     expect(screen.getByRole("link", { name: /search/i })).toHaveAttribute("href", "/search");
   });
+
+  it("does not show a settings badge by default", () => {
+    render(<BottomNav active="home" />);
+
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
 });

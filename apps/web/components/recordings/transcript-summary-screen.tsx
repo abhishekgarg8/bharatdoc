@@ -47,7 +47,7 @@ export function TranscriptSummaryScreen({
   const [status, setStatus] = useState(recording.status);
   const [savedSummary, setSavedSummary] = useState(recording.summary ?? "");
   const [pdfStoragePath, setPdfStoragePath] = useState(recording.pdfStoragePath);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(recording.pdfStoragePath ? demoPdfSignedUrl : null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(recording.pdfSignedUrl);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -115,7 +115,8 @@ export function TranscriptSummaryScreen({
               ...recording,
               summary,
               status: "summary_ready" as const,
-              pdfStoragePath: null
+              pdfStoragePath: null,
+              pdfSignedUrl: null
             };
 
       setSummary(updated.summary ?? summary);

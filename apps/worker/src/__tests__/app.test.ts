@@ -248,7 +248,7 @@ describe("worker app", () => {
     });
   });
 
-  it("rejects transcription when patient id is missing", async () => {
+  it("allows transcription when patient id is missing", async () => {
     await request(createApp(depsFor(activeDoctor, { ...recording, patient_id: null })))
       .post("/api/transcribe")
       .set("Authorization", "Bearer valid-token")
@@ -257,9 +257,13 @@ describe("worker app", () => {
         filename: "recording.webm",
         contentType: "audio/webm"
       })
-      .expect(400)
+      .expect(200)
       .expect(({ body }) => {
-        expect(body.error.code).toBe("PATIENT_ID_REQUIRED");
+        expect(body).toMatchObject({
+          recording_id: recording.id,
+          transcript: "Patient reports fever for two days.",
+          status: "transcribed"
+        });
       });
   });
 

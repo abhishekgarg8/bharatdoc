@@ -9,20 +9,23 @@ import {
   fetchDashboardRecords,
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
-import { fetchCurrentDoctor, type MeResponse } from "@/lib/client/session";
+import { destinationForInactiveDoctor, fetchCurrentDoctor, type MeResponse } from "@/lib/client/session";
 
 interface DashboardPageClientProps {
   authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
 export function DashboardPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false
+  demoOnMissingToken = false,
+  onNavigate
 }: DashboardPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
+  const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<MeResponse["doctor"] | null>(null);
   const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
@@ -42,16 +45,29 @@ export function DashboardPageClient({
         if (demoOnMissingToken) {
           setLoading(false);
         } else {
-          window.location.assign("/onboarding");
+          navigate("/onboarding");
         }
         return;
       }
 
+      let didRedirect = false;
+
       try {
-        const [me, nextRecords] = await Promise.all([
-          fetchCurrentDoctor(idToken, fetcher),
-          fetchDashboardRecords(idToken, fetcher)
-        ]);
+        const me = await fetchCurrentDoctor(idToken, fetcher);
+
+        if (!isMounted) {
+          return;
+        }
+
+        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+
+        if (inactiveDestination) {
+          didRedirect = true;
+          navigate(inactiveDestination);
+          return;
+        }
+
+        const nextRecords = await fetchDashboardRecords(idToken, fetcher);
 
         if (isMounted) {
           setDoctor(me.doctor);
@@ -66,7 +82,7 @@ export function DashboardPageClient({
           }
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !didRedirect) {
           setLoading(false);
         }
       }
@@ -77,7 +93,7 @@ export function DashboardPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher]);
+  }, [client, demoOnMissingToken, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading dashboard" />;

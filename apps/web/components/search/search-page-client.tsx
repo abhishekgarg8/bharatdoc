@@ -9,19 +9,23 @@ import {
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 
 interface SearchPageClientProps {
   authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
+  onNavigate?: (href: string) => void;
 }
 
 export function SearchPageClient({
   authClient,
   fetcher = fetch,
-  demoOnMissingToken = false
+  demoOnMissingToken = false,
+  onNavigate
 }: SearchPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
+  const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [records, setRecords] = useState<DashboardRecord[]>(demoOnMissingToken ? demoDashboardRecords : []);
@@ -41,14 +45,30 @@ export function SearchPageClient({
         if (demoOnMissingToken) {
           setLoading(false);
         } else {
-          window.location.assign("/onboarding");
+          navigate("/onboarding");
         }
         return;
       }
 
       setIdToken(token);
 
+      let didRedirect = false;
+
       try {
+        const me = await fetchCurrentDoctor(token, fetcher);
+
+        if (!isMounted) {
+          return;
+        }
+
+        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+
+        if (inactiveDestination) {
+          didRedirect = true;
+          navigate(inactiveDestination);
+          return;
+        }
+
         const nextRecords = await fetchDashboardRecords(token, fetcher);
 
         if (isMounted) {
@@ -63,7 +83,7 @@ export function SearchPageClient({
           }
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !didRedirect) {
           setLoading(false);
         }
       }
@@ -74,7 +94,7 @@ export function SearchPageClient({
     return () => {
       isMounted = false;
     };
-  }, [client, demoOnMissingToken, fetcher]);
+  }, [client, demoOnMissingToken, fetcher, navigate]);
 
   if (loading) {
     return <PageLoading label="Loading search" />;

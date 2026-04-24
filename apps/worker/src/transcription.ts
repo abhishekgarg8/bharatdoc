@@ -1,4 +1,4 @@
-import { MAX_AUDIO_BYTES_PHASE_1, requirePatientId, type Recording } from "@bharatdoc/shared";
+import { MAX_AUDIO_BYTES_PHASE_1, type Recording } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
 import type { AuthContext, WorkerDependencies } from "./types.js";
 
@@ -60,12 +60,6 @@ function requireAudio(audio: TranscriptionFileInput | undefined): TranscriptionF
 function requireTranscribableRecording(recording: Recording | null): Recording {
   if (!recording) {
     throw new HttpError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
-  }
-
-  try {
-    requirePatientId(recording.patient_id);
-  } catch {
-    throw new HttpError(400, "Patient ID is required before transcription.", "PATIENT_ID_REQUIRED");
   }
 
   return recording;

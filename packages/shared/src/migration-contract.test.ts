@@ -12,6 +12,10 @@ const reviewRpcMigration = readFileSync(
   resolve(dirname, "../../../supabase/migrations/202604240001_review_clinic_join_request_rpc.sql"),
   "utf8"
 );
+const hardenedReviewRpcMigration = readFileSync(
+  resolve(dirname, "../../../supabase/migrations/202604240002_harden_join_request_review_rpc.sql"),
+  "utf8"
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -48,5 +52,23 @@ describe("initial Supabase migration contract", () => {
     expect(reviewRpcMigration).toContain("public.review_clinic_join_request");
     expect(reviewRpcMigration).toContain("and status = 'pending'");
     expect(reviewRpcMigration).toContain("get diagnostics changed_rows = row_count");
+  });
+
+  it("hardens join-request review RPC execution privileges", () => {
+    expect(hardenedReviewRpcMigration).toContain("role = 'owner'");
+    expect(hardenedReviewRpcMigration).toContain("account_status = 'active'");
+    expect(hardenedReviewRpcMigration).toContain("and clinic_id = owner_clinic_id");
+    expect(hardenedReviewRpcMigration).toContain(
+      "revoke all on function public.review_clinic_join_request(uuid, uuid, uuid, text, text) from public"
+    );
+    expect(hardenedReviewRpcMigration).toContain(
+      "revoke execute on function public.review_clinic_join_request(uuid, uuid, uuid, text, text) from anon"
+    );
+    expect(hardenedReviewRpcMigration).toContain(
+      "revoke execute on function public.review_clinic_join_request(uuid, uuid, uuid, text, text) from authenticated"
+    );
+    expect(hardenedReviewRpcMigration).toContain(
+      "grant execute on function public.review_clinic_join_request(uuid, uuid, uuid, text, text) to service_role"
+    );
   });
 });

@@ -66,7 +66,8 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
       summary: input.summary,
       status: "summary_ready" as const,
       pdf_storage_path: null
-    }))
+    })),
+    createPdfSignedUrl: vi.fn(async () => "https://signed.example.com/recording.pdf")
   };
 }
 
@@ -135,9 +136,27 @@ describe("recordings service", () => {
       recorded_at: "2026-04-23T06:12:00.000Z",
       transcript: "Patient reports fever for two days.",
       summary: null,
-      pdf_storage_path: null
+      pdf_storage_path: null,
+      pdf_signed_url: null
     });
     expect(repository.findRecordingForClinic).toHaveBeenCalledWith(recording.id, activeDoctor.clinic_id);
+  });
+
+  it("loads a fresh signed PDF URL for saved PDF recordings", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findRecordingForClinic).mockResolvedValueOnce({
+      ...recording,
+      status: "pdf_saved",
+      pdf_storage_path: "clinic/doctor/recording.pdf"
+    });
+
+    await expect(
+      getRecordingDetailForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
+    ).resolves.toMatchObject({
+      pdf_storage_path: "clinic/doctor/recording.pdf",
+      pdf_signed_url: "https://signed.example.com/recording.pdf"
+    });
+    expect(repository.createPdfSignedUrl).toHaveBeenCalledWith("clinic/doctor/recording.pdf");
   });
 
   it("saves edited summaries and advances transcribed recordings to summary ready", async () => {

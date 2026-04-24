@@ -14,7 +14,8 @@ const recording: RecordingDetailRecord = {
   recordedAt: "2026-04-23T05:25:00.000Z",
   transcript: "Patient reports fever for two days.\n\nDoctor advised fluids and paracetamol.",
   summary: null,
-  pdfStoragePath: null
+  pdfStoragePath: null,
+  pdfSignedUrl: null
 };
 
 describe("TranscriptSummaryScreen", () => {
@@ -89,7 +90,8 @@ describe("TranscriptSummaryScreen", () => {
           ...recording,
           summary: "Initial summary",
           status: "pdf_saved",
-          pdfStoragePath: "clinic/doctor/old.pdf"
+          pdfStoragePath: "clinic/doctor/old.pdf",
+          pdfSignedUrl: "https://signed.example.com/old.pdf"
         }}
         onSaveSummary={save}
       />
@@ -106,6 +108,25 @@ describe("TranscriptSummaryScreen", () => {
     });
     expect(screen.queryByLabelText("PDF saved")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open PDF" })).not.toBeInTheDocument();
+  });
+
+  it("opens the real signed PDF URL for reloaded saved PDFs", () => {
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          summary: "Initial summary",
+          status: "pdf_saved",
+          pdfStoragePath: "clinic/doctor/recording.pdf",
+          pdfSignedUrl: "https://signed.example.com/recording.pdf"
+        }}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute(
+      "href",
+      "https://signed.example.com/recording.pdf"
+    );
   });
 
   it("generates PDFs after a summary is saved", async () => {

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardPageClient } from "@/components/dashboard-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
@@ -91,5 +91,27 @@ describe("DashboardPageClient", () => {
 
     await expect(screen.findByText("Unable to load dashboard. Please sign in again.")).resolves.toBeInTheDocument();
     expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
+  });
+
+  it("redirects pending users away from the dashboard without loading records", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString() === "/api/me") {
+        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" } });
+      }
+
+      return Response.json({ records: [apiRecord] });
+    }) as unknown as typeof fetch;
+
+    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
   });
 });

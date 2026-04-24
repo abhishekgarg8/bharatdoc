@@ -36,6 +36,7 @@ export interface RecordingDetail {
   transcript: string | null;
   summary: string | null;
   pdf_storage_path: string | null;
+  pdf_signed_url: string | null;
 }
 
 export interface CreateRecordingRow {
@@ -60,6 +61,7 @@ export interface RecordingsRepository {
     doctorId: string;
     summary: string;
   }): Promise<RecordingListItem>;
+  createPdfSignedUrl(path: string): Promise<string>;
 }
 
 function clampLimit(limit: number | undefined, fallback: number): number {
@@ -158,7 +160,11 @@ export function toDashboardRecording(recording: RecordingListItem, fallbackDocto
   };
 }
 
-export function toRecordingDetail(recording: RecordingListItem, fallbackDoctorName: string): RecordingDetail {
+export function toRecordingDetail(
+  recording: RecordingListItem,
+  fallbackDoctorName: string,
+  pdfSignedUrl: string | null = null
+): RecordingDetail {
   return {
     id: recording.id,
     patient_id: recording.patient_id,
@@ -169,7 +175,8 @@ export function toRecordingDetail(recording: RecordingListItem, fallbackDoctorNa
     recorded_at: recording.recorded_at,
     transcript: recording.transcript,
     summary: recording.summary,
-    pdf_storage_path: recording.pdf_storage_path
+    pdf_storage_path: recording.pdf_storage_path,
+    pdf_signed_url: pdfSignedUrl
   };
 }
 
@@ -198,7 +205,11 @@ export async function getRecordingDetailForDoctor(
     throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
   }
 
-  return toRecordingDetail(recording, doctor.name);
+  const pdfSignedUrl = recording.pdf_storage_path
+    ? await repository.createPdfSignedUrl(recording.pdf_storage_path)
+    : null;
+
+  return toRecordingDetail(recording, doctor.name, pdfSignedUrl);
 }
 
 export async function searchPatientRecordingsForClinic(

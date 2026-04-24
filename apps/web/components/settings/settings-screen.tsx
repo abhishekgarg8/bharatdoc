@@ -47,6 +47,7 @@ interface SettingsScreenProps {
   idToken?: string;
   fetcher?: typeof fetch;
   allowLocalDemoWrites?: boolean;
+  demoMode?: boolean;
 }
 
 const defaultDoctor: SettingsDoctorProfile = {
@@ -140,29 +141,53 @@ function requestedLabel(requestedAt: string, now = new Date()): string {
 }
 
 export function SettingsScreen({
-  doctor = defaultDoctor,
-  clinic = defaultClinic,
-  activeDoctors = defaultActiveDoctors,
-  pendingApprovals = defaultPendingApprovals,
+  doctor,
+  clinic,
+  activeDoctors,
+  pendingApprovals,
   idToken,
   fetcher = fetch,
-  allowLocalDemoWrites = false
+  allowLocalDemoWrites = false,
+  demoMode = false
 }: SettingsScreenProps) {
-  const [pending, setPending] = useState(pendingApprovals);
-  const [clinicState, setClinicState] = useState(clinic);
-  const [activeDoctorsState] = useState(activeDoctors);
+  const resolvedDoctor = doctor ?? (demoMode ? defaultDoctor : null);
+  const resolvedClinic = clinic ?? (demoMode ? defaultClinic : null);
+  const resolvedActiveDoctors = activeDoctors ?? (demoMode ? defaultActiveDoctors : []);
+  const resolvedPendingApprovals = pendingApprovals ?? (demoMode ? defaultPendingApprovals : []);
+  const clinicForState = resolvedClinic ?? {
+    id: "",
+    name: "",
+    code: "",
+    address: null,
+    activeDoctorsCount: 0
+  };
+  const [pending, setPending] = useState(resolvedPendingApprovals);
+  const [clinicState, setClinicState] = useState(clinicForState);
+  const [activeDoctorsState] = useState(resolvedActiveDoctors);
   const [workingRequestId, setWorkingRequestId] = useState<string | null>(null);
   const [savingClinic, setSavingClinic] = useState(false);
   const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "clinic-profile" | null>(null);
   const [clinicForm, setClinicForm] = useState({
-    name: clinic.name,
-    address: clinic.address ?? "",
-    code: clinic.code
+    name: clinicForState.name,
+    address: clinicForState.address ?? "",
+    code: clinicForState.code
   });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isOwner = doctor.role === "owner";
+  const isOwner = resolvedDoctor?.role === "owner";
+  const canManageClinic = Boolean(isOwner && resolvedClinic);
   const promptEdited = useMemo(() => DEFAULT_SUMMARY_PROMPT.length > 0, []);
+
+  if (!resolvedDoctor) {
+    return (
+      <main className="relative mx-auto flex h-dvh w-full max-w-[430px] items-center justify-center bg-paper px-6 text-center text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
+        <section className="rounded-[14px] border border-rule bg-paper-deep px-5 py-6">
+          <h1 className="font-body text-base font-bold text-ink">Unable to load settings</h1>
+          <p className="mt-2 font-body text-sm leading-6 text-ink-muted">Sign in again to view account settings.</p>
+        </section>
+      </main>
+    );
+  }
 
   async function reviewDoctor(request: PendingApproval, action: "approve" | "reject") {
     setWorkingRequestId(request.id);
@@ -265,17 +290,17 @@ export function SettingsScreen({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
           <section className="mb-4 flex items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]">
             <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-terracotta font-display text-[26px] text-white">
-              {initialForName(doctor.name)}
+              {initialForName(resolvedDoctor.name)}
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-body text-[15px] font-bold leading-tight text-ink">{doctor.name}</h2>
-              <p className="mt-0.5 font-body text-xs text-ink-muted">{doctor.specialization}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{doctor.phone}</p>
+              <h2 className="font-body text-[15px] font-bold leading-tight text-ink">{resolvedDoctor.name}</h2>
+              <p className="mt-0.5 font-body text-xs text-ink-muted">{resolvedDoctor.specialization}</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{resolvedDoctor.phone}</p>
             </div>
             <Edit3 className="h-[18px] w-[18px] shrink-0 text-ink-soft" />
           </section>
 
-          {isOwner ? (
+          {canManageClinic ? (
             <SettingsGroup title="Clinic admin">
               <SettingsRow
                 title="Pending approvals"
@@ -305,7 +330,7 @@ export function SettingsScreen({
             </SettingsGroup>
           ) : null}
 
-          {isOwner && expandedPanel === "active-doctors" ? (
+          {canManageClinic && expandedPanel === "active-doctors" ? (
             <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-3 shadow-[0_1px_0_#E5DAC5]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
@@ -346,7 +371,7 @@ export function SettingsScreen({
             </section>
           ) : null}
 
-          {isOwner && expandedPanel === "clinic-profile" ? (
+          {canManageClinic && expandedPanel === "clinic-profile" ? (
             <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-4 shadow-[0_1px_0_#E5DAC5]">
               <div className="mb-4">
                 <h2 className="font-body text-sm font-bold text-ink">Clinic profile</h2>
@@ -441,7 +466,7 @@ export function SettingsScreen({
             />
           </SettingsGroup>
 
-          {isOwner ? (
+          {canManageClinic ? (
             <section className="mb-5">
               <div className="mb-2 ml-1 font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
                 Owner review

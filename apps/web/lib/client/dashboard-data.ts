@@ -27,7 +27,7 @@ export interface DashboardRecordListResponse {
 
 export interface CreateRecordingMetadataInput {
   id: string;
-  patient_id: string;
+  patient_id: string | null;
   label?: string | null;
   duration_seconds: number;
   recorded_at: string;

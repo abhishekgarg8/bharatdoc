@@ -13,7 +13,7 @@ interface BottomNavProps {
   settingsBadgeCount?: number;
 }
 
-export function BottomNav({ active, settingsBadgeCount = 1 }: BottomNavProps) {
+export function BottomNav({ active, settingsBadgeCount = 0 }: BottomNavProps) {
   return (
     <nav className="border-t border-rule bg-paper px-6 pb-3 pt-2 font-body" aria-label="Primary navigation">
       <div className="flex items-center justify-around">
