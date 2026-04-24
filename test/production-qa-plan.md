@@ -13,6 +13,7 @@ Screenshots: `test/screenshots/`
 - Confirmed-owner fallback alias: `abhishekgarg8+bdqa-owner-admin-20260424160852@gmail.com`
 - Confirmed-doctor fallback alias: `abhishekgarg8+bdqa-doctor-admin-20260424160852@gmail.com`
 - Fresh production owner alias: `abhishekgarg8+bdqa-owner-prod-20260424190352@gmail.com`
+- Rerun owner alias: `abhishekgarg8+bdqa-owner-rerun-20260424194557@gmail.com`
 
 ## Test Cases
 
