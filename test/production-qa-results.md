@@ -86,3 +86,6 @@ Likely cause:
 - `test/screenshots/t02-rerun-owner-signup-after-submit.png`
 - `test/screenshots/t02-rerun-owner-login-filled.png`
 - `test/screenshots/t02-rerun-owner-failure.png`
+- `test/screenshots/rerun-20260424195604-owner-admin-login-filled.png`
+- `test/screenshots/rerun-20260424195604-owner-admin-login-result.png`
+- `test/screenshots/rerun-20260424195604-owner-prod-login-result.png`
