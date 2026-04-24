@@ -665,6 +665,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 # Supabase (public anon key — safe to expose to browser)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SITE_URL=https://bharatdoc-web.vercel.app/
 
 # Railway worker base URL (used server-side in Next.js API routes only)
 RAILWAY_WORKER_URL=
@@ -694,6 +695,7 @@ FIREBASE_ADMIN_SDK_JSON=
 | `FIREBASE_ADMIN_SDK_JSON` | Firebase | Console → Project Settings → Service Accounts → Generate new private key → paste full JSON as one line |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase | Dashboard → Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase | Dashboard → Settings → API → `anon` public key |
+| `NEXT_PUBLIC_SITE_URL` | Vercel/Supabase Auth | Public app URL for email confirmation and magic-link redirects |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Dashboard → Settings → API → `service_role` secret key |
 | `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys → Create new secret key |
 | `RAILWAY_WORKER_URL` | Railway | Railway dashboard → your worker service → Settings → Public URL |

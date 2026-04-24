@@ -12,6 +12,26 @@ export interface AuthClient {
 
 let browserClient: SupabaseClient | null = null;
 
+const defaultSiteUrl = "https://bharatdoc-web.vercel.app/";
+
+export function getAuthRedirectUrl(): string {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.NEXT_PUBLIC_VERCEL_URL ??
+    defaultSiteUrl;
+  let url = configuredUrl.trim();
+
+  if (!url) {
+    url = defaultSiteUrl;
+  }
+
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  return url.endsWith("/") ? url : `${url}/`;
+}
+
 function getSupabaseBrowserClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -23,7 +43,7 @@ function getSupabaseBrowserClient(): SupabaseClient {
   browserClient ??= createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
       persistSession: true
     }
   });
@@ -48,6 +68,7 @@ export function createSupabaseAuthClient(): AuthClient {
         email: parsed.email,
         password: parsed.password,
         options: {
+          emailRedirectTo: getAuthRedirectUrl(),
           data: {
             email: parsed.email
           }

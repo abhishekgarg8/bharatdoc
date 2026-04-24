@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { authErrorMessage, createSupabaseAuthClient } from "@/lib/client/auth-client";
+import { authErrorMessage, createSupabaseAuthClient, getAuthRedirectUrl } from "@/lib/client/auth-client";
 
 const supabaseMocks = vi.hoisted(() => {
   const signUp = vi.fn();
@@ -53,10 +53,22 @@ describe("Supabase auth client", () => {
       })
     ).resolves.toBe("access-token");
 
+    expect(supabaseMocks.createClient).toHaveBeenCalledWith(
+      "https://supabase.test",
+      "anon-key",
+      {
+        auth: {
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          persistSession: true
+        }
+      }
+    );
     expect(supabaseMocks.signUp).toHaveBeenCalledWith({
       email: "doctor@example.com",
       password: "bharatdoc123",
       options: {
+        emailRedirectTo: "https://bharatdoc-web.vercel.app/",
         data: {
           email: "doctor@example.com"
         }
@@ -78,6 +90,18 @@ describe("Supabase auth client", () => {
         password: "bharatdoc123"
       })
     ).rejects.toThrow("Confirm your email before continuing.");
+  });
+
+  it("uses configured production site URL for Supabase email redirects", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://bharatdoc-web.vercel.app");
+
+    expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
+  });
+
+  it("normalizes Vercel deployment URLs for Supabase email redirects", () => {
+    vi.stubEnv("NEXT_PUBLIC_VERCEL_URL", "bharatdoc-web.vercel.app");
+
+    expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
   });
 
   it("returns the current access token from the persisted Supabase session", async () => {

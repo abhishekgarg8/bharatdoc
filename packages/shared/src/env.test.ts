@@ -7,11 +7,15 @@ describe("environment validation", () => {
       parseWebEnv({
         NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
         SUPABASE_SERVICE_ROLE_KEY: "service-role"
       })
-    ).toMatchObject({ NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com" });
+    ).toMatchObject({
+      NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+      NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/"
+    });
   });
 
   it("defaults worker model settings", () => {

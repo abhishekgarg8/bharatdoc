@@ -1,0 +1,4 @@
+[     874ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://bharatdoc-web.vercel.app/onboarding:0
+[   29871ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://bharatdoc-web.vercel.app/api/me:0
+[   75510ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://bharatdoc-web.vercel.app/api/auth/register:0
+[  120327ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://bharatdoc-web.vercel.app/api/auth/register:0

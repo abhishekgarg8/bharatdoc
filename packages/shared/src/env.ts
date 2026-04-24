@@ -5,6 +5,7 @@ const nonEmpty = z.string().min(1);
 export const WebEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: nonEmpty,
+  NEXT_PUBLIC_SITE_URL: z.string().url().optional(),
   RAILWAY_WORKER_URL: z.string().url(),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: nonEmpty
