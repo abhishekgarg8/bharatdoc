@@ -37,10 +37,26 @@ Observed API responses:
 
 This blocks owner onboarding, doctor join requests, approvals, recording, transcription, summary, PDF, search, settings, and session persistence testing in production.
 
+## Rerun After Supabase Project Correction
+
+The blocker still reproduces on 2026-04-24 after the project-id correction, but the failure mode has changed.
+
+Additional evidence:
+
+- The deployed browser bundle now uses `NEXT_PUBLIC_SUPABASE_URL=https://jtezgoegatwbvdqeogiy.supabase.co`.
+- The deployed browser bundle still embeds an anon JWT with `ref: "lnsccuqehnvafgmsahft"`.
+- Production email/password login now fails at Supabase with `401 Invalid API key`.
+- The current local `.env` shows the same mismatch: Supabase URL values point to `jtezgoegatwbvdqeogiy`, while `NEXT_PUBLIC_SUPABASE_ANON_KEY` still decodes to `lnsccuqehnvafgmsahft`.
+
+Likely cause:
+
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` was not updated when the Supabase project URL was corrected.
+- Update and redeploy the anon key for project `jtezgoegatwbvdqeogiy`, then rerun T02.
+
 ## Configuration Signals
 
 - The production browser bundle calls Supabase project `jtezgoegatwbvdqeogiy`.
-- This repo’s local `.env` points at Supabase project `lnsccuqehnvafgmsahft`.
+- This repo’s local `.env` currently has mixed project values: Supabase URLs point at `jtezgoegatwbvdqeogiy`, while `NEXT_PUBLIC_SUPABASE_ANON_KEY` points at `lnsccuqehnvafgmsahft`.
 - Admin-created fallback users in the local `.env` project cannot sign into production, confirming the projects differ.
 - The production signup request sends `redirect_to` for a Vercel preview URL, while the received email link falls back to `https://bharatdoc-web.vercel.app/`.
 
@@ -56,3 +72,5 @@ This blocks owner onboarding, doctor join requests, approvals, recording, transc
 - `test/screenshots/t02-owner-prod-profile-filled.png`
 - `test/screenshots/t02-owner-prod-clinic-filled.png`
 - `test/screenshots/t02-owner-prod-failure.png`
+- `test/screenshots/t02-rerun-owner-login-filled.png`
+- `test/screenshots/t02-rerun-owner-failure.png`
