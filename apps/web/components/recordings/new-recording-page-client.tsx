@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import { PageLoading } from "@/components/session/page-loading";
-import { createFirebasePhoneAuthClient, type PhoneAuthClient } from "@/lib/client/phone-auth";
+import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 
 interface NewRecordingPageClientProps {
-  authClient?: PhoneAuthClient;
+  authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
   useDemoRecorder?: boolean;
@@ -18,7 +18,7 @@ export function NewRecordingPageClient({
   demoOnMissingToken = true,
   useDemoRecorder = false
 }: NewRecordingPageClientProps) {
-  const client = useMemo(() => authClient ?? createFirebasePhoneAuthClient(), [authClient]);
+  const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
 

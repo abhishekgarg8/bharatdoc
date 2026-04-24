@@ -20,7 +20,7 @@ export function extractBearerToken(header: string | undefined): string {
 export async function authenticateRequest(req: Request, deps: WorkerDependencies): Promise<AuthContext> {
   const bearerToken = extractBearerToken(req.header("authorization"));
   const token = await deps.tokenVerifier.verifyIdToken(bearerToken);
-  const doctor = await deps.doctors.findByFirebaseUid(token.uid);
+  const doctor = await deps.doctors.findByAuthUid(token.uid);
 
   return {
     doctor: assertActiveDoctor(doctor),
@@ -38,9 +38,9 @@ export function requireClinicScope(doctor: Doctor, clinicId: string): Doctor {
   return assertClinicScope(doctor, clinicId);
 }
 
-export function mapFirebaseAuthError(error: unknown): never {
+export function mapAuthError(error: unknown): never {
   if (error instanceof Error) {
-    throw new HttpError(401, "Firebase token verification failed.", "AUTH_REQUIRED");
+    throw new HttpError(401, "Supabase token verification failed.", "AUTH_REQUIRED");
   }
 
   throw error;

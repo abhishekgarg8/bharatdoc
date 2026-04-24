@@ -68,9 +68,7 @@ test("root routes unauthenticated users to onboarding", async ({ page }) => {
 test("demo onboarding join flow reaches pending approval", async ({ page }) => {
   await page.goto("/onboarding?demo=1");
 
-  await page.getByRole("button", { name: /send otp/i }).click();
-  await page.getByLabel("OTP").fill("427111");
-  await page.getByRole("button", { name: /verify & continue/i }).click();
+  await page.getByRole("button", { name: /create account/i }).click();
   await expect(page.getByText("Profile details")).toBeVisible();
   await page.getByRole("button", { name: /^continue$/i }).click();
   await expect(page.getByText("Your clinic")).toBeVisible();
@@ -83,9 +81,7 @@ test("demo onboarding join flow reaches pending approval", async ({ page }) => {
 test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await page.goto("/onboarding?demo=1");
 
-  await page.getByRole("button", { name: /send otp/i }).click();
-  await page.getByLabel("OTP").fill("427111");
-  await page.getByRole("button", { name: /verify & continue/i }).click();
+  await page.getByRole("button", { name: /create account/i }).click();
   await page.getByRole("button", { name: /^continue$/i }).click();
   await page.getByRole("button", { name: /create clinic/i }).click();
   await page.getByRole("button", { name: /create clinic & continue/i }).click();
@@ -93,11 +89,13 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await expect(page.getByText("Today's consultations")).toBeVisible();
 });
 
-test("onboarding smoke renders phone OTP entry", async ({ page }) => {
+test("onboarding smoke renders username password entry", async ({ page }) => {
   await page.goto("/onboarding");
 
   await expect(page.getByText("Welcome to BharatDoc")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Send OTP/i })).toBeVisible();
+  await expect(page.getByLabel("Username")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
 });
 
 test("pending approval smoke renders locked state", async ({ page }) => {

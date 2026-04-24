@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { RecordingDetailPageClient } from "@/components/recordings/recording-detail-page-client";
-import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { AuthClient } from "@/lib/client/auth-client";
 
 const apiRecording = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -18,8 +18,10 @@ const apiRecording = {
 
 describe("RecordingDetailPageClient", () => {
   it("loads authenticated recording detail", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async () => Response.json({ recording: apiRecording })) as unknown as typeof fetch;
@@ -40,8 +42,10 @@ describe("RecordingDetailPageClient", () => {
   });
 
   it("renders demo recording detail when no token is available", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => null)
     };
 

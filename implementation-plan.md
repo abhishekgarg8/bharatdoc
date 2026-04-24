@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build Phase 1 as a staging-deployed pnpm TypeScript monorepo from the current PRD/design package. The MVP includes high-fidelity Bharat Warmth PWA screens, Firebase phone OTP onboarding, clinic owner approval, local audio recording, manual transcription, editable AI summaries, PDF generation, clinic-scoped patient search, Settings, and owner admin.
+Build Phase 1 as a staging-deployed pnpm TypeScript monorepo from the current PRD/design package. The MVP includes high-fidelity Bharat Warmth PWA screens, Supabase username/password onboarding, clinic owner approval, local audio recording, manual transcription, editable AI summaries, PDF generation, clinic-scoped patient search, Settings, and owner admin.
 
 Testing is a first-class requirement: every implementation step lands with unit/API/UI coverage where applicable, plus repeated browser verification with screenshots during development.
 
@@ -11,7 +11,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - Monorepo: `apps/web`, `apps/worker`, `packages/shared`.
 - Finish line: local app works, Supabase migrations/buckets are applied, Vercel/Railway staging deploys pass smoke tests.
 - UI: implement Bharat Warmth closely using Tailwind tokens and reusable components.
-- Data access: server-mediated Supabase access only; Next.js and Railway verify Firebase JWTs and use service role credentials server-side.
+- Data access: server-mediated Supabase access only; Next.js and Railway verify Supabase Auth JWTs and use service role credentials server-side.
 - AI: `gpt-4o-mini-transcribe` for transcription and `gpt-4o-mini` for summary generation, with optional env overrides.
 
 ## Implementation Plan
@@ -26,7 +26,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 ### 2. Database, storage, and access control
 
 - Add Supabase migrations for clinics, doctors, join requests, recordings, indexes, and private buckets.
-- Implement shared Zod schemas and access helpers for Firebase JWT verification, doctor lookup, role checks, account status, and clinic scope.
+- Implement shared Zod schemas and access helpers for Supabase Auth JWT verification, doctor lookup, role checks, account status, and clinic scope.
 - Add unit tests for schema validation, status transitions, clinic code generation, patient ID normalization, and access-control decisions.
 - Add API tests for forbidden inactive users, rejected users, cross-clinic access, non-owner admin actions, and self-removal prevention.
 
@@ -40,8 +40,8 @@ Testing is a first-class requirement: every implementation step lands with unit/
 
 ### 4. Auth and onboarding APIs
 
-- Implement Firebase phone OTP client flow and server registration endpoints.
-- [x] Bind invisible Firebase reCAPTCHA to the OTP submit button, reuse the verifier across retries, and reset it after failed sends.
+- [x] Replace Firebase phone OTP with Supabase username/password signup and login.
+- [x] Implement Supabase Auth token verification for Vercel API routes and the Railway worker.
 - Owner path creates clinic, owner doctor row, active account, and clinic code.
 - Doctor path looks up clinic code, creates pending doctor row, and creates join request.
 - Add unit/API tests for owner creation, doctor join, duplicate pending request, invalid clinic code, pending gate, and rejected gate.
@@ -66,7 +66,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 
 ### 7. Railway worker
 
-- Implement Express worker with `/health`, Firebase Admin verification, Supabase service role access, and structured error responses.
+- Implement Express worker with `/health`, Supabase Auth verification, Supabase service role access, and structured error responses.
 - Add `/api/transcribe`, `/api/summarize`, and `/api/generate-pdf`.
 - Transcription uploads audio to Supabase Storage, calls OpenAI, saves transcript, and sets status to `transcribed`.
 - Summary fetches transcript/prompt server-side, calls OpenAI, saves summary, and sets status to `summary_ready`.

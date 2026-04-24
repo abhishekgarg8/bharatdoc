@@ -6,7 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 const require = createRequire(path.join(process.cwd(), "package.json"));
-const admin = require("firebase-admin");
+const { createClient } = require("@supabase/supabase-js");
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -18,110 +18,52 @@ function requiredEnv(name) {
   return value;
 }
 
-function extractEnvObjectValue(envFileContent, key) {
-  const lines = envFileContent.split(/\r?\n/);
-  const startIndex = lines.findIndex((line) => new RegExp(`^\\s*${key}\\s*=`).test(line));
-
-  if (startIndex === -1) {
-    return null;
-  }
-
-  const firstLine = lines[startIndex];
-  const initialValue = firstLine.slice(firstLine.indexOf("=") + 1).trimStart();
-
-  if (!initialValue.startsWith("{")) {
-    return null;
-  }
-
-  const collected = [initialValue];
-
-  if (initialValue.trimEnd().endsWith("}")) {
-    return collected[0];
-  }
-
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    const nextLine = lines[index];
-    collected.push(nextLine);
-
-    if (nextLine.trim() === "}") {
-      return collected.join("\n");
-    }
-  }
-
-  return null;
+function usernameToAuthEmail(username) {
+  return `${username.trim().toLowerCase()}@bharatdoc.local`;
 }
 
-async function parseServiceAccountJson() {
-  const rawValue = requiredEnv("FIREBASE_ADMIN_SDK_JSON");
+function createSupabaseClients() {
+  const supabaseUrl = requiredEnv("SUPABASE_URL");
+  const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey = requiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
-  try {
-    return JSON.parse(rawValue);
-  } catch {
-    const envPath = path.join(process.cwd(), "../../.env");
-    const envFileContent = await readFile(envPath, "utf8");
-    const extracted = extractEnvObjectValue(envFileContent, "FIREBASE_ADMIN_SDK_JSON");
-
-    if (!extracted) {
-      throw new Error("FIREBASE_ADMIN_SDK_JSON could not be reconstructed from .env.");
-    }
-
-    return JSON.parse(extracted);
-  }
-}
-
-async function createFirebaseAdminApp() {
-  const serviceAccountJson = await parseServiceAccountJson();
-  const existing = admin.apps.find((app) => app?.name === "bharatdoc-live-flow-smoke");
-
-  return (
-    existing ??
-    admin.initializeApp(
-      {
-        credential: admin.credential.cert(serviceAccountJson)
-      },
-      "bharatdoc-live-flow-smoke"
-    )
-  );
-}
-
-async function ensurePhoneUser(app, uid, phoneNumber) {
-  try {
-    await app.auth().getUser(uid);
-    await app.auth().updateUser(uid, { phoneNumber });
-  } catch (error) {
-    if (error?.code === "auth/user-not-found") {
-      await app.auth().createUser({ uid, phoneNumber });
-      return;
-    }
-
-    throw error;
-  }
-}
-
-async function exchangeCustomToken(apiKey, token) {
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      token,
-      returnSecureToken: true
+  return {
+    admin: createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false
+      }
+    }),
+    password: createClient(supabaseUrl, anonKey, {
+      auth: {
+        persistSession: false
+      }
     })
-  });
-  const payload = await response.json();
-
-  if (!response.ok || !payload.idToken) {
-    throw new Error(`Unable to exchange Firebase custom token: ${JSON.stringify(payload)}`);
-  }
-
-  return payload.idToken;
+  };
 }
 
-async function createIdToken(app, apiKey, uid, phoneNumber) {
-  await ensurePhoneUser(app, uid, phoneNumber);
-  const customToken = await app.auth().createCustomToken(uid);
-  return exchangeCustomToken(apiKey, customToken);
+async function createPasswordToken(clients, username) {
+  const email = usernameToAuthEmail(username);
+  const password = `Smoke-${username}-${randomUUID()}`;
+  const { error: createError } = await clients.admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      username
+    }
+  });
+
+  if (createError) {
+    throw new Error(`Unable to create Supabase smoke user ${username}: ${createError.message}`);
+  }
+
+  const { data, error: signInError } = await clients.password.auth.signInWithPassword({ email, password });
+
+  if (signInError || !data.session?.access_token) {
+    throw new Error(`Unable to sign in Supabase smoke user ${username}: ${signInError?.message ?? "missing session"}`);
+  }
+
+  return data.session.access_token;
 }
 
 async function apiRequest(baseUrl, pathname, { method = "GET", token, json, formData } = {}) {
@@ -186,20 +128,17 @@ async function createSpeechAudio(runId) {
 
 async function main() {
   const baseUrl = process.env.LIVE_FLOW_WEB_URL ?? process.env.STAGING_WEB_URL ?? "http://127.0.0.1:3000";
-  const firebaseApiKey = requiredEnv("NEXT_PUBLIC_FIREBASE_API_KEY");
   const runAiFlow = process.env.LIVE_FLOW_SKIP_AI !== "1";
-  const app = await createFirebaseAdminApp();
+  const clients = createSupabaseClients();
   const runId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-  const ownerPhone = `+9194${String(Date.now()).slice(-8)}`;
-  const doctorPhone = `+9195${String(Date.now()).slice(-8)}`;
-  const ownerUid = `bharatdoc-smoke-owner-${runId}`;
-  const doctorUid = `bharatdoc-smoke-doctor-${runId}`;
+  const ownerUsername = `smoke_owner_${runId}`.toLowerCase();
+  const doctorUsername = `smoke_doctor_${runId}`.toLowerCase();
 
   console.log(`Live flow smoke against ${baseUrl}`);
 
   const [ownerToken, doctorToken] = await Promise.all([
-    createIdToken(app, firebaseApiKey, ownerUid, ownerPhone),
-    createIdToken(app, firebaseApiKey, doctorUid, doctorPhone)
+    createPasswordToken(clients, ownerUsername),
+    createPasswordToken(clients, doctorUsername)
   ]);
 
   const ownerProfile = {

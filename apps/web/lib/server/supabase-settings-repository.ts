@@ -5,8 +5,8 @@ import type { DoctorPreferencesRepository, DoctorPreferencesUpdate } from "@/lib
 
 export function createSupabaseSettingsRepository(supabase: SupabaseClient): DoctorPreferencesRepository {
   return {
-    async findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null> {
-      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", firebaseUid).maybeSingle();
+    async findDoctorByAuthUid(authUid: string): Promise<Doctor | null> {
+      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", authUid).maybeSingle();
 
       if (error) {
         throw error;

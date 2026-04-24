@@ -777,7 +777,7 @@ Assumptions: 50 consultations/day across all doctors, avg 10-min recording.
 ## 11. Phased Roadmap
 
 ### Phase 1 — MVP
-- [ ] Firebase Auth phone + OTP login
+- [x] Supabase Auth username/password signup + login
 - [ ] Clinic creation (owner) + Clinic Code join flow (doctor)
 - [ ] Approval flow + pending state UI
 - [ ] Clinic Owner admin tab (pending approvals, active doctors, clinic profile)

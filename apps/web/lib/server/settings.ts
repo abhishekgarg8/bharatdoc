@@ -20,7 +20,7 @@ export interface DoctorPreferencesUpdate {
 }
 
 export interface DoctorPreferencesRepository {
-  findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   updateDoctorPreferences(doctorId: string, input: DoctorPreferencesUpdate): Promise<Doctor>;
 }
 
@@ -60,7 +60,7 @@ async function requireActiveDoctorForSettings(
   user: VerifiedUser,
   repository: DoctorPreferencesRepository
 ): Promise<Doctor> {
-  const doctor = await repository.findDoctorByFirebaseUid(user.uid);
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
 
   if (!doctor) {
     throw new AppError(404, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");

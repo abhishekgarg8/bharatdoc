@@ -2,49 +2,50 @@
 
 import { useMemo, useState } from "react";
 import { Building2, Check, FileText, Loader2, Plus } from "lucide-react";
-import type { RegistrationInput } from "@bharatdoc/shared";
+import { normalizeUsername, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
-import { createFirebasePhoneAuthClient, firebaseAuthErrorMessage, formatIndianPhoneNumber, type PhoneAuthClient, type PhoneAuthSession } from "@/lib/client/phone-auth";
+import { createSupabaseAuthClient, authErrorMessage, type AuthClient } from "@/lib/client/auth-client";
 import { destinationForRegistration, lookupClinic, registerAccount, type ClinicLookupResponse } from "@/lib/client/onboarding-api";
+import { destinationForDoctorStatus, fetchCurrentDoctor } from "@/lib/client/session";
 
-type OnboardingStep = "phone" | "otp" | "profile" | "clinic";
+type OnboardingStep = "credentials" | "profile" | "clinic";
+type AuthMode = "signup" | "login";
 type ClinicMode = "join_clinic" | "create_clinic";
 
 interface OnboardingScreenProps {
-  phoneAuthClient?: PhoneAuthClient;
+  authClient?: AuthClient;
   onNavigate?: (href: string) => void;
   demoMode?: boolean;
 }
 
-function createDemoPhoneAuthClient(): PhoneAuthClient {
+function createDemoAuthClient(): AuthClient {
   return {
-    async sendOtp(): Promise<PhoneAuthSession> {
-      return {
-        async verifyOtp(): Promise<string> {
-          return "demo-id-token";
-        }
-      };
+    async signUpWithPassword(): Promise<string> {
+      return "demo-id-token";
+    },
+    async signInWithPassword(): Promise<string> {
+      return "demo-id-token";
     },
     async getCurrentIdToken(): Promise<string | null> {
       return "demo-id-token";
+    },
+    async signOut(): Promise<void> {
+      return undefined;
     }
   };
 }
 
-export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
-  const authClient = useMemo(
-    () => phoneAuthClient ?? (demoMode ? createDemoPhoneAuthClient() : createFirebasePhoneAuthClient()),
-    [demoMode, phoneAuthClient]
-  );
+export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
+  const auth = useMemo(() => authClient ?? (demoMode ? createDemoAuthClient() : createSupabaseAuthClient()), [demoMode, authClient]);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
-  const [step, setStep] = useState<OnboardingStep>("phone");
+  const [step, setStep] = useState<OnboardingStep>("credentials");
+  const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [phone, setPhone] = useState("98765 43210");
-  const [otp, setOtp] = useState("");
-  const [otpSession, setOtpSession] = useState<PhoneAuthSession | null>(null);
+  const [username, setUsername] = useState("aparna");
+  const [password, setPassword] = useState("bharatdoc123");
   const [idToken, setIdToken] = useState<string | null>(null);
   const [profile, setProfile] = useState({
     name: "Dr. Aparna Iyer",
@@ -59,39 +60,53 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
     address: "24 Baner Road, Pune 411045"
   });
 
-  async function handleSendOtp() {
+  async function handleCredentials() {
     setIsBusy(true);
     setError(null);
 
     try {
-      const formattedPhone = formatIndianPhoneNumber(phone);
-      setPhone(formattedPhone);
-      setOtpSession(await authClient.sendOtp(formattedPhone));
-      setStep("otp");
-    } catch (sendError) {
-      setError(firebaseAuthErrorMessage(sendError));
+      const credentials = {
+        username: normalizeUsername(username),
+        password
+      };
+      const token =
+        authMode === "signup" ? await auth.signUpWithPassword(credentials) : await auth.signInWithPassword(credentials);
+
+      setUsername(credentials.username);
+      setIdToken(token);
+
+      if (demoMode || authMode === "signup") {
+        setStep("profile");
+        return;
+      }
+
+      try {
+        const me = await fetchCurrentDoctor(token);
+        navigate(destinationForDoctorStatus(me.doctor.account_status));
+      } catch {
+        setStep("profile");
+      }
+    } catch (authError) {
+      setError(authErrorMessage(authError));
     } finally {
       setIsBusy(false);
     }
   }
 
-  async function handleVerifyOtp() {
-    if (!otpSession) {
-      setError("Request an OTP first.");
+  function handleAuthModeChange(nextMode: AuthMode) {
+    setAuthMode(nextMode);
+    setError(null);
+  }
+
+  function handleProfileContinue() {
+    if (!idToken) {
+      setError("Create an account or sign in before registration.");
+      setStep("credentials");
       return;
     }
 
-    setIsBusy(true);
     setError(null);
-
-    try {
-      setIdToken(await otpSession.verifyOtp(otp));
-      setStep("profile");
-    } catch (verifyError) {
-      setError(firebaseAuthErrorMessage(verifyError));
-    } finally {
-      setIsBusy(false);
-    }
+    setStep("clinic");
   }
 
   async function handleLookupClinic() {
@@ -118,7 +133,7 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
 
   async function handleRegister() {
     if (!idToken) {
-      setError("Verify your OTP before registration.");
+      setError("Create an account or sign in before registration.");
       return;
     }
 
@@ -178,45 +193,42 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
         <StepIndicator step={step} />
         {error ? <div className="mt-4 rounded-lg border border-stamp/20 bg-stamp/10 px-3 py-2 font-body text-xs text-stamp">{error}</div> : null}
 
-        {step === "phone" ? (
-          <Panel title="Mobile number">
-            <label className="mb-1.5 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
-              Mobile number
-            </label>
-            <div className="flex items-center gap-2.5 rounded-[10px] border-[1.5px] border-terracotta bg-paper px-3.5 py-3">
-              <span className="border-r border-rule pr-3 font-mono text-[15px] font-bold text-ink">+91</span>
-              <input
-                className="min-w-0 flex-1 bg-transparent font-mono text-lg font-bold tracking-[0.08em] text-ink outline-none"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                inputMode="tel"
-                aria-label="Mobile number"
-              />
+        {step === "credentials" ? (
+          <Panel title={authMode === "signup" ? "Create login" : "Sign in"}>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <ModeButton active={authMode === "signup"} onClick={() => handleAuthModeChange("signup")}>
+                Sign up
+              </ModeButton>
+              <ModeButton active={authMode === "login"} onClick={() => handleAuthModeChange("login")}>
+                Log in
+              </ModeButton>
             </div>
-            <p className="mt-2 font-body text-[11px] text-ink-muted">We will send a 6-digit OTP via SMS.</p>
-            <BharatButton id="send-otp-button" className="mt-5 w-full" onClick={handleSendOtp} disabled={isBusy}>
-              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Send OTP
-            </BharatButton>
-          </Panel>
-        ) : null}
-
-        {step === "otp" ? (
-          <Panel title="Enter the code">
-            <p className="font-body text-sm leading-6 text-ink-muted">
-              Sent to <span className="font-mono font-bold text-ink">{phone}</span>
-            </p>
+            <label className="mb-1.5 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+              Username
+            </label>
             <input
-              className="mt-5 w-full rounded-[10px] border-[1.5px] border-terracotta bg-paper px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.28em] text-ink outline-none"
-              value={otp}
-              onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              inputMode="numeric"
-              aria-label="OTP"
-              placeholder="000000"
+              className="w-full rounded-[10px] border-[1.5px] border-terracotta bg-paper px-4 py-3 font-mono text-lg font-bold tracking-[0.04em] text-ink outline-none"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoCapitalize="none"
+              autoComplete="username"
+              aria-label="Username"
             />
-            <BharatButton className="mt-5 w-full" onClick={handleVerifyOtp} disabled={isBusy || otp.length < 6}>
+            <label className="mb-1.5 mt-4 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+              Password
+            </label>
+            <input
+              className="w-full rounded-[10px] border border-rule bg-paper-deep px-4 py-3 font-body text-sm font-semibold text-ink outline-none"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+              aria-label="Password"
+            />
+            <p className="mt-2 font-body text-[11px] text-ink-muted">Use at least 8 characters.</p>
+            <BharatButton className="mt-5 w-full" onClick={handleCredentials} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Verify & continue
+              {authMode === "signup" ? "Create account" : "Log in"}
             </BharatButton>
           </Panel>
         ) : null}
@@ -235,7 +247,7 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
               placeholder="Optional"
               onChange={(value) => setProfile((current) => ({ ...current, medicalRegNo: value }))}
             />
-            <BharatButton className="mt-3 w-full" onClick={() => setStep("clinic")}>
+            <BharatButton className="mt-3 w-full" onClick={handleProfileContinue}>
               Continue
             </BharatButton>
           </Panel>
@@ -301,11 +313,11 @@ export function OnboardingScreen({ phoneAuthClient, onNavigate, demoMode = false
 }
 
 function StepIndicator({ step }: { step: OnboardingStep }) {
-  const current = ["phone", "otp", "profile", "clinic"].indexOf(step) + 1;
+  const current = ["credentials", "profile", "clinic"].indexOf(step) + 1;
 
   return (
     <div className="mt-8 flex items-center gap-2">
-      {[1, 2, 3, 4].map((item) => (
+      {[1, 2, 3].map((item) => (
         <div key={item} className={item <= current ? "h-1.5 flex-1 rounded-full bg-terracotta" : "h-1.5 flex-1 rounded-full bg-rule"} />
       ))}
     </div>

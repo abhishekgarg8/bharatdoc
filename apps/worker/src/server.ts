@@ -1,6 +1,6 @@
 import { createApp } from "./app.js";
 import { workerEnv } from "./env.js";
-import { createFirebaseTokenVerifier } from "./firebase.js";
+import { createSupabaseTokenVerifier } from "./supabase-auth.js";
 import { createOpenAISummaryClient, createOpenAITranscriptionClient } from "./openai.js";
 import { createSimplePdfRenderer } from "./pdf-renderer.js";
 import {
@@ -13,7 +13,7 @@ import {
 import { supabase } from "./supabase.js";
 
 const app = createApp({
-  tokenVerifier: createFirebaseTokenVerifier(workerEnv.FIREBASE_ADMIN_SDK_JSON),
+  tokenVerifier: createSupabaseTokenVerifier(supabase),
   doctors: createDoctorRepository(supabase),
   clinics: createClinicRepository(supabase),
   recordings: createRecordingProcessingRepository(supabase),

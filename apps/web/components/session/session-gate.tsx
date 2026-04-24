@@ -2,18 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { createFirebasePhoneAuthClient, type PhoneAuthClient } from "@/lib/client/phone-auth";
+import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { destinationForDoctorStatus, fetchCurrentDoctor } from "@/lib/client/session";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 
 interface SessionGateProps {
-  authClient?: PhoneAuthClient;
+  authClient?: AuthClient;
   onNavigate?: (href: string) => void;
 }
 
 export function SessionGate({ authClient, onNavigate }: SessionGateProps) {
-  const client = useMemo(() => authClient ?? createFirebasePhoneAuthClient(), [authClient]);
+  const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
   const [message, setMessage] = useState("Checking your session");
 

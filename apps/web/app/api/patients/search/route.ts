@@ -1,5 +1,5 @@
 import { verifyRequestUser } from "@/lib/server/auth";
-import { createFirebaseAdminVerifier } from "@/lib/server/firebase-admin";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
 import { searchPatientRecordingsForClinic } from "@/lib/server/recordings";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 export async function GET(request: Request) {
   try {
-    const user = await verifyRequestUser(request, createFirebaseAdminVerifier());
+    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const url = new URL(request.url);
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
     const records = await searchPatientRecordingsForClinic(

@@ -16,16 +16,16 @@ export interface PendingJoinRequest {
 }
 
 export interface OnboardingRepository {
-  findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   findClinicByCode(clinicCode: string): Promise<Clinic | null>;
   createOwner(input: {
-    firebaseUid: string;
+    authUid: string;
     phone: string;
     profile: RegistrationInput & { mode: "create_clinic" };
     clinicCode: string;
   }): Promise<{ doctor: Doctor; clinic: Clinic }>;
   createDoctorJoinRequest(input: {
-    firebaseUid: string;
+    authUid: string;
     phone: string;
     profile: RegistrationInput & { mode: "join_clinic" };
     clinic: Clinic;
@@ -82,7 +82,7 @@ export async function registerDoctorAccount(
   repository: OnboardingRepository
 ): Promise<RegistrationResult> {
   const registrationInput = RegistrationInputSchema.parse(input);
-  const existingDoctor = await repository.findDoctorByFirebaseUid(user.uid);
+  const existingDoctor = await repository.findDoctorByAuthUid(user.uid);
 
   if (existingDoctor) {
     return {
@@ -95,7 +95,7 @@ export async function registerDoctorAccount(
 
   if (registrationInput.mode === "create_clinic") {
     const result = await repository.createOwner({
-      firebaseUid: user.uid,
+      authUid: user.uid,
       phone: user.phoneNumber,
       profile: registrationInput,
       clinicCode: generateClinicCode()
@@ -115,7 +115,7 @@ export async function registerDoctorAccount(
   }
 
   const result = await repository.createDoctorJoinRequest({
-    firebaseUid: user.uid,
+    authUid: user.uid,
     phone: user.phoneNumber,
     profile: registrationInput,
     clinic

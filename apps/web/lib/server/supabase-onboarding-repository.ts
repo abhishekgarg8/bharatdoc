@@ -9,8 +9,8 @@ function normalizeOptional(value: string | undefined): string | null {
 
 export function createSupabaseOnboardingRepository(supabase: SupabaseClient): OnboardingRepository {
   return {
-    async findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null> {
-      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", firebaseUid).maybeSingle();
+    async findDoctorByAuthUid(authUid: string): Promise<Doctor | null> {
+      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", authUid).maybeSingle();
 
       if (error) {
         throw error;
@@ -30,7 +30,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
     },
 
     async createOwner(input: {
-      firebaseUid: string;
+      authUid: string;
       phone: string;
       profile: CreateClinicRegistrationInput;
       clinicCode: string;
@@ -53,7 +53,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       const { data: doctor, error: doctorError } = await supabase
         .from("doctors")
         .insert({
-          firebase_uid: input.firebaseUid,
+          firebase_uid: input.authUid,
           clinic_id: clinic.id,
           role: "owner",
           account_status: "active",
@@ -75,7 +75,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
     },
 
     async createDoctorJoinRequest(input: {
-      firebaseUid: string;
+      authUid: string;
       phone: string;
       profile: JoinClinicRegistrationInput;
       clinic: Clinic;
@@ -83,7 +83,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       const { data: doctor, error: doctorError } = await supabase
         .from("doctors")
         .insert({
-          firebase_uid: input.firebaseUid,
+          firebase_uid: input.authUid,
           clinic_id: input.clinic.id,
           role: "doctor",
           account_status: "pending_approval",

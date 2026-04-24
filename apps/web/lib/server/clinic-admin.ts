@@ -54,7 +54,7 @@ export interface JoinRequestForReview {
 }
 
 export interface ClinicAdminRepository {
-  findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   findClinicById(clinicId: string): Promise<Clinic | null>;
   findClinicByCode(clinicCode: string): Promise<Clinic | null>;
   listActiveDoctors(clinicId: string): Promise<ActiveClinicDoctor[]>;
@@ -97,7 +97,7 @@ function normalizeAddress(address: string | null | undefined): string | null | u
 }
 
 async function requireOwnerContext(user: VerifiedUser, repository: ClinicAdminRepository): Promise<Doctor> {
-  const doctor = await repository.findDoctorByFirebaseUid(user.uid);
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
 
   if (!doctor) {
     throw new AppError(401, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");

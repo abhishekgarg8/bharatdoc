@@ -1,26 +1,28 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
-import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { AuthClient } from "@/lib/client/auth-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("OnboardingScreen", () => {
-  it("starts with the phone OTP step", () => {
+  it("starts with the username password step", () => {
     render(<OnboardingScreen />);
 
     expect(screen.getByText("Welcome to BharatDoc")).toBeInTheDocument();
-    expect(screen.getAllByText("Mobile number").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /send otp/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
   });
 
   it("runs the join-clinic flow and navigates to pending approval", async () => {
-    const verifyOtp = vi.fn(async () => "verified-id-token");
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(async () => ({ verifyOtp })),
-      getCurrentIdToken: vi.fn(async () => null)
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(async () => "verified-id-token"),
+      signInWithPassword: vi.fn(async () => "verified-id-token"),
+      getCurrentIdToken: vi.fn(async () => null),
+      signOut: vi.fn()
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -42,13 +44,11 @@ describe("OnboardingScreen", () => {
     });
     vi.stubGlobal("fetch", fetcher);
 
-    render(<OnboardingScreen phoneAuthClient={authClient} onNavigate={navigate} />);
+    render(<OnboardingScreen authClient={authClient} onNavigate={navigate} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /send otp/i }));
-    await screen.findByLabelText("OTP");
-    fireEvent.change(screen.getByLabelText("OTP"), { target: { value: "427111" } });
-    fireEvent.click(screen.getByRole("button", { name: /verify & continue/i }));
-
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "DrAparna" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
@@ -58,8 +58,10 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
-    expect(authClient.sendOtp).toHaveBeenCalledWith("+919876543210");
-    expect(verifyOtp).toHaveBeenCalledWith("427111");
+    expect(authClient.signUpWithPassword).toHaveBeenCalledWith({
+      username: "draparna",
+      password: "bharatdoc123"
+    });
     expect(fetcher).toHaveBeenCalledWith(
       "/api/auth/register",
       expect.objectContaining({
@@ -68,15 +70,12 @@ describe("OnboardingScreen", () => {
     );
   });
 
-  it("supports deterministic demo onboarding without Firebase or API calls", async () => {
+  it("supports deterministic demo onboarding without external auth or API calls", async () => {
     const navigate = vi.fn();
 
     render(<OnboardingScreen demoMode onNavigate={navigate} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /send otp/i }));
-    await screen.findByLabelText("OTP");
-    fireEvent.change(screen.getByLabelText("OTP"), { target: { value: "427111" } });
-    fireEvent.click(screen.getByRole("button", { name: /verify & continue/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
     await screen.findByText("Your clinic");

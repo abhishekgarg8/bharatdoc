@@ -1,12 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsPageClient } from "@/components/settings/settings-page-client";
-import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { AuthClient } from "@/lib/client/auth-client";
 
 describe("SettingsPageClient", () => {
   it("loads authenticated owner settings and clinic admin details", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -78,8 +80,10 @@ describe("SettingsPageClient", () => {
   });
 
   it("uses demo settings when no token is available", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => null)
     };
 

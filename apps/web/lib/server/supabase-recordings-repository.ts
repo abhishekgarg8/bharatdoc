@@ -33,8 +33,8 @@ function toRecordingListItem(row: RecordingWithDoctorRow): RecordingListItem {
 
 export function createSupabaseRecordingsRepository(supabase: SupabaseClient): RecordingsRepository {
   return {
-    async findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null> {
-      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", firebaseUid).maybeSingle();
+    async findDoctorByAuthUid(authUid: string): Promise<Doctor | null> {
+      const { data, error } = await supabase.from("doctors").select("*").eq("firebase_uid", authUid).maybeSingle();
 
       if (error) {
         throw error;

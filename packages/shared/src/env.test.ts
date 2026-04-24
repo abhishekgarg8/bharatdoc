@@ -5,17 +5,13 @@ describe("environment validation", () => {
   it("parses required web app environment values", () => {
     expect(
       parseWebEnv({
-        NEXT_PUBLIC_FIREBASE_API_KEY: "firebase-key",
-        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "example.firebaseapp.com",
-        NEXT_PUBLIC_FIREBASE_PROJECT_ID: "bharatdoc",
         NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
-        FIREBASE_ADMIN_SDK_JSON: "{}"
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
       })
-    ).toMatchObject({ NEXT_PUBLIC_FIREBASE_PROJECT_ID: "bharatdoc" });
+    ).toMatchObject({ NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com" });
   });
 
   it("defaults worker model settings", () => {
@@ -23,8 +19,7 @@ describe("environment validation", () => {
       parseWorkerEnv({
         OPENAI_API_KEY: "openai",
         SUPABASE_URL: "https://supabase.example.com",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
-        FIREBASE_ADMIN_SDK_JSON: "{}"
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
       })
     ).toMatchObject({
       PORT: 8080,
@@ -38,8 +33,7 @@ describe("environment validation", () => {
       parseWorkerEnv({
         OPENAI_API_KEY: "openai",
         SUPABASE_URL: "not-a-url",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
-        FIREBASE_ADMIN_SDK_JSON: "{}"
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
       })
     ).toThrow();
   });

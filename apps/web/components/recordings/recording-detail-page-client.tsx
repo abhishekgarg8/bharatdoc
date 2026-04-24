@@ -7,12 +7,12 @@ import {
   findDemoRecordingDetail,
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
-import { createFirebasePhoneAuthClient, type PhoneAuthClient } from "@/lib/client/phone-auth";
+import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { fetchRecordingDetail } from "@/lib/client/summary-api";
 
 interface RecordingDetailPageClientProps {
   recordingId: string;
-  authClient?: PhoneAuthClient;
+  authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
 }
@@ -23,7 +23,7 @@ export function RecordingDetailPageClient({
   fetcher = fetch,
   demoOnMissingToken = true
 }: RecordingDetailPageClientProps) {
-  const client = useMemo(() => authClient ?? createFirebasePhoneAuthClient(), [authClient]);
+  const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [recording, setRecording] = useState<RecordingDetailRecord | null>(null);

@@ -24,7 +24,7 @@ const activeDoctor: Doctor = {
 
 function createRepository(doctor: Doctor | null = activeDoctor): DoctorPreferencesRepository {
   return {
-    findDoctorByFirebaseUid: vi.fn(async () => doctor),
+    findDoctorByAuthUid: vi.fn(async () => doctor),
     updateDoctorPreferences: vi.fn(async (_doctorId, input) => ({
       ...activeDoctor,
       ...input

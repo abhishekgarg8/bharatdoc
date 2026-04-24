@@ -1,7 +1,7 @@
 import { extractBearerToken, verifyRequestUser } from "@/lib/server/auth";
 import { getWebEnv } from "@/lib/server/env";
 import { errorResponse } from "@/lib/server/errors";
-import { createFirebaseAdminVerifier } from "@/lib/server/firebase-admin";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { proxyPdfRequest } from "@/lib/server/worker-pdf-proxy";
 
 interface RouteContext {
@@ -13,7 +13,7 @@ interface RouteContext {
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const bearerToken = extractBearerToken(request.headers.get("authorization"));
-    await verifyRequestUser(request, createFirebaseAdminVerifier());
+    await verifyRequestUser(request, createSupabaseAuthVerifier());
     const result = await proxyPdfRequest({
       recordingId: params.id,
       bearerToken,

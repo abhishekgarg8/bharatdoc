@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SearchPageClient } from "@/components/search/search-page-client";
-import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { AuthClient } from "@/lib/client/auth-client";
 
 const apiRecord = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -15,8 +15,10 @@ const apiRecord = {
 
 describe("SearchPageClient", () => {
   it("loads authenticated recent records and searches with the same token", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -46,8 +48,10 @@ describe("SearchPageClient", () => {
   });
 
   it("uses demo search when no token is available", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => null)
     };
 

@@ -26,7 +26,7 @@ interface DoctorRow {
 
 export function createDoctorRepository(supabase: SupabaseClient): DoctorRepository {
   return {
-    async findByFirebaseUid(firebaseUid: string): Promise<Doctor | null> {
+    async findByAuthUid(authUid: string): Promise<Doctor | null> {
       const { data, error } = await supabase
         .from("doctors")
         .select(
@@ -46,7 +46,7 @@ export function createDoctorRepository(supabase: SupabaseClient): DoctorReposito
             "created_at"
           ].join(",")
         )
-        .eq("firebase_uid", firebaseUid)
+        .eq("firebase_uid", authUid)
         .maybeSingle<DoctorRow>();
 
       if (error) {

@@ -13,7 +13,7 @@ describe("onboarding API client", () => {
     expect(fetcher).toHaveBeenCalledWith("/api/clinics/lookup?code=MED42X");
   });
 
-  it("registers accounts with Firebase bearer token", async () => {
+  it("registers accounts with Supabase bearer token", async () => {
     const fetcher = vi.fn(async () => Response.json({ status: "pending_approval", role: "doctor" }));
 
     await registerAccount(

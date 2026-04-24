@@ -29,24 +29,24 @@ const activeOwner: Doctor = {
 
 function createRepository(overrides: Partial<OnboardingRepository> = {}): OnboardingRepository {
   return {
-    findDoctorByFirebaseUid: vi.fn(async () => null),
+    findDoctorByAuthUid: vi.fn(async () => null),
     findClinicByCode: vi.fn(async () => clinic),
-    createOwner: vi.fn(async ({ firebaseUid, phone, profile, clinicCode }) => ({
+    createOwner: vi.fn(async ({ authUid, phone, profile, clinicCode }) => ({
       clinic: { ...clinic, clinic_code: clinicCode, name: profile.clinic.name },
       doctor: {
         ...activeOwner,
-        firebase_uid: firebaseUid,
+        firebase_uid: authUid,
         phone,
         name: profile.profile.name,
         specialization: profile.profile.specialization
       }
     })),
-    createDoctorJoinRequest: vi.fn(async ({ firebaseUid, phone, profile }) => ({
+    createDoctorJoinRequest: vi.fn(async ({ authUid, phone, profile }) => ({
       clinic,
       doctor: {
         ...activeOwner,
         id: "33333333-3333-4333-8333-333333333333",
-        firebase_uid: firebaseUid,
+        firebase_uid: authUid,
         phone,
         role: "doctor" as const,
         account_status: "pending_approval" as const,
@@ -101,7 +101,7 @@ describe("doctor registration", () => {
     expect(result.role).toBe("owner");
     expect(repository.createOwner).toHaveBeenCalledWith(
       expect.objectContaining({
-        firebaseUid: "firebase-owner",
+        authUid: "firebase-owner",
         phone: "+919876543210",
         clinicCode: expect.stringMatching(/^[A-Z2-9]{6}$/)
       })
@@ -124,7 +124,7 @@ describe("doctor registration", () => {
     expect(result.role).toBe("doctor");
     expect(repository.createDoctorJoinRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        firebaseUid: "firebase-doctor",
+        authUid: "firebase-doctor",
         phone: "+919800000000",
         clinic
       })
@@ -133,7 +133,7 @@ describe("doctor registration", () => {
 
   it("returns existing account state without creating duplicate rows", async () => {
     const repository = createRepository({
-      findDoctorByFirebaseUid: vi.fn(async () => activeOwner)
+      findDoctorByAuthUid: vi.fn(async () => activeOwner)
     });
 
     const result = await registerDoctorAccount(
@@ -155,7 +155,7 @@ describe("doctor registration", () => {
     expect(repository.createDoctorJoinRequest).not.toHaveBeenCalled();
   });
 
-  it("does not accept spoofed firebase UID or phone values from request bodies", async () => {
+  it("does not accept spoofed auth UID or phone values from request bodies", async () => {
     const repository = createRepository();
 
     await registerDoctorAccount(
@@ -172,7 +172,7 @@ describe("doctor registration", () => {
 
     expect(repository.createDoctorJoinRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        firebaseUid: "verified-firebase",
+        authUid: "verified-firebase",
         phone: "+919876543210"
       })
     );

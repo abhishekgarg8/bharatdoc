@@ -53,11 +53,11 @@ function depsFor(doctor: Doctor | null, recordingResult: Recording | null = reco
           throw new Error("bad token");
         }
 
-        return { uid: doctor?.firebase_uid ?? "missing-firebase" };
+        return { uid: doctor?.firebase_uid ?? "missing-auth-user" };
       })
     },
     doctors: {
-      findByFirebaseUid: vi.fn(async () => doctor)
+      findByAuthUid: vi.fn(async () => doctor)
     },
     clinics: {
       findClinicById: vi.fn(async () => clinic)
@@ -129,7 +129,7 @@ describe("worker app", () => {
       });
   });
 
-  it("rejects Firebase tokens that do not map to a doctor", async () => {
+  it("rejects auth tokens that do not map to a doctor", async () => {
     await request(createApp(depsFor(null)))
       .get("/api/me")
       .set("Authorization", "Bearer valid-token")

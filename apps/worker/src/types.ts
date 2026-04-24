@@ -1,16 +1,16 @@
 import type { Clinic, Doctor, Recording, RecordingStatus } from "@bharatdoc/shared";
 
-export interface VerifiedFirebaseToken {
+export interface VerifiedAuthToken {
   uid: string;
-  phone_number?: string;
+  email?: string;
 }
 
-export interface FirebaseTokenVerifier {
-  verifyIdToken(token: string): Promise<VerifiedFirebaseToken>;
+export interface AuthTokenVerifier {
+  verifyIdToken(token: string): Promise<VerifiedAuthToken>;
 }
 
 export interface DoctorRepository {
-  findByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  findByAuthUid(authUid: string): Promise<Doctor | null>;
 }
 
 export interface ClinicRepository {
@@ -86,7 +86,7 @@ export interface AudioStorage {
 }
 
 export interface WorkerDependencies {
-  tokenVerifier: FirebaseTokenVerifier;
+  tokenVerifier: AuthTokenVerifier;
   doctors: DoctorRepository;
   clinics: ClinicRepository;
   recordings: RecordingProcessingRepository;
@@ -99,5 +99,5 @@ export interface WorkerDependencies {
 
 export interface AuthContext {
   doctor: Doctor;
-  token: VerifiedFirebaseToken;
+  token: VerifiedAuthToken;
 }

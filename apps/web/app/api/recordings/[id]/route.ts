@@ -1,5 +1,5 @@
 import { verifyRequestUser } from "@/lib/server/auth";
-import { createFirebaseAdminVerifier } from "@/lib/server/firebase-admin";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
 import { getRecordingDetailForDoctor } from "@/lib/server/recordings";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
@@ -13,7 +13,7 @@ interface RouteContext {
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
-    const user = await verifyRequestUser(request, createFirebaseAdminVerifier());
+    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
     const recording = await getRecordingDetailForDoctor(user, params.id, repository);
 

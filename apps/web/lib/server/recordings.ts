@@ -49,7 +49,7 @@ export interface CreateRecordingRow {
 }
 
 export interface RecordingsRepository {
-  findDoctorByFirebaseUid(firebaseUid: string): Promise<Doctor | null>;
+  findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   listRecentRecordings(doctorId: string, limit: number): Promise<RecordingListItem[]>;
   searchPatientRecordings(clinicId: string, patientId: string, limit: number): Promise<RecordingListItem[]>;
   createRecording(input: CreateRecordingRow): Promise<RecordingListItem>;
@@ -137,7 +137,7 @@ function requireSummary(summary: string | null | undefined): string {
 }
 
 async function requireActiveDoctorContext(user: VerifiedUser, repository: RecordingsRepository): Promise<Doctor> {
-  const doctor = await repository.findDoctorByFirebaseUid(user.uid);
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
 
   if (!doctor) {
     throw new AppError(404, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");

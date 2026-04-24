@@ -1,7 +1,7 @@
 import { extractBearerToken, verifyRequestUser } from "@/lib/server/auth";
 import { getWebEnv } from "@/lib/server/env";
 import { errorResponse } from "@/lib/server/errors";
-import { createFirebaseAdminVerifier } from "@/lib/server/firebase-admin";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { saveRecordingSummaryForDoctor } from "@/lib/server/recordings";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
@@ -16,7 +16,7 @@ interface RouteContext {
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const bearerToken = extractBearerToken(request.headers.get("authorization"));
-    await verifyRequestUser(request, createFirebaseAdminVerifier());
+    await verifyRequestUser(request, createSupabaseAuthVerifier());
     const result = await proxySummaryRequest({
       recordingId: params.id,
       bearerToken,
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
-    const user = await verifyRequestUser(request, createFirebaseAdminVerifier());
+    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const body = (await request.json()) as { summary?: string };
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
     const recording = await saveRecordingSummaryForDoctor(user, params.id, body.summary, repository);

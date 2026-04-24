@@ -45,7 +45,7 @@ const recording: RecordingListItem = {
 
 function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepository {
   return {
-    findDoctorByFirebaseUid: vi.fn(async () => doctor),
+    findDoctorByAuthUid: vi.fn(async () => doctor),
     listRecentRecordings: vi.fn(async () => [recording]),
     searchPatientRecordings: vi.fn(async () => [recording]),
     createRecording: vi.fn(async (input) => ({

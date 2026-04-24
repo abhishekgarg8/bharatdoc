@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardPageClient } from "@/components/dashboard-page-client";
-import type { PhoneAuthClient } from "@/lib/client/phone-auth";
+import type { AuthClient } from "@/lib/client/auth-client";
 import type { Doctor } from "@bharatdoc/shared";
 
 const activeDoctor: Doctor = {
@@ -32,8 +32,10 @@ const apiRecord = {
 
 describe("DashboardPageClient", () => {
   it("loads authenticated doctor context and dashboard records", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -63,8 +65,10 @@ describe("DashboardPageClient", () => {
   });
 
   it("falls back to demo dashboard when no token is available", async () => {
-    const authClient: PhoneAuthClient = {
-      sendOtp: vi.fn(),
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => null)
     };
 

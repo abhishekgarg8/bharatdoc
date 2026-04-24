@@ -1,5 +1,5 @@
 import { verifyRequestUser } from "@/lib/server/auth";
-import { createFirebaseAdminVerifier } from "@/lib/server/firebase-admin";
+import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
 import {
   createRecordingMetadataForDoctor,
@@ -10,7 +10,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 export async function GET(request: Request) {
   try {
-    const user = await verifyRequestUser(request, createFirebaseAdminVerifier());
+    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get("limit") ?? "10");
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await verifyRequestUser(request, createFirebaseAdminVerifier());
+    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const body = await request.json();
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
     const record = await createRecordingMetadataForDoctor(user, body, repository);

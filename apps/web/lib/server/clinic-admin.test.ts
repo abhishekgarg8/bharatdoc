@@ -36,7 +36,7 @@ const clinic: Clinic = {
 
 function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository {
   return {
-    findDoctorByFirebaseUid: vi.fn(async () => doctor),
+    findDoctorByAuthUid: vi.fn(async () => doctor),
     findClinicById: vi.fn(async () => clinic),
     findClinicByCode: vi.fn(async (clinicCode: string) => (clinicCode === clinic.clinic_code ? clinic : null)),
     listActiveDoctors: vi.fn(async () => [

@@ -8,10 +8,10 @@ import {
   fetchDashboardRecords,
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
-import { createFirebasePhoneAuthClient, type PhoneAuthClient } from "@/lib/client/phone-auth";
+import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 
 interface SearchPageClientProps {
-  authClient?: PhoneAuthClient;
+  authClient?: AuthClient;
   fetcher?: typeof fetch;
   demoOnMissingToken?: boolean;
 }
@@ -21,7 +21,7 @@ export function SearchPageClient({
   fetcher = fetch,
   demoOnMissingToken = true
 }: SearchPageClientProps) {
-  const client = useMemo(() => authClient ?? createFirebasePhoneAuthClient(), [authClient]);
+  const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [records, setRecords] = useState<DashboardRecord[]>(demoDashboardRecords);
