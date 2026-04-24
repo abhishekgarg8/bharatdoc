@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e7]
+  - main [ref=e55]:
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - link "Back to dashboard" [ref=e58] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e59]
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: Clinic records
+          - heading "Search" [level=1] [ref=e63]
+          - paragraph [ref=e64]: Find consultations by Patient ID across your clinic.
+      - generic [ref=e65]:
+        - generic [ref=e66]: Patient ID
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - img [ref=e69]
+            - textbox "Patient ID" [ref=e72]:
+              - /placeholder: P-10482
+          - button "Search" [ref=e73] [cursor=pointer]
+      - generic [ref=e74]:
+        - heading "Recent clinic records" [level=2] [ref=e75]
+        - paragraph [ref=e76]: 0 consultations
+      - generic [ref=e78]:
+        - paragraph [ref=e79]: No consultations found
+        - paragraph [ref=e80]: Check the Patient ID and search again.
+      - navigation "Primary navigation" [ref=e81]:
+        - generic [ref=e82]:
+          - link "Home" [ref=e83] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e84]
+            - generic [ref=e87]: Home
+          - link "Search" [ref=e88] [cursor=pointer]:
+            - /url: /search
+            - img [ref=e89]
+            - generic [ref=e92]: Search
+          - link "Settings 1" [ref=e93] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e94]
+            - generic [ref=e97]: Settings
+            - generic [ref=e98]: "1"

@@ -1,0 +1,3 @@
+[    1846ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://bharatdoc-web.vercel.app/onboarding:0
+[   34372ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://bharatdoc-web.vercel.app/api/me:0
+[  160889ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://bharatdoc-web.vercel.app/api/patients/search?q=P-DOES-NOT-EXIST:0
