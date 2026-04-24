@@ -138,6 +138,7 @@ async function createSpeechAudio(runId) {
 
 async function main() {
   const baseUrl = process.env.LIVE_FLOW_WEB_URL ?? process.env.STAGING_WEB_URL ?? "http://127.0.0.1:3000";
+  const workerBaseUrl = process.env.LIVE_FLOW_WORKER_URL ?? requiredEnv("RAILWAY_WORKER_URL");
   const runAiFlow = process.env.LIVE_FLOW_SKIP_AI !== "1";
   const clients = createSupabaseClients();
   const runId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
@@ -238,6 +239,7 @@ async function main() {
   });
 
   const transcriptionForm = new FormData();
+  transcriptionForm.set("recording_id", recordingId);
   transcriptionForm.set(
     "audio",
     new File([audioBuffer], path.basename(audioPath), {
@@ -245,7 +247,7 @@ async function main() {
     })
   );
 
-  const transcription = await apiRequest(baseUrl, `/api/recordings/${recordingId}/transcription`, {
+  const transcription = await apiRequest(workerBaseUrl, "/api/transcribe", {
     method: "POST",
     token: doctorToken,
     formData: transcriptionForm

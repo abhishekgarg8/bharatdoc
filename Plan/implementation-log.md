@@ -558,3 +558,44 @@ When new work lands, append a new section using this pattern:
 
 - ...
 ```
+
+## 21. P1 external gap remediation
+
+### What was done
+
+- Updated Vercel/Railway env documentation so web API routes explicitly receive `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` server-side.
+- Moved browser transcription audio upload off Vercel: `transcribeRecordingAudio` now posts directly to Railway `/api/transcribe` using `NEXT_PUBLIC_RAILWAY_WORKER_URL`.
+- Removed the Vercel transcription upload proxy route and server proxy helper.
+- Added worker CORS allowlisting through `WORKER_CORS_ORIGINS` for direct browser-to-Railway uploads.
+- Confirmed production demo access is gated by `NEXT_PUBLIC_ENABLE_DEMO_MODE=true`; public `?demo=1` does not bypass auth in production mode.
+- Updated recording tests to match the product rule that local audio can be saved without Patient ID, but transcription cannot start until Patient ID is present.
+- Confirmed saved PDF reload uses `pdf_signed_url` from the detail API, not a demo data URL.
+- Added a PostgREST schema visibility preflight to `scripts/live-flow-smoke.mjs` for `public.clinics`, `public.doctors`, `public.clinic_join_requests`, and `public.recordings`.
+
+### Testing
+
+- `pnpm --filter @bharatdoc/web test -- app/demo-mode-pages.test.tsx components/recordings/recording-screen.test.tsx lib/server/recordings.test.ts`
+- `pnpm --filter @bharatdoc/worker test -- src/__tests__/transcription.test.ts src/__tests__/app.test.ts`
+- `pnpm --filter @bharatdoc/shared test -- src/env.test.ts`
+- Direct-upload tests cover Railway worker URL selection, `recording_id` multipart payloads, missing worker URL failure, retry behavior, and worker CORS preflight behavior.
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
+### Live validation
+
+- Ran local production web on `http://127.0.0.1:3000` and local worker on `http://127.0.0.1:8080`.
+- `LIVE_FLOW_WEB_URL=http://127.0.0.1:3000 LIVE_FLOW_WORKER_URL=http://127.0.0.1:8080 pnpm smoke:live-flow`
+- Result: PostgREST schema visible for all required tables; auth smoke passed; transcription status `transcribed`; summary status `summary_ready`; PDF status `pdf_saved`.
+
+### Browser screenshots
+
+- `output/p1-demo-gate-dashboard.png`
+- `output/p1-demo-gate-recording.png`
+- Both screenshots show production-mode `?demo=1` routes redirecting to onboarding instead of rendering demo clinical/admin data.
+
+### Notes / blockers
+
+- `pnpm smoke:staging` is still blocked because `STAGING_WEB_URL` is not set in `.env`; `STAGING_WORKER_URL` is also absent. Staging validation should be rerun after those URLs are added.
+- Supabase Auth must keep `https://bharatdoc-web.vercel.app/` in the allowed redirect URLs for production magic links.

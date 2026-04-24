@@ -8,7 +8,12 @@ Notes:
 - Older P1 findings around default demo fallbacks, blank Patient ID transcription, retry idempotency, stale PDFs, Unicode/multi-page PDF rendering, same-clinic summary edits, and non-atomic approval/rejection are materially fixed in the current code.
 - This file lists active gaps only.
 
-## P1 Findings
+Resolution update, April 24, 2026:
+- P1-1 is remediated: browser transcription audio now uploads directly to Railway `/api/transcribe`; the Vercel upload proxy route was removed; worker CORS is allowlisted by `WORKER_CORS_ORIGINS`.
+- P1-2 is remediated in `Plan/env.template.txt` and env validation docs.
+- P1-3 is reconciled in `implementation-plan.md`, `Plan/implementation-log.md`, and `docs/staging-smoke.md`. Local live smoke passed; staging smoke remains blocked until `STAGING_WEB_URL` and `STAGING_WORKER_URL` are set.
+
+## Resolved P1 Findings
 
 ### P1-1. Web transcription upload still runs through Vercel instead of Railway
 

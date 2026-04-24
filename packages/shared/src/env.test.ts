@@ -8,6 +8,7 @@ describe("environment validation", () => {
         NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
         NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
         SUPABASE_SERVICE_ROLE_KEY: "service-role"
@@ -25,6 +26,7 @@ describe("environment validation", () => {
         NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
         NEXT_PUBLIC_ENABLE_DEMO_MODE: "true",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
         SUPABASE_SERVICE_ROLE_KEY: "service-role"
@@ -38,6 +40,7 @@ describe("environment validation", () => {
         NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
         NEXT_PUBLIC_ENABLE_DEMO_MODE: "1",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
         SUPABASE_SERVICE_ROLE_KEY: "service-role"
@@ -55,7 +58,8 @@ describe("environment validation", () => {
     ).toMatchObject({
       PORT: 8080,
       OPENAI_TRANSCRIPTION_MODEL: "gpt-4o-mini-transcribe",
-      OPENAI_SUMMARY_MODEL: "gpt-4o-mini"
+      OPENAI_SUMMARY_MODEL: "gpt-4o-mini",
+      WORKER_CORS_ORIGINS: "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
     });
   });
 

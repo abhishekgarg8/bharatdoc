@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import type { AudioRecorder, RecordedAudioChunk } from "@/lib/client/audio-recorder";
 import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
@@ -39,6 +39,10 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
 }
 
 describe("RecordingScreen", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("records, stores chunks locally, and produces a demo transcript", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder, emitChunk } = createRecorder();
@@ -156,6 +160,7 @@ describe("RecordingScreen", () => {
   });
 
   it("syncs authenticated recordings with Patient ID and navigates to the server detail page", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
     const navigate = vi.fn();
@@ -213,7 +218,7 @@ describe("RecordingScreen", () => {
     });
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
-      `/api/recordings/${apiRecord.id}/transcription`,
+      "https://worker.example.com/api/transcribe",
       expect.objectContaining({
         method: "POST",
         headers: { Authorization: "Bearer id-token" },
@@ -254,6 +259,7 @@ describe("RecordingScreen", () => {
   });
 
   it("keeps local audio available for retry when authenticated transcription fails", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
     const fetcher = vi.fn(async () => Response.json({ error: { code: "WORKER_DOWN" } }, { status: 502 })) as unknown as typeof fetch;
@@ -281,6 +287,7 @@ describe("RecordingScreen", () => {
   });
 
   it("retries transcription with the persisted server recording id", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
     const apiRecord = {
@@ -327,8 +334,8 @@ describe("RecordingScreen", () => {
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledTimes(3);
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/recordings", expect.any(Object));
-    expect(fetcher).toHaveBeenNthCalledWith(2, "/api/recordings/server-recording/transcription", expect.any(Object));
-    expect(fetcher).toHaveBeenNthCalledWith(3, "/api/recordings/server-recording/transcription", expect.any(Object));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://worker.example.com/api/transcribe", expect.any(Object));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "https://worker.example.com/api/transcribe", expect.any(Object));
     expect((await repository.list())[0]).toMatchObject({
       serverRecordingId: "server-recording",
       syncState: "transcribed",

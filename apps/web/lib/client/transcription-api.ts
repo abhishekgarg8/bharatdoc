@@ -13,6 +13,16 @@ async function parseJson<T>(response: Response, errorMessage: string): Promise<T
   return (await response.json()) as T;
 }
 
+function workerTranscriptionUrl(): string {
+  const workerBaseUrl = process.env.NEXT_PUBLIC_RAILWAY_WORKER_URL?.trim();
+
+  if (!workerBaseUrl) {
+    throw new Error("Railway worker URL is not configured.");
+  }
+
+  return `${workerBaseUrl.replace(/\/$/, "")}/api/transcribe`;
+}
+
 export async function transcribeRecordingAudio(
   idToken: string,
   recordingId: string,
@@ -21,9 +31,10 @@ export async function transcribeRecordingAudio(
   fetcher: typeof fetch = fetch
 ): Promise<WorkerTranscriptionResponse> {
   const body = new FormData();
+  body.set("recording_id", recordingId);
   body.set("audio", audio, `recording.${mimeType.includes("mp4") ? "m4a" : "webm"}`);
 
-  const response = await fetcher(`/api/recordings/${encodeURIComponent(recordingId)}/transcription`, {
+  const response = await fetcher(workerTranscriptionUrl(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${idToken}`

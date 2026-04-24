@@ -87,6 +87,9 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Slice C: Unicode/multi-page PDF generation and atomic owner approval/rejection via Supabase RPC.
 - [x] Apply the owner approval/rejection RPC migration to the linked Supabase project.
 - [x] Verify the migration with remote migration history, live auth smoke, full live AI smoke, and browser screenshot review.
+- [x] P1-1: Upload transcription audio directly from the browser to Railway and gate worker CORS.
+- [x] P1-2: Align Vercel/Railway env docs with required web API route secrets.
+- [x] P1-3: Reconcile validation records with current live-smoke and staging-smoke status.
 
 ## Testing Discipline
 

@@ -8,8 +8,20 @@ import { summarizeRecording } from "./summary.js";
 import { MAX_TRANSCRIPTION_AUDIO_BYTES, transcribeRecording, type TranscribeRecordingInput } from "./transcription.js";
 import type { WorkerDependencies } from "./types.js";
 
-export function createApp(deps: WorkerDependencies): express.Express {
+interface WorkerAppOptions {
+  corsOrigins?: string;
+}
+
+function parseCorsOrigins(corsOrigins: string | undefined): string[] {
+  return (corsOrigins ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+}
+
+export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = {}): express.Express {
   const app = express();
+  const allowedOrigins = parseCorsOrigins(options.corsOrigins);
   const audioUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -18,7 +30,20 @@ export function createApp(deps: WorkerDependencies): express.Express {
   });
 
   app.disable("x-powered-by");
-  app.use(cors());
+  app.use(
+    cors({
+      allowedHeaders: ["Authorization", "Content-Type"],
+      methods: ["GET", "POST", "OPTIONS"],
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+          callback(null, true);
+          return;
+        }
+
+        callback(null, false);
+      }
+    })
+  );
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {

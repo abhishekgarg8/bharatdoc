@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { transcribeRecordingAudio } from "@/lib/client/transcription-api";
 
 describe("transcription api client", () => {
-  it("posts audio form data to the recording transcription route", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("posts audio form data directly to the Railway worker", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const fetcher = vi.fn(async () =>
       Response.json({
         recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -20,16 +25,20 @@ describe("transcription api client", () => {
       status: "transcribed"
     });
 
-    expect(fetcher).toHaveBeenCalledWith("/api/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/transcription", {
+    expect(fetcher).toHaveBeenCalledWith("https://worker.example.com/api/transcribe", {
       method: "POST",
       headers: {
         Authorization: "Bearer id-token"
       },
       body: expect.any(FormData)
     });
+    expect((vi.mocked(fetcher).mock.calls[0]?.[1]?.body as FormData).get("recording_id")).toBe(
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    );
   });
 
   it("throws when the transcription route fails", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const fetcher = vi.fn(async () => Response.json({ error: { code: "AUDIO_REQUIRED" } }, { status: 400 })) as unknown as typeof fetch;
 
     await expect(
@@ -41,5 +50,17 @@ describe("transcription api client", () => {
         fetcher
       )
     ).rejects.toThrow("Unable to transcribe recording.");
+  });
+
+  it("fails fast when the public worker URL is missing", async () => {
+    await expect(
+      transcribeRecordingAudio(
+        "id-token",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        new Blob(["audio"]),
+        "audio/webm",
+        vi.fn() as unknown as typeof fetch
+      )
+    ).rejects.toThrow("Railway worker URL is not configured.");
   });
 });

@@ -20,7 +20,7 @@ export function isRecordAudioAsset(pathname: string, contentType = ""): boolean 
 
   return (
     normalizedContentType.startsWith("audio/") ||
-    pathname.includes("/api/recordings/") && pathname.includes("/transcription") ||
+    pathname.endsWith("/api/transcribe") ||
     /\.(webm|wav|m4a|mp3|ogg)$/i.test(pathname)
   );
 }

@@ -111,6 +111,31 @@ describe("worker app", () => {
       });
   });
 
+  it("allows browser requests only from configured CORS origins", async () => {
+    await request(
+      createApp(depsFor(null), {
+        corsOrigins: "https://bharatdoc-web.vercel.app,http://127.0.0.1:3000"
+      })
+    )
+      .options("/api/transcribe")
+      .set("Origin", "https://bharatdoc-web.vercel.app")
+      .set("Access-Control-Request-Method", "POST")
+      .expect("Access-Control-Allow-Origin", "https://bharatdoc-web.vercel.app")
+      .expect(204);
+
+    await request(
+      createApp(depsFor(null), {
+        corsOrigins: "https://bharatdoc-web.vercel.app"
+      })
+    )
+      .options("/api/transcribe")
+      .set("Origin", "https://evil.example")
+      .set("Access-Control-Request-Method", "POST")
+      .expect((response) => {
+        expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+      });
+  });
+
   it("rejects protected routes without bearer tokens", async () => {
     await request(createApp(depsFor(activeDoctor)))
       .get("/api/me")
@@ -246,6 +271,30 @@ describe("worker app", () => {
       transcript: "Patient reports fever for two days.",
       audioStoragePath: "clinic/doctor/recording.webm"
     });
+  });
+
+  it("accepts realistic mobile audio uploads under the Phase 1 limit", async () => {
+    const deps = depsFor(activeDoctor, { ...recording, status: "recorded", transcript: null, summary: null });
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.alloc(5 * 1024 * 1024, "a"), {
+        filename: "one-hour-mobile-recording.webm",
+        contentType: "audio/webm"
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.status).toBe("transcribed");
+      });
+
+    expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "one-hour-mobile-recording.webm",
+        mimeType: "audio/webm"
+      })
+    );
   });
 
   it("rejects transcription when patient id is missing before audio work", async () => {

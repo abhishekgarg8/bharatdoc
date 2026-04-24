@@ -15,7 +15,7 @@ describe("offline policy", () => {
 
   it("recognizes audio assets and transcription posts as non-shell data", () => {
     expect(isRecordAudioAsset("/local/recording.webm")).toBe(true);
-    expect(isRecordAudioAsset("/api/recordings/abc/transcription")).toBe(true);
+    expect(isRecordAudioAsset("https://worker.example.com/api/transcribe")).toBe(true);
     expect(isRecordAudioAsset("/upload", "audio/webm")).toBe(true);
     expect(isRecordAudioAsset("/dashboard", "text/html")).toBe(false);
   });
@@ -31,7 +31,7 @@ describe("offline policy", () => {
     expect(
       shouldKeepAudioLocalUntilTranscription({
         hasExplicitTranscriptionIntent: true,
-        pathname: "/api/recordings/abc/transcription"
+        pathname: "https://worker.example.com/api/transcribe"
       })
     ).toBe(false);
   });

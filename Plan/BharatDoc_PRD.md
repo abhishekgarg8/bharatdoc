@@ -668,7 +668,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SITE_URL=https://bharatdoc-web.vercel.app/
 NEXT_PUBLIC_ENABLE_DEMO_MODE=false
 
-# Railway worker base URL (used server-side in Next.js API routes only)
+# Railway worker base URLs
+NEXT_PUBLIC_RAILWAY_WORKER_URL=
 RAILWAY_WORKER_URL=
 ```
 
@@ -681,6 +682,9 @@ OPENAI_API_KEY=
 # Supabase elevated key (for server-side writes and storage uploads)
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+
+# Browser origins allowed to call Railway directly for audio upload
+WORKER_CORS_ORIGINS=
 ```
 
 #### Provisioning Guide
@@ -691,10 +695,12 @@ SUPABASE_SERVICE_ROLE_KEY=
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase | Dashboard → Settings → API → `anon` public key |
 | `NEXT_PUBLIC_SITE_URL` | Vercel/Supabase Auth | Public app URL for email confirmation and magic-link redirects |
 | `NEXT_PUBLIC_ENABLE_DEMO_MODE` | Vercel | Keep `false`/unset in production; set `true` only for local demos/test previews |
+| `NEXT_PUBLIC_RAILWAY_WORKER_URL` | Railway/Vercel | Public Railway worker URL used by the browser for direct audio transcription uploads |
 | `SUPABASE_URL` | Supabase | Dashboard → Settings → API → Project URL; required in both Vercel and Railway |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Dashboard → Settings → API → `service_role` secret key |
 | `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys → Create new secret key |
 | `RAILWAY_WORKER_URL` | Railway | Railway dashboard → your worker service → Settings → Public URL |
+| `WORKER_CORS_ORIGINS` | Railway | Comma-separated allowed browser origins, including production Vercel URL and local dev URLs |
 
 ---
 
