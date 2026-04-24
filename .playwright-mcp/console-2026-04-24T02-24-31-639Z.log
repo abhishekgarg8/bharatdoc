@@ -35,3 +35,6 @@
 [  396021ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) @ https://bharatdoc-web.vercel.app/onboarding:0
 [  397665ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) @ https://bharatdoc-web.vercel.app/onboarding:0
 [  435739ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password:0
+[ 4299247ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://bharatdoc-web.vercel.app/onboarding:0
+[ 4300456ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://bharatdoc-web.vercel.app/onboarding:0
+[ 4344049ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password:0

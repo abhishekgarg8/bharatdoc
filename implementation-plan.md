@@ -80,6 +80,14 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - Capture screenshots for all critical states: onboarding, pending, dashboard online/offline, recording, post-record, transcribing, transcript, summary, PDF, search, settings, admin.
 - Use Computer Use/manual browser verification for OS/browser-level behavior that Playwright cannot fully validate, especially mic permission, PWA installability, mobile viewport feel, and screenshot review.
 
+### 9. External review gap remediation
+
+- [x] Slice A: production auth and demo-data safety.
+- [x] Slice B: recording finalization, transcription retry idempotency, owner-scoped summary edits, and stale PDF invalidation.
+- [x] Slice C: Unicode/multi-page PDF generation and atomic owner approval/rejection via Supabase RPC.
+- [x] Apply the owner approval/rejection RPC migration to the linked Supabase project.
+- [x] Verify the migration with remote migration history, live auth smoke, full live AI smoke, and browser screenshot review.
+
 ## Testing Discipline
 
 - No implementation step is considered complete without matching tests in the same pass.

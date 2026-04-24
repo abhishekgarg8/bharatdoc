@@ -1,188 +1,228 @@
-# P1 Gap Findings To Fix
+# Current Gap Findings
 
-These are the P1 issues from the review, deduplicated and written as direct implementation instructions.
+Fresh review date: April 24, 2026.
 
-## 1. Protected app pages render demo data by default
+Scope: current codebase checked against `implementation-plan.md`, `Plan/BharatDoc_PRD.md`, and the current app/worker implementation. Older P1 findings that are now fixed are not repeated here.
+
+## P1 Findings
+
+### P1-1. Production Settings can still render demo admin data
+
+Files:
+- `apps/web/components/settings/settings-page-client.tsx`
+- `apps/web/components/settings/settings-screen.tsx`
+- `apps/web/components/bottom-nav.tsx`
+
+Problem:
+- `SettingsScreen` still defaults to demo doctor, clinic, active doctors, and pending approvals.
+- `SettingsPageClient` only passes `activeDoctors` and `pendingApprovals` when their arrays are non-empty.
+- An owner with zero real pending approvals can therefore see the demo pending doctor.
+- A non-owner can still get a default settings badge count through `BottomNav`.
+
+Fix:
+- Do not use demo defaults in production settings props.
+- Pass empty arrays explicitly from `SettingsPageClient`.
+- Default `BottomNav` `settingsBadgeCount` to `0`.
+- Keep demo settings data only behind explicit demo mode.
+- Add tests for owner with zero pending approvals and non-owner settings.
+
+### P1-2. Existing saved PDFs reopen with a demo PDF URL
+
+Files:
+- `apps/web/components/recordings/transcript-summary-screen.tsx`
+- `apps/web/lib/client/recording-detail-data.ts`
+- `apps/web/lib/client/summary-api.ts`
+- `apps/web/app/api/recordings/[id]/route.ts`
+
+Problem:
+- A loaded recording with `pdfStoragePath` initializes `pdfUrl` to `demoPdfSignedUrl`.
+- The detail API returns `pdf_storage_path`, but not a fresh signed Supabase URL.
+- A real saved clinical PDF can therefore open a fake/demo PDF after reload.
+
+Fix:
+- Add server support for fetching a fresh signed URL for the stored PDF path.
+- Return `pdf_signed_url` or equivalent from the recording detail API when `pdf_storage_path` exists.
+- Initialize `pdfUrl` from the signed URL, not demo data.
+- Use demo URLs only in explicit demo mode.
+- Add tests for reloading a `pdf_saved` recording.
+
+### P1-3. End-to-end validation records conflict
+
+Files:
+- `implementation-plan.md`
+- `Plan/implementation-log.md`
+- `scripts/live-flow-smoke.mjs`
+- `docs/staging-smoke.md`
+
+Problem:
+- `implementation-plan.md` now claims the remote migration, live auth smoke, full live AI smoke, and screenshot review are complete.
+- The implementation log still says `pnpm smoke:live-flow` is blocked by Supabase schema/cache problems.
+- Staging smoke is documented but blocked by missing staging URLs.
+- These records cannot both be true, so Phase 1 validation status is currently unreliable.
+
+Fix:
+- Re-run or produce logs for `pnpm smoke:live-flow` and `pnpm smoke:staging`.
+- Confirm PostgREST schema cache sees `public.clinics`, `public.doctors`, `clinic_join_requests`, and `recordings`.
+- Reconcile `implementation-plan.md` and `Plan/implementation-log.md` with exact pass/fail evidence.
+- Keep screenshots or smoke output paths linked from the implementation log.
+
+## P2 Findings
+
+### P2-1. Onboarding writes are still not transactional
+
+File:
+- `apps/web/lib/server/supabase-onboarding-repository.ts`
+
+Problem:
+- Owner onboarding inserts the clinic first and the doctor second.
+- Doctor join onboarding inserts the doctor first and the join request second.
+- A partial failure can leave orphan clinics or pending doctors without join requests.
+
+Fix:
+- Move owner creation into a Supabase RPC/database transaction.
+- Move doctor join creation into a Supabase RPC/database transaction.
+- Keep the existing duplicate-account behavior, but close the read-before-write race.
+- Add tests for partial-failure/duplicate-submit behavior.
+
+### P2-2. iOS MP4/AAC recording MIME path is missing
+
+File:
+- `apps/web/lib/client/audio-recorder.ts`
+
+Problem:
+- Recorder MIME negotiation only chooses `audio/webm` or `audio/wav`.
+- The PRD calls out WebM/Opus for Android and MP4/AAC for iOS.
+- Safari/iOS can fail or degrade without an `audio/mp4`/AAC path.
+
+Fix:
+- Try supported MIME types in order, including `audio/webm;codecs=opus`, `audio/webm`, `audio/mp4;codecs=mp4a.40.2`, `audio/mp4`, then a safe fallback.
+- Keep filename extensions aligned with MIME type.
+- Add unit coverage for Safari/iOS-style support matrices.
+
+### P2-3. Patient ID search is exact-only
+
+File:
+- `apps/web/lib/server/supabase-recordings-repository.ts`
+
+Problem:
+- The PRD requires exact or prefix Patient ID search.
+- Current Supabase query uses `.eq("patient_id", patientId)`.
+- Prefix searches such as `P-104` will not return `P-10470`.
+
+Fix:
+- Change the query to support exact and prefix matching.
+- Preserve clinic scoping and newest-first ordering.
+- Add tests for exact, prefix, empty, and cross-clinic cases.
+
+### P2-4. Dashboard/admin badges still use hardcoded or default counts
 
 Files:
 - `apps/web/components/dashboard-page-client.tsx`
-- `apps/web/components/search/search-page-client.tsx`
-- `apps/web/components/settings/settings-page-client.tsx`
-- `apps/web/components/recordings/new-recording-page-client.tsx`
-- `apps/web/components/recordings/recording-detail-page-client.tsx`
-- `apps/web/components/settings/prompt-editor-page-client.tsx`
-- `apps/web/components/settings/transcription-language-page-client.tsx`
+- `apps/web/components/dashboard-screen.tsx`
+- `apps/web/components/bottom-nav.tsx`
 
 Problem:
-- `demoOnMissingToken` defaults to `true`.
-- Missing/expired auth or API failures can render plausible demo clinic data.
-- In a clinical app, fake records must never appear in production protected routes.
+- Dashboard passes `pendingApprovalsCount: doctor?.role === "owner" ? 1 : 0`.
+- `DashboardScreen` and `BottomNav` still default the settings badge count to `1`.
+- The top settings icon on the dashboard is a plain button with no navigation.
 
 Fix:
-- Default `demoOnMissingToken` to `false` in production page clients.
-- Redirect missing-token users through the auth/session gate.
-- On authenticated fetch failures, show a real error or force re-auth. Do not fall back to demo records.
-- Keep demo mode only behind explicit demo/test entry points such as `/onboarding?demo=1` or test-only props.
+- Load the real pending approval count for owners.
+- Default all badge counts to `0`.
+- Make the dashboard settings icon navigate to `/settings`.
+- Add tests for owner with zero pending approvals and doctor role with no badge.
 
-## 2. Production signup is prefilled with demo credentials
+### P2-5. Pending/rejected access screens are static and partly inert
 
-File:
-- `apps/web/components/onboarding/onboarding-screen.tsx`
+Files:
+- `apps/web/components/onboarding/pending-approval-screen.tsx`
+- `apps/web/components/onboarding/access-rejected-screen.tsx`
+- `apps/web/app/pending-approval/page.tsx`
+- `apps/web/app/access-rejected/page.tsx`
 
 Problem:
-- Production onboarding initializes username, password, profile, clinic code, clinic name, and address with demo values.
-- A real user can create or join with known sample data and a known password by tapping through the flow.
+- Pending approval screen hardcodes `Sunrise Clinic`, `MED42X`, owner name, and requested date.
+- The pending screen `Sign out` button has no handler.
+- The rejected screen `Join a different clinic` button has no handler.
 
 Fix:
-- Use empty defaults when `demoMode === false`.
-- Keep demo defaults only inside demo mode.
-- Add tests proving production onboarding starts blank and demo onboarding remains deterministic.
+- Load the current doctor/clinic/join-request context from authenticated APIs.
+- Show real clinic and request details.
+- Wire sign-out and retry/join-different-clinic flows.
+- Add tests for pending, active, and rejected account states.
 
-## 3. Public signup uses service-role account creation
-
-File:
-- `apps/web/app/api/auth/password/signup/route.ts`
-
-Problem:
-- The public unauthenticated signup route calls `supabase.auth.admin.createUser` with the service role.
-- There is no rate limit, invite constraint, bot protection, or abuse guard.
-- The route auto-confirms users with `email_confirm: true`.
-
-Fix:
-- Prefer browser-side `supabase.auth.signUp` with the anon key for normal signup.
-- If a server signup endpoint remains, add hard abuse protection: rate limiting, bot protection, invite/clinic constraints, normalized duplicate handling, and no broad public service-role user creation.
-- Do not expose raw provider/internal errors to the client.
-
-## 4. Settings/admin writes can report success without persistence
+### P2-6. Account settings actions are inert
 
 File:
 - `apps/web/components/settings/settings-screen.tsx`
 
 Problem:
-- Approve/reject and clinic-profile save skip the backend call when `idToken` is missing.
-- The UI still mutates local state and shows success.
-- An unauthenticated or failed-auth session can appear to approve doctors or save clinic changes.
+- Settings shows `Sign out` and `Delete account`, but both render as buttons without handlers.
+- The PRD includes logout and delete account with confirmation.
 
 Fix:
-- Require `idToken` before any admin write.
-- If token is missing, show an auth error and redirect/re-authenticate.
-- Only update local state after the API call succeeds.
-- Apply the same persistence rule to prompt and language preference saves.
+- Wire `Sign out` to the Supabase auth client and redirect to onboarding.
+- Either implement delete account with confirmation or remove the row until backend support exists.
+- Add tests for sign-out behavior and delete confirmation state.
 
-## 5. Recording stop can lose audio when Patient ID is blank
+### P2-7. Recording screen misses clinic/offline context from the PRD
+
+File:
+- `apps/web/components/recordings/recording-screen.tsx`
+
+Problem:
+- The PRD calls for clinic context on the recording screen.
+- It also calls for offline messaging and reconnect/pending transcription visibility.
+- Current recording screen does not show clinic context and has no `navigator.onLine`/online-offline UI.
+
+Fix:
+- Pass clinic name into the recording page client and show it as read-only context.
+- Detect offline/online state and show explicit offline save/transcribe messaging.
+- Keep transcription manual, but make pending local recordings visible on reconnect.
+
+### P2-8. Search result UI does not expose all PRD-required context
 
 Files:
-- `apps/web/components/recordings/recording-screen.tsx`
+- `apps/web/components/search/search-screen.tsx`
+- `apps/web/components/dashboard-record-card.tsx`
+- `apps/web/lib/client/dashboard-data.ts`
+
+Problem:
+- Search results reuse the dashboard card.
+- PRD search results should show clinic scope context, clinic name, doctor name, label, status, and PDF link when available.
+- Current result data does not include clinic name or PDF availability.
+
+Fix:
+- Add search-specific result DTO fields for clinic name, label, and PDF status/link.
+- Render a search-specific result card instead of the generic dashboard card.
+- Keep exact/prefix search clinic-scoped.
+
+### P2-9. Prompt test action is not a real AI preview
+
+File:
+- `apps/web/components/settings/prompt-editor-screen.tsx`
+
+Problem:
+- `Test sample` only interpolates the prompt with a hardcoded transcript.
+- The PRD asks for sample transcript testing of the prompt behavior.
+
+Fix:
+- Let the doctor edit/paste a sample transcript.
+- Run the prompt through the same summary-generation path with test-only output, or clearly label it as a render preview.
+- Add validation that the test does not persist a recording summary.
+
+### P2-10. Synced local recordings can mask newer server status on Dashboard
+
+Files:
+- `apps/web/lib/client/dashboard-data.ts`
 - `apps/web/lib/client/local-recordings.ts`
 
 Problem:
-- `stopRecording()` stops the recorder before `repository.finalize()`.
-- `finalize()` requires a Patient ID.
-- If the doctor stops first and tags the patient later, the UI moves to failed after the recorder has already stopped.
-- Short recordings may not have a 30-second chunk persisted, so audio can be lost.
-- The PRD says Patient ID can be added after recording and is mandatory before transcription/PDF, not before stop.
+- `mergeDashboardRecords` keeps local records before server records when IDs match.
+- After transcription, a local record can share the server recording ID.
+- If the server record later moves to `summary_ready` or `pdf_saved`, the stale local `transcribed` dashboard record can win.
 
 Fix:
-- Allow local recording finalization without Patient ID.
-- Persist the final audio blob immediately on stop.
-- Keep Patient ID validation at transcription/PDF time.
-- Let the doctor add or edit Patient ID after stopping and before transcription.
-
-## 6. Transcription retry is not idempotent
-
-Files:
-- `apps/web/components/recordings/recording-screen.tsx`
-- `apps/web/lib/client/dashboard-data.ts`
-- `apps/web/lib/server/recordings.ts`
-- `apps/web/lib/server/supabase-recordings-repository.ts`
-
-Problem:
-- Every transcription retry calls `createRecordingMetadata()` before invoking the worker.
-- The server inserts a new `recordings` row with the same primary key.
-- If metadata creation succeeds but worker/OpenAI transcription fails, the next retry can fail on duplicate key before transcription starts.
-
-Fix:
-- If `serverRecordingId` exists locally, skip metadata creation and retry transcription with that ID.
-- Make metadata creation idempotent server-side: return the existing row if the same recording ID already belongs to the same doctor.
-- Do not overwrite another doctor's row.
-- Persist `serverRecordingId` before calling the worker and keep it across failed retries.
-
-## 7. Same-clinic doctors can edit each other's summaries
-
-File:
-- `apps/web/lib/server/recordings.ts`
-
-Problem:
-- Summary PATCH finds recordings by clinic scope and updates by `clinic_id`.
-- Any active doctor in the same clinic can edit another doctor's summary.
-- Worker summary/PDF paths use doctor ownership, so authorization is inconsistent.
-
-Fix:
-- For MVP, restrict summary edits to the recording owner doctor.
-- Keep clinic-scoped reads/search if required, but make writes owner-scoped unless an explicit collaborative-edit policy exists.
-- If clinic-wide editing is intended later, add audit fields and product-visible ownership rules.
-
-## 8. Summary changes keep stale PDFs marked current
-
-Files:
-- `apps/worker/src/summary.ts`
-- `apps/web/lib/server/recordings.ts`
-- `apps/web/components/recordings/transcript-summary-screen.tsx`
-
-Problem:
-- Regenerating or editing a summary after `pdf_saved` preserves `pdf_saved`.
-- The database can show a new summary while `pdf_storage_path` still points to a PDF generated from old text.
-- The UI can advertise an old PDF as current.
-
-Fix:
-- On any summary change after PDF generation, invalidate the existing PDF.
-- For MVP: set status back to `summary_ready` and clear `pdf_storage_path`.
-- Hide the old PDF link until a new PDF is generated.
-- Long term: use versioned summaries and versioned PDFs.
-
-## 9. PDF renderer corrupts Hindi and other non-ASCII text
-
-File:
-- `apps/worker/src/pdf-renderer.ts`
-
-Problem:
-- `asciiText()` replaces all non-ASCII characters.
-- Hindi/Hinglish text, clinic names, addresses, and patient summaries can be silently corrupted.
-
-Fix:
-- Replace the custom ASCII-only PDF writer with a Unicode-capable renderer.
-- Use `@react-pdf/renderer` as planned in the PRD, or another renderer that supports embedded fonts.
-- Embed a font that supports Devanagari and Latin text, such as Noto Sans Devanagari plus a Latin fallback.
-- Add tests with Hindi/Hinglish sample text.
-
-## 10. PDF output truncates long summaries
-
-File:
-- `apps/worker/src/pdf-renderer.ts`
-
-Problem:
-- When the first page runs out of space, the renderer writes a continuation note and stops.
-- The PRD requires the full edited summary in the PDF.
-- Clinical content can be dropped from the saved document.
-
-Fix:
-- Generate multi-page PDFs.
-- Preserve the full summary text.
-- Add tests with a long summary that spans multiple pages.
-- Include the PRD-required footer: `Generated by BharatDoc | AI-assisted - verify before clinical use`.
-
-## 11. Approval state changes are not atomic
-
-File:
-- `apps/web/lib/server/supabase-clinic-admin-repository.ts`
-
-Problem:
-- Approve/reject updates the join request and doctor row in separate statements.
-- There is no transaction boundary, pending-status predicate, or affected-row check.
-- Concurrent owner actions or partial failures can leave `clinic_join_requests.status` and `doctors.account_status` inconsistent.
-
-Fix:
-- Move approve/reject into a Supabase RPC/database transaction.
-- Only update rows where the join request is still `status = 'pending'`.
-- Update join request and doctor account status atomically.
-- Return a clear conflict/not-found error if another review already processed the request.
+- Prefer server records when a local record already has `serverRecordingId`.
+- Or clear/update local records after successful server sync.
+- Add tests for server `pdf_saved` beating stale local `transcribed`.
