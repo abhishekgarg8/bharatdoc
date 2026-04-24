@@ -41,11 +41,11 @@ describe("Supabase auth client", () => {
       data: { session: { access_token: "access-token" } },
       error: null
     });
-    const fetcher = vi.fn(async () => Response.json({ username: "doctor01" }));
+    const fetcher = vi.fn(async () => Response.json({ email: "doctor@example.com" }));
 
     await expect(
       createSupabaseAuthClient(fetcher as unknown as typeof fetch).signUpWithPassword({
-        username: "Doctor01",
+        email: "Doctor@Example.com",
         password: "bharatdoc123"
       })
     ).resolves.toBe("access-token");
@@ -54,11 +54,11 @@ describe("Supabase auth client", () => {
       "/api/auth/password/signup",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ username: "doctor01", password: "bharatdoc123" })
+        body: JSON.stringify({ email: "doctor@example.com", password: "bharatdoc123" })
       })
     );
     expect(supabaseMocks.signInWithPassword).toHaveBeenCalledWith({
-      email: "doctor01@bharatdoc.local",
+      email: "doctor@example.com",
       password: "bharatdoc123"
     });
   });

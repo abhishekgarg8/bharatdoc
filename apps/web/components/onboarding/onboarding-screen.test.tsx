@@ -8,11 +8,11 @@ afterEach(() => {
 });
 
 describe("OnboardingScreen", () => {
-  it("starts with the username password step", () => {
+  it("starts with the email password step", () => {
     render(<OnboardingScreen />);
 
     expect(screen.getByText("Welcome to BharatDoc")).toBeInTheDocument();
-    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe("OnboardingScreen", () => {
 
     render(<OnboardingScreen authClient={authClient} onNavigate={navigate} />);
 
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "DrAparna" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "DrAparna@Example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
@@ -59,7 +59,7 @@ describe("OnboardingScreen", () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
     expect(authClient.signUpWithPassword).toHaveBeenCalledWith({
-      username: "draparna",
+      email: "draparna@example.com",
       password: "bharatdoc123"
     });
     expect(fetcher).toHaveBeenCalledWith(

@@ -5,10 +5,10 @@ import type { TokenVerifier, VerifiedUser } from "@/lib/server/auth";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 function userContact(user: User): string {
-  const username = user.user_metadata?.username;
+  const metadataEmail = user.user_metadata?.email;
 
-  if (typeof username === "string" && username.trim()) {
-    return username.trim();
+  if (typeof metadataEmail === "string" && metadataEmail.trim()) {
+    return metadataEmail.trim();
   }
 
   return user.email ?? user.id;

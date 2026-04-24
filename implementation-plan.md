@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build Phase 1 as a staging-deployed pnpm TypeScript monorepo from the current PRD/design package. The MVP includes high-fidelity Bharat Warmth PWA screens, Supabase username/password onboarding, clinic owner approval, local audio recording, manual transcription, editable AI summaries, PDF generation, clinic-scoped patient search, Settings, and owner admin.
+Build Phase 1 as a staging-deployed pnpm TypeScript monorepo from the current PRD/design package. The MVP includes high-fidelity Bharat Warmth PWA screens, Supabase email/password onboarding, clinic owner approval, local audio recording, manual transcription, editable AI summaries, PDF generation, clinic-scoped patient search, Settings, and owner admin.
 
 Testing is a first-class requirement: every implementation step lands with unit/API/UI coverage where applicable, plus repeated browser verification with screenshots during development.
 
@@ -40,7 +40,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 
 ### 4. Auth and onboarding APIs
 
-- [x] Replace Firebase phone OTP with Supabase username/password signup and login.
+- [x] Replace Firebase phone OTP with Supabase email/password signup and login.
 - [x] Implement Supabase Auth token verification for Vercel API routes and the Railway worker.
 - Owner path creates clinic, owner doctor row, active account, and clinic code.
 - Doctor path looks up clinic code, creates pending doctor row, and creates join request.

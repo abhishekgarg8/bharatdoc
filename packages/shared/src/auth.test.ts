@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUsername, PasswordCredentialsSchema, usernameToAuthEmail } from "./auth.js";
+import { normalizeEmail, PasswordCredentialsSchema } from "./auth.js";
 
 describe("auth helpers", () => {
-  it("normalizes username credentials for Supabase password auth", () => {
-    expect(normalizeUsername(" Dr_Aparna-1 ")).toBe("dr_aparna-1");
-    expect(usernameToAuthEmail("Dr.Aparna")).toBe("dr.aparna@bharatdoc.local");
+  it("normalizes email credentials for Supabase password auth", () => {
+    expect(normalizeEmail(" RehanGupta82@Gmail.com ")).toBe("rehangupta82@gmail.com");
   });
 
-  it("validates usernames and passwords", () => {
-    expect(PasswordCredentialsSchema.parse({ username: "doctor01", password: "bharatdoc123" })).toEqual({
-      username: "doctor01",
+  it("validates emails and passwords", () => {
+    expect(PasswordCredentialsSchema.parse({ email: "doctor@example.com", password: "bharatdoc123" })).toEqual({
+      email: "doctor@example.com",
       password: "bharatdoc123"
     });
-    expect(() => PasswordCredentialsSchema.parse({ username: "bad name", password: "bharatdoc123" })).toThrow();
-    expect(() => PasswordCredentialsSchema.parse({ username: "doctor01", password: "short" })).toThrow();
+    expect(() => PasswordCredentialsSchema.parse({ email: "bad name", password: "bharatdoc123" })).toThrow();
+    expect(() => PasswordCredentialsSchema.parse({ email: "doctor@example.com", password: "short" })).toThrow();
   });
 });

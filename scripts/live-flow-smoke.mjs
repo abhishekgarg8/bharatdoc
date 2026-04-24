@@ -18,10 +18,6 @@ function requiredEnv(name) {
   return value;
 }
 
-function usernameToAuthEmail(username) {
-  return `${username.trim().toLowerCase()}@bharatdoc.local`;
-}
-
 function createSupabaseClients() {
   const supabaseUrl = requiredEnv("SUPABASE_URL");
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -41,26 +37,26 @@ function createSupabaseClients() {
   };
 }
 
-async function createPasswordToken(clients, username) {
-  const email = usernameToAuthEmail(username);
-  const password = `Smoke-${username}-${randomUUID()}`;
+async function createPasswordToken(clients, emailPrefix) {
+  const email = `${emailPrefix.trim().toLowerCase()}@bharatdoc.test`;
+  const password = `Smoke-${emailPrefix}-${randomUUID()}`;
   const { error: createError } = await clients.admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: {
-      username
+      email
     }
   });
 
   if (createError) {
-    throw new Error(`Unable to create Supabase smoke user ${username}: ${createError.message}`);
+    throw new Error(`Unable to create Supabase smoke user ${email}: ${createError.message}`);
   }
 
   const { data, error: signInError } = await clients.password.auth.signInWithPassword({ email, password });
 
   if (signInError || !data.session?.access_token) {
-    throw new Error(`Unable to sign in Supabase smoke user ${username}: ${signInError?.message ?? "missing session"}`);
+    throw new Error(`Unable to sign in Supabase smoke user ${email}: ${signInError?.message ?? "missing session"}`);
   }
 
   return data.session.access_token;
@@ -131,14 +127,14 @@ async function main() {
   const runAiFlow = process.env.LIVE_FLOW_SKIP_AI !== "1";
   const clients = createSupabaseClients();
   const runId = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-  const ownerUsername = `smoke_owner_${runId}`.toLowerCase();
-  const doctorUsername = `smoke_doctor_${runId}`.toLowerCase();
+  const ownerEmailPrefix = `smoke_owner_${runId}`.toLowerCase();
+  const doctorEmailPrefix = `smoke_doctor_${runId}`.toLowerCase();
 
   console.log(`Live flow smoke against ${baseUrl}`);
 
   const [ownerToken, doctorToken] = await Promise.all([
-    createPasswordToken(clients, ownerUsername),
-    createPasswordToken(clients, doctorUsername)
+    createPasswordToken(clients, ownerEmailPrefix),
+    createPasswordToken(clients, doctorEmailPrefix)
   ]);
 
   const ownerProfile = {

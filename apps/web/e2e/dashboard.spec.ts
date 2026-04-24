@@ -89,11 +89,11 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await expect(page.getByText("Today's consultations")).toBeVisible();
 });
 
-test("onboarding smoke renders username password entry", async ({ page }) => {
+test("onboarding smoke renders email password entry", async ({ page }) => {
   await page.goto("/onboarding");
 
   await expect(page.getByText("Welcome to BharatDoc")).toBeVisible();
-  await expect(page.getByLabel("Username")).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
 });

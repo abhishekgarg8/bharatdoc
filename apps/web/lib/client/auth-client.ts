@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { PasswordCredentialsSchema, usernameToAuthEmail, type PasswordCredentials } from "@bharatdoc/shared";
+import { PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
 
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
@@ -70,7 +70,7 @@ export function createSupabaseAuthClient(fetcher: typeof fetch = fetch): AuthCli
       const parsed = PasswordCredentialsSchema.parse(credentials);
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: usernameToAuthEmail(parsed.username),
+        email: parsed.email,
         password: parsed.password
       });
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Building2, Check, FileText, Loader2, Plus } from "lucide-react";
-import { normalizeUsername, type RegistrationInput } from "@bharatdoc/shared";
+import { normalizeEmail, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
@@ -44,8 +44,8 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [username, setUsername] = useState("aparna");
-  const [password, setPassword] = useState("bharatdoc123");
+  const [email, setEmail] = useState("rehangupta82@gmail.com");
+  const [password, setPassword] = useState("testtest");
   const [idToken, setIdToken] = useState<string | null>(null);
   const [profile, setProfile] = useState({
     name: "Dr. Aparna Iyer",
@@ -66,13 +66,13 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
     try {
       const credentials = {
-        username: normalizeUsername(username),
+        email: normalizeEmail(email),
         password
       };
       const token =
         authMode === "signup" ? await auth.signUpWithPassword(credentials) : await auth.signInWithPassword(credentials);
 
-      setUsername(credentials.username);
+      setEmail(credentials.email);
       setIdToken(token);
 
       if (demoMode || authMode === "signup") {
@@ -204,15 +204,16 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               </ModeButton>
             </div>
             <label className="mb-1.5 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
-              Username
+              Email
             </label>
             <input
-              className="w-full rounded-[10px] border-[1.5px] border-terracotta bg-paper px-4 py-3 font-mono text-lg font-bold tracking-[0.04em] text-ink outline-none"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              className="w-full rounded-[10px] border-[1.5px] border-terracotta bg-paper px-4 py-3 font-body text-base font-semibold text-ink outline-none"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               autoCapitalize="none"
-              autoComplete="username"
-              aria-label="Username"
+              autoComplete="email"
+              inputMode="email"
+              aria-label="Email"
             />
             <label className="mb-1.5 mt-4 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
               Password
