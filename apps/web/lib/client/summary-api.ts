@@ -3,6 +3,7 @@ import {
   type RecordingDetailApiRecord,
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
+import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface RecordingDetailResponse {
   recording: RecordingDetailApiRecord;
@@ -21,14 +22,6 @@ export interface WorkerPdfResponse {
   status: "pdf_saved";
 }
 
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
-}
-
 export async function fetchRecordingDetail(
   idToken: string,
   recordingId: string,
@@ -39,7 +32,7 @@ export async function fetchRecordingDetail(
       Authorization: `Bearer ${idToken}`
     }
   });
-  const payload = await parseJson<RecordingDetailResponse>(response, "Unable to load recording.");
+  const payload = await parseJsonOrThrow<RecordingDetailResponse>(response, "Unable to load recording.");
 
   return mapApiRecordingToDetail(payload.recording);
 }
@@ -56,7 +49,7 @@ export async function summarizeRecording(
     }
   });
 
-  return parseJson<WorkerSummaryResponse>(response, "Unable to generate summary.");
+  return parseJsonOrThrow<WorkerSummaryResponse>(response, "Unable to generate summary.");
 }
 
 export async function saveRecordingSummary(
@@ -73,7 +66,7 @@ export async function saveRecordingSummary(
     },
     body: JSON.stringify({ summary })
   });
-  const payload = await parseJson<RecordingDetailResponse>(response, "Unable to save summary.");
+  const payload = await parseJsonOrThrow<RecordingDetailResponse>(response, "Unable to save summary.");
 
   return mapApiRecordingToDetail(payload.recording);
 }
@@ -90,5 +83,5 @@ export async function generateRecordingPdf(
     }
   });
 
-  return parseJson<WorkerPdfResponse>(response, "Unable to generate PDF.");
+  return parseJsonOrThrow<WorkerPdfResponse>(response, "Unable to generate PDF.");
 }

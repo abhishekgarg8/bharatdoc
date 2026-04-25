@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PendingApprovalScreen } from "@/components/onboarding/pending-approval-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { fetchPendingApprovalStatus, type PendingApprovalStatus } from "@/lib/client/pending-approval-api";
@@ -100,7 +101,12 @@ export function PendingApprovalPageClient({
         }
 
         setStatus(nextStatus);
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted) {
           setError("Unable to load approval status. Please sign in again.");
         }

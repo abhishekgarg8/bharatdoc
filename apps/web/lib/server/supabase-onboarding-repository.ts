@@ -1,10 +1,59 @@
 import "server-only";
 import type { Clinic, Doctor, ProfileInput } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { OnboardingRepository, PendingJoinRequest } from "@/lib/server/onboarding";
+import {
+  ExistingDoctorAccountError,
+  type OnboardingRepository,
+  type PendingJoinRequest
+} from "@/lib/server/onboarding";
 
 function normalizeOptional(value: string | undefined): string | null {
   return value?.trim() ? value.trim() : null;
+}
+
+interface OwnerAccountRpcResult {
+  clinic?: Clinic;
+  doctor?: Doctor;
+  existing_doctor?: Doctor;
+}
+
+interface DoctorJoinRpcResult extends OwnerAccountRpcResult {
+  join_request?: PendingJoinRequest;
+}
+
+function requireOwnerAccountResult(data: unknown): { doctor: Doctor; clinic: Clinic } {
+  const result = data as OwnerAccountRpcResult | null;
+
+  if (result?.existing_doctor) {
+    throw new ExistingDoctorAccountError(result.existing_doctor);
+  }
+
+  if (!result?.doctor || !result.clinic) {
+    throw new Error("Onboarding owner RPC returned an invalid payload.");
+  }
+
+  return {
+    doctor: result.doctor,
+    clinic: result.clinic
+  };
+}
+
+function requireDoctorJoinResult(data: unknown): { doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest } {
+  const result = data as DoctorJoinRpcResult | null;
+
+  if (result?.existing_doctor) {
+    throw new ExistingDoctorAccountError(result.existing_doctor);
+  }
+
+  if (!result?.doctor || !result.clinic || !result.join_request) {
+    throw new Error("Onboarding join-request RPC returned an invalid payload.");
+  }
+
+  return {
+    doctor: result.doctor,
+    clinic: result.clinic,
+    joinRequest: result.join_request
+  };
 }
 
 export function createSupabaseOnboardingRepository(supabase: SupabaseClient): OnboardingRepository {
@@ -60,42 +109,23 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       };
       clinicCode: string;
     }): Promise<{ doctor: Doctor; clinic: Clinic }> {
-      const { data: clinic, error: clinicError } = await supabase
-        .from("clinics")
-        .insert({
-          name: input.hospital.name,
-          clinic_code: input.clinicCode,
-          address: normalizeOptional(input.hospital.address),
-          logo_storage_path: normalizeOptional(input.hospital.logo_storage_path)
-        })
-        .select("*")
-        .single();
+      const { data, error } = await supabase.rpc("create_owner_account", {
+        p_auth_uid: input.authUid,
+        p_phone: input.phone,
+        p_name: input.profile.name,
+        p_specialization: input.profile.specialization,
+        p_profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
+        p_clinic_name: input.hospital.name,
+        p_clinic_code: input.clinicCode,
+        p_clinic_address: normalizeOptional(input.hospital.address),
+        p_logo_storage_path: normalizeOptional(input.hospital.logo_storage_path)
+      });
 
-      if (clinicError) {
-        throw clinicError;
+      if (error) {
+        throw error;
       }
 
-      const { data: doctor, error: doctorError } = await supabase
-        .from("doctors")
-        .insert({
-          firebase_uid: input.authUid,
-          clinic_id: clinic.id,
-          role: "owner",
-          account_status: "active",
-          name: input.profile.name,
-          specialization: input.profile.specialization,
-          phone: input.phone,
-          profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
-          transcription_lang: "auto"
-        })
-        .select("*")
-        .single();
-
-      if (doctorError) {
-        throw doctorError;
-      }
-
-      return { clinic: clinic as Clinic, doctor: doctor as Doctor };
+      return requireOwnerAccountResult(data);
     },
 
     async createDoctorJoinRequest(input: {
@@ -104,45 +134,20 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       profile: ProfileInput;
       clinic: Clinic;
     }): Promise<{ doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest }> {
-      const { data: doctor, error: doctorError } = await supabase
-        .from("doctors")
-        .insert({
-          firebase_uid: input.authUid,
-          clinic_id: input.clinic.id,
-          role: "doctor",
-          account_status: "pending_approval",
-          name: input.profile.name,
-          specialization: input.profile.specialization,
-          phone: input.phone,
-          profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
-          transcription_lang: "auto"
-        })
-        .select("*")
-        .single();
+      const { data, error } = await supabase.rpc("create_doctor_join_request", {
+        p_auth_uid: input.authUid,
+        p_phone: input.phone,
+        p_name: input.profile.name,
+        p_specialization: input.profile.specialization,
+        p_profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
+        p_clinic_id: input.clinic.id
+      });
 
-      if (doctorError) {
-        throw doctorError;
+      if (error) {
+        throw error;
       }
 
-      const { data: joinRequest, error: joinRequestError } = await supabase
-        .from("clinic_join_requests")
-        .insert({
-          clinic_id: input.clinic.id,
-          doctor_id: doctor.id,
-          status: "pending"
-        })
-        .select("id, clinic_id, doctor_id, status")
-        .single();
-
-      if (joinRequestError) {
-        throw joinRequestError;
-      }
-
-      return {
-        doctor: doctor as Doctor,
-        clinic: input.clinic,
-        joinRequest: joinRequest as PendingJoinRequest
-      };
+      return requireDoctorJoinResult(data);
     }
   };
 }

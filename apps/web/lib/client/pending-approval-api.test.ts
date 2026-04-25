@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { AuthSessionExpiredError } from "@/lib/client/api-error";
 import { fetchPendingApprovalStatus } from "@/lib/client/pending-approval-api";
 
 describe("pending approval api client", () => {
@@ -30,9 +31,9 @@ describe("pending approval api client", () => {
     });
   });
 
-  it("throws when the pending approval API fails", async () => {
+  it("throws an auth-expired error when the pending approval API returns 401", async () => {
     const fetcher = vi.fn(async () => Response.json({ error: { code: "AUTH_REQUIRED" } }, { status: 401 })) as unknown as typeof fetch;
 
-    await expect(fetchPendingApprovalStatus("bad-token", fetcher)).rejects.toThrow("Unable to load approval status.");
+    await expect(fetchPendingApprovalStatus("bad-token", fetcher)).rejects.toBeInstanceOf(AuthSessionExpiredError);
   });
 });

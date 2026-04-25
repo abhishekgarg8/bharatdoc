@@ -101,6 +101,10 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Finish partial gap #7: dashboard now uses live hospital context and pending approval counts instead of hardcoded owner badges.
 - [x] Finish partial gap #11: hospital code is read-only/copyable in settings and removed from normal profile update contracts.
 - [x] Finish partial gap #19: search results now render hospital, label, and PDF availability context from search-specific DTO fields.
+- [x] Fix P1 gap: move onboarding owner and join-request writes behind atomic Supabase RPCs with duplicate-submit recovery.
+- [x] Fix P1 gap: sanitize unknown web and worker server errors while preserving expected user-actionable errors.
+- [x] Fix P1 gap: redirect expired protected-page sessions through Supabase sign-out and onboarding recovery.
+- [x] Fix P1 gap: add clinic-code lookup throttling and miss telemetry for public lookup abuse guard.
 - [ ] Config follow-up: replace the local `.env` anon key with the anon key for Supabase project `jtezgoegatwbvdqeogiy` once the correct public anon key is available.
 
 ### 10. Production latency remediation

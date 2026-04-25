@@ -1,6 +1,7 @@
 "use client";
 
 import type { Doctor } from "@bharatdoc/shared";
+import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface MeResponse {
   doctor: Doctor;
@@ -33,9 +34,5 @@ export async function fetchCurrentDoctor(idToken: string, fetcher: typeof fetch 
     }
   });
 
-  if (!response.ok) {
-    throw new Error("Unable to load current doctor.");
-  }
-
-  return (await response.json()) as MeResponse;
+  return parseJsonOrThrow<MeResponse>(response, "Unable to load current doctor.");
 }

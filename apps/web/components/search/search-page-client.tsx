@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SearchScreen } from "@/components/search/search-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import {
   demoDashboardRecords,
   fetchDashboardSnapshot,
@@ -75,7 +76,12 @@ export function SearchPageClient({
         if (isMounted) {
           setRecords(snapshot.records);
         }
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted) {
           if (allowDemoFallback) {
             setRecords(demoDashboardRecords);

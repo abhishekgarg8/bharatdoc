@@ -101,6 +101,32 @@ describe("RecordingDetailPageClient", () => {
     expect(screen.queryByRole("heading", { name: "P-10481" })).not.toBeInTheDocument();
   });
 
+  it("signs out and redirects to onboarding when recording detail auth is expired", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(async () => undefined),
+      getCurrentIdToken: vi.fn(async () => "expired-token")
+    };
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async () =>
+      Response.json({ error: { code: "AUTH_REQUIRED", message: "Supabase token verification failed." } }, { status: 401 })
+    ) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        authClient={authClient}
+        fetcher={fetcher}
+        onNavigate={navigate}
+      />
+    );
+
+    await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
+    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(screen.queryByText("Unable to load recording.")).not.toBeInTheDocument();
+  });
+
   it("retries transcription from local audio when a server recording has no transcript", async () => {
     vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const authClient: AuthClient = {

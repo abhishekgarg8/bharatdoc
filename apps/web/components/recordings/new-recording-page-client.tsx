@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode, useExplicitMockRecorder } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
@@ -67,7 +68,12 @@ export function NewRecordingPageClient({
         }
 
         setIdToken(token ?? undefined);
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted && !allowDemoFallback) {
           setError("Unable to prepare recorder. Please sign in again.");
         }

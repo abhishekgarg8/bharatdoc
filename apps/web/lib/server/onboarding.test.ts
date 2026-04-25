@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Clinic, Doctor } from "@bharatdoc/shared";
-import { lookupClinicByCode, registerDoctorAccount, type OnboardingRepository } from "@/lib/server/onboarding";
+import {
+  ExistingDoctorAccountError,
+  lookupClinicByCode,
+  registerDoctorAccount,
+  type OnboardingRepository
+} from "@/lib/server/onboarding";
 
 const clinic: Clinic = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -154,6 +159,63 @@ describe("doctor registration", () => {
     });
     expect(repository.createOwner).not.toHaveBeenCalled();
     expect(repository.createDoctorJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns existing account state when the owner creation RPC detects a duplicate submit", async () => {
+    const repository = createRepository({
+      createOwner: vi.fn(async () => {
+        throw new ExistingDoctorAccountError(activeOwner);
+      })
+    });
+
+    const result = await registerDoctorAccount(
+      {
+        mode: "create_clinic",
+        profile: { name: "Dr. Kavita Rao", specialization: "Pediatrician" },
+        clinic: { name: "Sunrise Clinic" }
+      },
+      { uid: "firebase-owner", phoneNumber: "+919876543210" },
+      repository
+    );
+
+    expect(result).toMatchObject({
+      status: "existing_account",
+      role: "owner",
+      account_status: "active",
+      doctor: activeOwner
+    });
+  });
+
+  it("recovers existing account state when a database unique constraint wins a race", async () => {
+    const duplicateError = {
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "doctors_firebase_uid_key"',
+      details: "Key (firebase_uid)=(firebase-owner) already exists."
+    };
+    const repository = createRepository({
+      createOwner: vi.fn(async () => {
+        throw duplicateError;
+      }),
+      findDoctorByAuthUid: vi.fn(async () => activeOwner)
+    });
+
+    const result = await registerDoctorAccount(
+      {
+        mode: "create_clinic",
+        profile: { name: "Dr. Kavita Rao", specialization: "Pediatrician" },
+        clinic: { name: "Sunrise Clinic" }
+      },
+      { uid: "firebase-owner", phoneNumber: "+919876543210" },
+      repository
+    );
+
+    expect(result).toMatchObject({
+      status: "existing_account",
+      role: "owner",
+      account_status: "active",
+      doctor: activeOwner
+    });
+    expect(repository.findDoctorByAuthUid).toHaveBeenCalledWith("firebase-owner");
   });
 
   it("does not accept spoofed auth UID or phone values from request bodies", async () => {

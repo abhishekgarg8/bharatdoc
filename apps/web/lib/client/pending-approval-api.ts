@@ -1,4 +1,5 @@
 import type { Doctor } from "@bharatdoc/shared";
+import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface PendingApprovalOwner {
   id: string;
@@ -32,14 +33,6 @@ export type PendingApprovalStatus =
       redirectTo: "/dashboard" | "/access-rejected";
     };
 
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
-}
-
 export async function fetchPendingApprovalStatus(
   idToken: string,
   fetcher: typeof fetch = fetch
@@ -50,5 +43,5 @@ export async function fetchPendingApprovalStatus(
     }
   });
 
-  return parseJson<PendingApprovalStatus>(response, "Unable to load approval status.");
+  return parseJsonOrThrow<PendingApprovalStatus>(response, "Unable to load approval status.");
 }

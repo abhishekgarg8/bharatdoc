@@ -113,6 +113,12 @@ export function sanitizeErrorForTelemetry(error: unknown): SanitizedError {
   };
 }
 
+function responseMessageForError(httpError: HttpError): string {
+  return httpError.status >= 500 && httpError.code === "INTERNAL_ERROR"
+    ? "Internal server error."
+    : httpError.message;
+}
+
 export function createErrorHandler(
   logger: StructuredLogger = consoleStructuredLogger,
 ): ErrorRequestHandler {
@@ -134,7 +140,7 @@ export function createErrorHandler(
     res.status(httpError.status).json({
       error: {
         code: httpError.code,
-        message: httpError.message,
+        message: responseMessageForError(httpError),
       },
     });
   };

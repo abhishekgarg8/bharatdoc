@@ -96,6 +96,25 @@ describe("SearchPageClient", () => {
     expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
   });
 
+  it("signs out and redirects to onboarding when search bootstrap auth is expired", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(async () => undefined),
+      getCurrentIdToken: vi.fn(async () => "expired-token")
+    };
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async () =>
+      Response.json({ error: { code: "AUTH_REQUIRED", message: "Supabase token verification failed." } }, { status: 401 })
+    ) as unknown as typeof fetch;
+
+    render(<SearchPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+
+    await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
+    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(screen.queryByText("Unable to load search records. Please sign in again.")).not.toBeInTheDocument();
+  });
+
   it("redirects pending users away from search without loading records", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),

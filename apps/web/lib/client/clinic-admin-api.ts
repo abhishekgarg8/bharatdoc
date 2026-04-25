@@ -1,3 +1,5 @@
+import { parseJsonOrThrow } from "@/lib/client/api-error";
+
 export interface PendingApprovalDoctor {
   id: string;
   name: string;
@@ -44,14 +46,6 @@ export interface ClinicProfileUpdate {
   address?: string | null;
 }
 
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
-}
-
 function authHeaders(idToken: string): HeadersInit {
   return {
     Authorization: `Bearer ${idToken}`
@@ -65,7 +59,7 @@ export async function fetchPendingApprovals(
   const response = await fetcher("/api/clinic/join-requests", {
     headers: authHeaders(idToken)
   });
-  const payload = await parseJson<PendingApprovalsResponse>(response, "Unable to load pending approvals.");
+  const payload = await parseJsonOrThrow<PendingApprovalsResponse>(response, "Unable to load pending approvals.");
 
   return payload.pending;
 }
@@ -78,7 +72,7 @@ export async function fetchClinicAdminSnapshot(
     headers: authHeaders(idToken)
   });
 
-  return parseJson<ClinicAdminSnapshot>(response, "Unable to load hospital admin details.");
+  return parseJsonOrThrow<ClinicAdminSnapshot>(response, "Unable to load hospital admin details.");
 }
 
 export async function updateClinicProfile(
@@ -94,7 +88,7 @@ export async function updateClinicProfile(
     },
     body: JSON.stringify(input)
   });
-  const payload = await parseJson<{ clinic: ClinicProfile }>(response, "Unable to update hospital profile.");
+  const payload = await parseJsonOrThrow<{ clinic: ClinicProfile }>(response, "Unable to update hospital profile.");
 
   return payload.clinic;
 }
@@ -109,7 +103,7 @@ export async function approvePendingDoctor(
     headers: authHeaders(idToken)
   });
 
-  await parseJson<{ ok: true }>(response, "Unable to approve doctor.");
+  await parseJsonOrThrow<{ ok: true }>(response, "Unable to approve doctor.");
 }
 
 export async function rejectPendingDoctor(
@@ -127,5 +121,5 @@ export async function rejectPendingDoctor(
     body: JSON.stringify({ reason })
   });
 
-  await parseJson<{ ok: true }>(response, "Unable to reject doctor.");
+  await parseJsonOrThrow<{ ok: true }>(response, "Unable to reject doctor.");
 }

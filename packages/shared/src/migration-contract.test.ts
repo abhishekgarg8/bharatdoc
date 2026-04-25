@@ -32,6 +32,13 @@ const transcriptionAttemptsMigration = readFileSync(
   ),
   "utf8",
 );
+const atomicOnboardingRpcMigration = readFileSync(
+  resolve(
+    dirname,
+    "../../../supabase/migrations/202604250004_atomic_onboarding_rpcs.sql",
+  ),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -126,6 +133,27 @@ describe("initial Supabase migration contract", () => {
     );
     expect(hardenedReviewRpcMigration).toContain(
       "grant execute on function public.review_clinic_join_request(uuid, uuid, uuid, text, text) to service_role",
+    );
+  });
+
+  it("adds atomic onboarding RPCs for owner and join-request creation", () => {
+    expect(atomicOnboardingRpcMigration).toContain(
+      "public.create_owner_account",
+    );
+    expect(atomicOnboardingRpcMigration).toContain(
+      "public.create_doctor_join_request",
+    );
+    expect(atomicOnboardingRpcMigration).toContain(
+      "pg_advisory_xact_lock",
+    );
+    expect(atomicOnboardingRpcMigration).toContain(
+      "'existing_doctor'",
+    );
+    expect(atomicOnboardingRpcMigration).toContain(
+      "grant execute on function public.create_owner_account(text, text, text, text, text, text, text, text, text) to service_role",
+    );
+    expect(atomicOnboardingRpcMigration).toContain(
+      "grant execute on function public.create_doctor_join_request(text, text, text, text, text, uuid) to service_role",
     );
   });
 });

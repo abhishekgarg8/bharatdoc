@@ -1,4 +1,5 @@
 import type { TranscriptionLanguage } from "@bharatdoc/shared";
+import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface DoctorPreferences {
   custom_prompt: string | null;
@@ -14,14 +15,6 @@ export interface DoctorPreferencesUpdate {
   transcription_lang?: TranscriptionLanguage;
 }
 
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
-}
-
 function authHeaders(idToken: string): HeadersInit {
   return {
     Authorization: `Bearer ${idToken}`
@@ -35,7 +28,7 @@ export async function fetchDoctorPreferences(
   const response = await fetcher("/api/settings/preferences", {
     headers: authHeaders(idToken)
   });
-  const payload = await parseJson<DoctorPreferencesResponse>(response, "Unable to load settings preferences.");
+  const payload = await parseJsonOrThrow<DoctorPreferencesResponse>(response, "Unable to load settings preferences.");
 
   return payload.preferences;
 }
@@ -53,7 +46,7 @@ export async function updateDoctorPreferences(
     },
     body: JSON.stringify(input)
   });
-  const payload = await parseJson<DoctorPreferencesResponse>(response, "Unable to save settings preferences.");
+  const payload = await parseJsonOrThrow<DoctorPreferencesResponse>(response, "Unable to save settings preferences.");
 
   return payload.preferences;
 }

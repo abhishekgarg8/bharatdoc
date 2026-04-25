@@ -1,6 +1,10 @@
 import { AccessError } from "@bharatdoc/shared";
-import { describe, expect, it } from "vitest";
-import { AppError, toAppError } from "@/lib/server/errors";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppError, errorResponse, toAppError } from "@/lib/server/errors";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("server error mapping", () => {
   it("keeps explicit app errors unchanged", () => {
@@ -16,6 +20,41 @@ describe("server error mapping", () => {
       status: 403,
       code: "ACCOUNT_INACTIVE",
       message: "Doctor account is not active."
+    });
+  });
+
+  it("sanitizes unexpected error messages in API responses", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = errorResponse(new Error("Supabase service role secret leaked"));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toMatchObject({
+      code: "INTERNAL_ERROR",
+      message: "Internal server error."
+    });
+    expect(body.error.message).not.toContain("service role");
+    expect(body.error.request_id).toEqual(expect.any(String));
+    expect(console.error).toHaveBeenCalledWith(
+      "api.internal_error",
+      expect.objectContaining({
+        request_id: body.error.request_id,
+        error_message: "Supabase service role secret leaked"
+      })
+    );
+  });
+
+  it("keeps expected app error responses user-readable", async () => {
+    const response = errorResponse(new AppError(404, "Hospital was not found.", "CLINIC_NOT_FOUND"));
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({
+      error: {
+        code: "CLINIC_NOT_FOUND",
+        message: "Hospital was not found."
+      }
     });
   });
 });

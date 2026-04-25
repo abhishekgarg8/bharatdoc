@@ -15,6 +15,13 @@ export interface PendingJoinRequest {
   status: "pending" | "approved" | "rejected";
 }
 
+export class ExistingDoctorAccountError extends Error {
+  constructor(public readonly doctor: Doctor) {
+    super("Doctor account already exists.");
+    this.name = "ExistingDoctorAccountError";
+  }
+}
+
 export interface OnboardingRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   listHospitals(): Promise<Clinic[]>;
@@ -123,13 +130,22 @@ export async function registerDoctorAccount(
 
   if (registrationInput.mode === "create_hospital" || registrationInput.mode === "create_clinic") {
     const hospital = "hospital" in registrationInput ? registrationInput.hospital : registrationInput.clinic;
-    const result = await repository.createOwner({
-      authUid: user.uid,
-      phone: user.phoneNumber,
-      profile: registrationInput.profile,
-      hospital,
-      clinicCode: generateClinicCode()
-    });
+    const result = await createAccountOrReturnExisting(
+      () =>
+        repository.createOwner({
+          authUid: user.uid,
+          phone: user.phoneNumber,
+          profile: registrationInput.profile,
+          hospital,
+          clinicCode: generateClinicCode()
+        }),
+      repository,
+      user.uid
+    );
+
+    if ("existingDoctor" in result) {
+      return existingAccountResult(result.existingDoctor);
+    }
 
     return {
       status: "active",
@@ -147,16 +163,76 @@ export async function registerDoctorAccount(
     throw new AppError(404, "Hospital was not found.", "CLINIC_NOT_FOUND");
   }
 
-  const result = await repository.createDoctorJoinRequest({
-    authUid: user.uid,
-    phone: user.phoneNumber,
-    profile: registrationInput.profile,
-    clinic
-  });
+  const result = await createAccountOrReturnExisting(
+    () =>
+      repository.createDoctorJoinRequest({
+        authUid: user.uid,
+        phone: user.phoneNumber,
+        profile: registrationInput.profile,
+        clinic
+      }),
+    repository,
+    user.uid
+  );
+
+  if ("existingDoctor" in result) {
+    return existingAccountResult(result.existingDoctor);
+  }
 
   return {
     status: "pending_approval",
     role: "doctor",
     ...result
   };
+}
+
+function existingAccountResult(doctor: Doctor): Extract<RegistrationResult, { status: "existing_account" }> {
+  return {
+    status: "existing_account",
+    role: doctor.role,
+    account_status: doctor.account_status,
+    doctor
+  };
+}
+
+async function createAccountOrReturnExisting<T>(
+  create: () => Promise<T>,
+  repository: Pick<OnboardingRepository, "findDoctorByAuthUid">,
+  authUid: string
+): Promise<T | { existingDoctor: Doctor }> {
+  try {
+    return await create();
+  } catch (error) {
+    if (error instanceof ExistingDoctorAccountError) {
+      return { existingDoctor: error.doctor };
+    }
+
+    if (isDuplicateDoctorAuthError(error)) {
+      const existingDoctor = await repository.findDoctorByAuthUid(authUid);
+
+      if (existingDoctor) {
+        return { existingDoctor };
+      }
+    }
+
+    throw error;
+  }
+}
+
+function isDuplicateDoctorAuthError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+  const fields = [candidate.message, candidate.details, candidate.hint]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ");
+
+  return candidate.code === "23505" && fields.includes("doctors") && fields.includes("firebase_uid");
 }

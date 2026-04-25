@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardScreen } from "@/components/dashboard-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import {
   demoDashboardRecords,
@@ -79,7 +80,12 @@ export function DashboardPageClient({
           setPendingApprovalsCount(snapshot.pendingApprovalsCount);
           setRecords(snapshot.records);
         }
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted) {
           if (allowDemoFallback) {
             setClinicName("Sunrise Hospital, Pune");

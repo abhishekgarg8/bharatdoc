@@ -8,6 +8,7 @@ import {
   type SettingsDoctorProfile
 } from "@/components/settings/settings-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import {
@@ -137,7 +138,12 @@ export function SettingsPageClient({
           setActiveDoctors(toSettingsActiveDoctors(snapshot.activeDoctors));
           setPendingApprovals(snapshot.pendingApprovals);
         }
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted) {
           if (allowDemoFallback) {
             setDoctor(null);

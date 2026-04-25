@@ -34,20 +34,30 @@ export function toAppError(error: unknown): AppError {
   }
 
   if (error instanceof Error) {
-    return new AppError(500, error.message, "INTERNAL_ERROR");
+    return new AppError(500, "Internal server error.", "INTERNAL_ERROR");
   }
 
-  return new AppError(500, "Unexpected server error.", "INTERNAL_ERROR");
+  return new AppError(500, "Internal server error.", "INTERNAL_ERROR");
 }
 
 export function errorResponse(error: unknown): Response {
   const appError = toAppError(error);
+  const requestId = appError.status >= 500 && appError.code === "INTERNAL_ERROR" ? crypto.randomUUID() : null;
+
+  if (requestId) {
+    console.error("api.internal_error", {
+      request_id: requestId,
+      error_name: error instanceof Error ? error.name : typeof error,
+      error_message: error instanceof Error ? error.message : String(error)
+    });
+  }
 
   return Response.json(
     {
       error: {
         code: appError.code,
-        message: appError.message
+        message: appError.message,
+        ...(requestId ? { request_id: requestId } : {})
       }
     },
     { status: appError.status }

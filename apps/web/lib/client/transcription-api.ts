@@ -1,16 +1,10 @@
+import { parseJsonOrThrow } from "@/lib/client/api-error";
+
 export interface WorkerTranscriptionResponse {
   recording_id: string;
   transcript: string;
   audio_storage_path: string;
   status: "transcribed";
-}
-
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
 }
 
 function workerTranscriptionUrl(): string {
@@ -60,5 +54,5 @@ export async function transcribeRecordingAudio(
     body
   });
 
-  return parseJson<WorkerTranscriptionResponse>(response, "Unable to transcribe recording.");
+  return parseJsonOrThrow<WorkerTranscriptionResponse>(response, "Unable to transcribe recording.");
 }

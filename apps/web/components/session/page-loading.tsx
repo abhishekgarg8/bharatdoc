@@ -17,12 +17,20 @@ export function PageLoading({ label = "Loading" }: { label?: string }) {
 export function PageError({
   title = "Unable to load",
   message,
-  homeHref = "/dashboard"
+  homeHref = "/dashboard",
+  actionHref,
+  actionLabel
 }: {
   title?: string;
   message: string;
   homeHref?: string;
+  actionHref?: string;
+  actionLabel?: string;
 }) {
+  const needsSignIn = /\bsign in\b/i.test(message);
+  const primaryHref = actionHref ?? (needsSignIn ? "/onboarding" : homeHref);
+  const primaryLabel = actionLabel ?? (needsSignIn ? "Sign in again" : "Dashboard");
+
   function goBack() {
     if (typeof window === "undefined") {
       return;
@@ -70,10 +78,10 @@ export function PageError({
             </button>
             <Link
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-terracotta px-3 py-3 font-body text-sm font-bold text-white shadow-warm transition active:scale-[0.99]"
-              href={homeHref}
+              href={primaryHref}
             >
               <Home className="h-4 w-4" />
-              Dashboard
+              {primaryLabel}
             </Link>
           </div>
         </section>

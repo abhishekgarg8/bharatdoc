@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PromptEditorScreen } from "@/components/settings/prompt-editor-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
@@ -73,7 +74,12 @@ export function PromptEditorPageClient({
         if (isMounted) {
           setPreferences(nextPreferences);
         }
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted && !allowDemoFallback) {
           setError("Unable to load summary prompt. Please sign in again.");
         }

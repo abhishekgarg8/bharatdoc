@@ -1,4 +1,5 @@
 import type { Doctor, RecordingStatus } from "@bharatdoc/shared";
+import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface DashboardRecord {
   id: string;
@@ -199,21 +200,13 @@ export function mergeDashboardRecords(
   return merged.sort((left, right) => timestamp(right) - timestamp(left));
 }
 
-async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {
-  if (!response.ok) {
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as T;
-}
-
 export async function fetchDashboardRecords(idToken: string, fetcher: typeof fetch = fetch): Promise<DashboardRecord[]> {
   const response = await fetcher("/api/recordings", {
     headers: {
       Authorization: `Bearer ${idToken}`
     }
   });
-  const payload = await parseJson<DashboardRecordListResponse>(response, "Unable to load recent recordings.");
+  const payload = await parseJsonOrThrow<DashboardRecordListResponse>(response, "Unable to load recent recordings.");
 
   return payload.records.map((record) => mapApiRecordingToDashboardRecord(record));
 }
@@ -227,7 +220,7 @@ export async function fetchDashboardSnapshot(
       Authorization: `Bearer ${idToken}`
     }
   });
-  const payload = await parseJson<DashboardSnapshotResponse>(response, "Unable to load dashboard.");
+  const payload = await parseJsonOrThrow<DashboardSnapshotResponse>(response, "Unable to load dashboard.");
 
   return {
     doctor: payload.doctor,
@@ -250,7 +243,7 @@ export async function createRecordingMetadata(
     },
     body: JSON.stringify(input)
   });
-  const payload = await parseJson<CreateRecordingMetadataResponse>(response, "Unable to save recording metadata.");
+  const payload = await parseJsonOrThrow<CreateRecordingMetadataResponse>(response, "Unable to save recording metadata.");
 
   return mapApiRecordingToDashboardRecord(payload.record);
 }
@@ -266,7 +259,7 @@ export async function searchPatientRecords(
       Authorization: `Bearer ${idToken}`
     }
   });
-  const payload = await parseJson<DashboardRecordListResponse>(response, "Unable to search patient records.");
+  const payload = await parseJsonOrThrow<DashboardRecordListResponse>(response, "Unable to search patient records.");
 
   return payload.records.map((record) => mapApiRecordingToDashboardRecord(record));
 }

@@ -139,6 +139,20 @@ describe("PendingApprovalPageClient", () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
   });
 
+  it("signs out and redirects to onboarding when pending-status auth is expired", async () => {
+    const authClient = createAuthClient("expired-token");
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async () =>
+      Response.json({ error: { code: "AUTH_REQUIRED", message: "Supabase token verification failed." } }, { status: 401 })
+    ) as unknown as typeof fetch;
+
+    render(<PendingApprovalPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+
+    await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
+    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(screen.queryByText("Unable to load approval status. Please sign in again.")).not.toBeInTheDocument();
+  });
+
   it("allows demo fallback sign-out without a Supabase browser client", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),

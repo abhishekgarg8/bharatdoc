@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { TranscriptSummaryScreen } from "@/components/recordings/transcript-summary-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
+import { recoverExpiredSession } from "@/lib/client/api-error";
 import {
   findDemoRecordingDetail,
   type RecordingDetailRecord
@@ -92,7 +93,12 @@ export function RecordingDetailPageClient({
         if (isMounted) {
           setRecording(detail);
         }
-      } catch {
+      } catch (loadError) {
+        if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          didRedirect = true;
+          return;
+        }
+
         if (isMounted) {
           setError("Unable to load recording.");
         }
