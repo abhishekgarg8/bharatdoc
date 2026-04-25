@@ -1,19 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Building2, Check, FileText, Loader2, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Check, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 import { normalizeEmail, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { createSupabaseAuthClient, authErrorMessage, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
-import { destinationForRegistration, lookupClinic, registerAccount, type ClinicLookupResponse } from "@/lib/client/onboarding-api";
+import { destinationForRegistration, fetchHospitals, registerAccount, type HospitalOption } from "@/lib/client/onboarding-api";
 import { destinationForDoctorStatus, fetchCurrentDoctor } from "@/lib/client/session";
 
-type OnboardingStep = "credentials" | "profile" | "clinic";
+type OnboardingStep = "credentials" | "profile" | "hospital";
 type AuthMode = "signup" | "login";
-type ClinicMode = "join_clinic" | "create_clinic";
+type HospitalMode = "join_hospital" | "create_hospital";
 
 interface OnboardingScreenProps {
   authClient?: AuthClient;
@@ -29,6 +29,9 @@ function createDemoAuthClient(): AuthClient {
     async signInWithPassword(): Promise<string> {
       return "demo-id-token";
     },
+    async resetPasswordForEmail(): Promise<void> {
+      return undefined;
+    },
     async getCurrentIdToken(): Promise<string | null> {
       return "demo-id-token";
     },
@@ -43,15 +46,22 @@ const demoDefaults = {
   password: "bharatdoc123",
   profile: {
     name: "Dr. Aparna Iyer",
-    specialization: "General Physician",
-    medicalRegNo: ""
+    specialization: "General Physician"
   },
-  clinicCode: "MED42X",
-  clinic: {
-    name: "Sunrise Clinic",
+  hospitalId: "demo-hospital",
+  hospital: {
+    name: "Sunrise Hospital",
     address: "24 Baner Road, Pune 411045"
   }
 };
+
+const demoHospitals: HospitalOption[] = [
+  {
+    hospital_id: demoDefaults.hospitalId,
+    hospital_name: demoDefaults.hospital.name,
+    hospital_address: demoDefaults.hospital.address
+  }
+];
 
 export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
   const queryDemoMode = useExplicitDemoMode();
@@ -65,18 +75,63 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState(effectiveDemoMode ? demoDefaults.email : "");
   const [password, setPassword] = useState(effectiveDemoMode ? demoDefaults.password : "");
   const [idToken, setIdToken] = useState<string | null>(null);
-  const [profile, setProfile] = useState(effectiveDemoMode ? demoDefaults.profile : { name: "", specialization: "", medicalRegNo: "" });
-  const [clinicMode, setClinicMode] = useState<ClinicMode>("join_clinic");
-  const [clinicCode, setClinicCode] = useState(effectiveDemoMode ? demoDefaults.clinicCode : "");
-  const [clinicLookup, setClinicLookup] = useState<ClinicLookupResponse | null>(null);
-  const [clinic, setClinic] = useState(effectiveDemoMode ? demoDefaults.clinic : { name: "", address: "" });
+  const [profile, setProfile] = useState(effectiveDemoMode ? demoDefaults.profile : { name: "", specialization: "" });
+  const [hospitalMode, setHospitalMode] = useState<HospitalMode>("join_hospital");
+  const [hospitals, setHospitals] = useState<HospitalOption[]>(effectiveDemoMode ? demoHospitals : []);
+  const [selectedHospitalId, setSelectedHospitalId] = useState(effectiveDemoMode ? demoDefaults.hospitalId : "");
+  const [hospitalLoadAttempted, setHospitalLoadAttempted] = useState(effectiveDemoMode);
+  const [hospital, setHospital] = useState(effectiveDemoMode ? demoDefaults.hospital : { name: "", address: "" });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadHospitals() {
+      if (effectiveDemoMode || step !== "hospital" || hospitalMode !== "join_hospital" || hospitalLoadAttempted) {
+        return;
+      }
+
+      setIsBusy(true);
+      setError(null);
+
+      try {
+        const options = await fetchHospitals();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setHospitals(options);
+        setSelectedHospitalId((current) => current || options[0]?.hospital_id || "");
+        setHospitalLoadAttempted(true);
+      } catch {
+        if (isMounted) {
+          setError("Unable to load hospitals. Try again.");
+          setHospitalLoadAttempted(true);
+        }
+      } finally {
+        if (isMounted) {
+          setIsBusy(false);
+        }
+      }
+    }
+
+    void loadHospitals();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveDemoMode, hospitalLoadAttempted, hospitalMode, step]);
 
   async function handleCredentials() {
     setIsBusy(true);
     setError(null);
+    setResetMessage(null);
 
     try {
       const credentials = {
@@ -110,6 +165,43 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   function handleAuthModeChange(nextMode: AuthMode) {
     setAuthMode(nextMode);
     setError(null);
+    setResetMessage(null);
+  }
+
+  async function handleForgotPassword() {
+    setError(null);
+    setResetMessage(null);
+
+    if (!email.trim()) {
+      setError("Enter your email to reset your password.");
+      return;
+    }
+
+    let normalizedEmail: string;
+
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch {
+      setError("Enter a valid email to reset your password.");
+      return;
+    }
+
+    if (!auth.resetPasswordForEmail) {
+      setError("Password reset is unavailable. Try again later.");
+      return;
+    }
+
+    setIsResettingPassword(true);
+
+    try {
+      await auth.resetPasswordForEmail(normalizedEmail);
+      setEmail(normalizedEmail);
+      setResetMessage("Check your email for a reset link.");
+    } catch (resetError) {
+      setError(authErrorMessage(resetError));
+    } finally {
+      setIsResettingPassword(false);
+    }
   }
 
   function handleProfileContinue() {
@@ -120,29 +212,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
     }
 
     setError(null);
-    setStep("clinic");
-  }
-
-  async function handleLookupClinic() {
-    setIsBusy(true);
-    setError(null);
-
-    try {
-      setClinicLookup(
-        effectiveDemoMode
-          ? {
-              clinic_id: "demo-clinic",
-              clinic_name: "Sunrise Clinic",
-              clinic_address: "24 Baner Road, Pune"
-            }
-          : await lookupClinic(clinicCode)
-      );
-    } catch (lookupError) {
-      setClinicLookup(null);
-      setError(lookupError instanceof Error ? lookupError.message : "Clinic lookup failed.");
-    } finally {
-      setIsBusy(false);
-    }
+    setStep("hospital");
   }
 
   async function handleRegister() {
@@ -155,33 +225,35 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
     setError(null);
 
     const input: RegistrationInput =
-      clinicMode === "join_clinic"
+      hospitalMode === "join_hospital"
         ? {
-            mode: "join_clinic",
+            mode: "join_hospital",
             profile: {
               name: profile.name,
-              specialization: profile.specialization,
-              medical_reg_no: profile.medicalRegNo || undefined
+              specialization: profile.specialization
             },
-            clinic_code: clinicCode.toUpperCase()
+            hospital_id: selectedHospitalId
           }
         : {
-            mode: "create_clinic",
+            mode: "create_hospital",
             profile: {
               name: profile.name,
-              specialization: profile.specialization,
-              medical_reg_no: profile.medicalRegNo || undefined
+              specialization: profile.specialization
             },
-            clinic: {
-              name: clinic.name,
-              address: clinic.address || undefined
+            hospital: {
+              name: hospital.name,
+              address: hospital.address || undefined
             }
           };
 
     try {
       if (effectiveDemoMode) {
-        navigate(clinicMode === "join_clinic" ? "/pending-approval?demo=1" : "/dashboard?demo=1");
+        navigate(hospitalMode === "join_hospital" ? "/pending-approval?demo=1" : "/dashboard?demo=1");
       } else {
+        if (hospitalMode === "join_hospital" && !selectedHospitalId) {
+          throw new Error("Select a hospital to join.");
+        }
+
         const result = await registerAccount(idToken, input);
         navigate(destinationForRegistration(result));
       }
@@ -205,7 +277,16 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
         </div>
 
         <StepIndicator step={step} />
-        {error ? <div className="mt-4 rounded-lg border border-stamp/20 bg-stamp/10 px-3 py-2 font-body text-xs text-stamp">{error}</div> : null}
+        {error ? (
+          <div className="mt-4 rounded-lg border border-stamp/20 bg-stamp/10 px-3 py-2 font-body text-xs text-stamp" role="alert">
+            {error}
+          </div>
+        ) : null}
+        {resetMessage ? (
+          <div className="mt-4 rounded-lg border border-sage/25 bg-sage/10 px-3 py-2 font-body text-xs text-sage" role="status">
+            {resetMessage}
+          </div>
+        ) : null}
 
         {step === "credentials" ? (
           <Panel title={authMode === "signup" ? "Create login" : "Sign in"}>
@@ -221,9 +302,12 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               Email
             </label>
             <input
-              className="w-full rounded-[10px] border-[1.5px] border-terracotta bg-paper px-4 py-3 font-body text-base font-semibold text-ink outline-none"
+              className="w-full rounded-[10px] border border-rule bg-paper px-4 py-3 font-body text-base font-semibold text-ink outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setResetMessage(null);
+              }}
               autoCapitalize="none"
               autoComplete="email"
               inputMode="email"
@@ -232,15 +316,36 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
             <label className="mb-1.5 mt-4 block font-body text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
               Password
             </label>
-            <input
-              className="w-full rounded-[10px] border border-rule bg-paper-deep px-4 py-3 font-body text-sm font-semibold text-ink outline-none"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
-              aria-label="Password"
-            />
-            <p className="mt-2 font-body text-[11px] text-ink-muted">Use at least 8 characters.</p>
+            <div className="relative">
+              <input
+                className="w-full rounded-[10px] border border-rule bg-paper-deep px-4 py-3 pr-12 font-body text-sm font-semibold text-ink outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type={showPassword ? "text" : "password"}
+                autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                aria-label="Password"
+              />
+              <button
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-ink-muted transition hover:bg-paper"
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((current) => !current)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {authMode === "signup" ? (
+              <p className="mt-2 font-body text-[11px] text-ink-muted">Use at least 8 characters.</p>
+            ) : (
+              <button
+                className="mt-2 font-body text-[11px] font-bold text-terracotta underline-offset-2 hover:underline disabled:opacity-60"
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResettingPassword}
+              >
+                {isResettingPassword ? "Sending reset link..." : "Forgot password?"}
+              </button>
+            )}
             <BharatButton className="mt-5 w-full" onClick={handleCredentials} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {authMode === "signup" ? "Create account" : "Log in"}
@@ -256,53 +361,66 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               value={profile.specialization}
               onChange={(value) => setProfile((current) => ({ ...current, specialization: value }))}
             />
-            <TextField
-              label="Medical registration no."
-              value={profile.medicalRegNo}
-              placeholder="Optional"
-              onChange={(value) => setProfile((current) => ({ ...current, medicalRegNo: value }))}
-            />
             <BharatButton className="mt-3 w-full" onClick={handleProfileContinue}>
               Continue
             </BharatButton>
           </Panel>
         ) : null}
 
-        {step === "clinic" ? (
-          <Panel title="Your clinic" icon={<Building2 className="h-4 w-4 text-terracotta" />}>
+        {step === "hospital" ? (
+          <Panel title="Your hospital" icon={<Building2 className="h-4 w-4 text-terracotta" />}>
             <div className="mb-4 grid grid-cols-2 gap-2">
-              <ModeButton active={clinicMode === "join_clinic"} onClick={() => setClinicMode("join_clinic")}>
-                Join clinic
+              <ModeButton active={hospitalMode === "join_hospital"} onClick={() => setHospitalMode("join_hospital")}>
+                Join hospital
               </ModeButton>
-              <ModeButton active={clinicMode === "create_clinic"} onClick={() => setClinicMode("create_clinic")}>
-                Create clinic
+              <ModeButton active={hospitalMode === "create_hospital"} onClick={() => setHospitalMode("create_hospital")}>
+                Create hospital
               </ModeButton>
             </div>
 
-            {clinicMode === "join_clinic" ? (
+            {hospitalMode === "join_hospital" ? (
               <div>
-                <TextField label="Clinic code" value={clinicCode} onChange={(value) => setClinicCode(value.toUpperCase())} mono />
-                <BharatButton variant="ghost" className="mt-1 w-full" onClick={handleLookupClinic} disabled={isBusy}>
-                  Check clinic code
-                </BharatButton>
-                {clinicLookup ? (
+                <label className="mb-3 block">
+                  <span className="mb-1 block font-body text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+                    Hospital
+                  </span>
+                  <select
+                    className="w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-body text-sm font-semibold text-ink outline-none"
+                    value={selectedHospitalId}
+                    onChange={(event) => setSelectedHospitalId(event.target.value)}
+                    aria-label="Hospital"
+                    disabled={isBusy || hospitals.length === 0}
+                  >
+                    {hospitals.length === 0 ? <option value="">No hospitals available</option> : null}
+                    {hospitals.map((option) => (
+                      <option key={option.hospital_id} value={option.hospital_id}>
+                        {option.hospital_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {hospitals.find((option) => option.hospital_id === selectedHospitalId) ? (
                   <div className="mt-3 rounded-lg border border-rule bg-paper-deep px-3 py-2">
                     <div className="flex items-center gap-1.5 font-body text-[10px] font-bold uppercase tracking-[0.12em] text-sage">
                       <Check className="h-3 w-3" />
-                      Clinic found
+                      Hospital selected
                     </div>
-                    <div className="mt-1 font-display text-[22px] italic leading-none text-ink">{clinicLookup.clinic_name}</div>
-                    <div className="mt-1 font-body text-[11px] text-ink-muted">{clinicLookup.clinic_address ?? "Address not added"}</div>
+                    <div className="mt-1 font-display text-[22px] italic leading-none text-ink">
+                      {hospitals.find((option) => option.hospital_id === selectedHospitalId)?.hospital_name}
+                    </div>
+                    <div className="mt-1 font-body text-[11px] text-ink-muted">
+                      {hospitals.find((option) => option.hospital_id === selectedHospitalId)?.hospital_address ?? "Address not added"}
+                    </div>
                   </div>
                 ) : null}
               </div>
             ) : (
               <div>
-                <TextField label="Clinic name" value={clinic.name} onChange={(value) => setClinic((current) => ({ ...current, name: value }))} />
+                <TextField label="Hospital name" value={hospital.name} onChange={(value) => setHospital((current) => ({ ...current, name: value }))} />
                 <TextField
                   label="Address"
-                  value={clinic.address}
-                  onChange={(value) => setClinic((current) => ({ ...current, address: value }))}
+                  value={hospital.address}
+                  onChange={(value) => setHospital((current) => ({ ...current, address: value }))}
                   placeholder="Optional"
                 />
                 <div className="mt-2 flex items-center gap-3 rounded-[14px] border border-rule bg-paper-deep p-4">
@@ -318,7 +436,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
             <BharatButton className="mt-5 w-full" onClick={handleRegister} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {clinicMode === "join_clinic" ? "Request to join" : "Create clinic & continue"}
+              {hospitalMode === "join_hospital" ? "Request to join" : "Create hospital & continue"}
             </BharatButton>
           </Panel>
         ) : null}
@@ -328,7 +446,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 }
 
 function StepIndicator({ step }: { step: OnboardingStep }) {
-  const current = ["credentials", "profile", "clinic"].indexOf(step) + 1;
+  const current = ["credentials", "profile", "hospital"].indexOf(step) + 1;
 
   return (
     <div className="mt-8 flex items-center gap-2">

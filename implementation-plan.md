@@ -95,6 +95,9 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] P2-1: Support clinic-scoped partial Patient ID search while preserving clinic isolation.
 - [x] P2-2: Replace pending approval hardcoded clinic details with authenticated live clinic, owner, and request data.
 - [x] P3-1: Replace the fake recorder's mislabeled text blob with a valid WAV payload and matching upload extension.
+- [x] Brand the Supabase signup confirmation email subject and HTML template as BharatDoc.
+- [x] Remove Medical registration no. from shared schemas, onboarding UI, backend writes/selects, database migrations, PRD/design references, and tests.
+- [x] Fix UI audit Critical issues: forgot password, password visibility, access-rejected actions, and dashboard settings navigation.
 - [ ] Config follow-up: replace the local `.env` anon key with the anon key for Supabase project `jtezgoegatwbvdqeogiy` once the correct public anon key is available.
 
 ### 10. Production latency remediation

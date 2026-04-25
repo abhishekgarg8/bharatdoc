@@ -12,7 +12,6 @@ const activeDoctor: Doctor = {
   account_status: "active",
   name: "Dr. Aparna Iyer",
   specialization: "General Physician",
-  medical_reg_no: null,
   phone: "+919876543210",
   profile_photo_path: null,
   custom_prompt: "Custom note:\n{{transcript}}",

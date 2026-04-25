@@ -1,6 +1,6 @@
 import { MAX_AUDIO_BYTES_PHASE_1, requirePatientId, type Recording } from "@bharatdoc/shared";
-import { HttpError } from "./http-errors.js";
-import type { AuthContext, WorkerDependencies } from "./types.js";
+import { HttpError, sanitizeErrorForTelemetry } from "./http-errors.js";
+import type { AuthContext, TranscriptionAttemptStage, WorkerDependencies } from "./types.js";
 
 export interface TranscriptionFileInput {
   buffer: Buffer;
@@ -12,6 +12,7 @@ export interface TranscriptionFileInput {
 export interface TranscribeRecordingInput {
   recordingId?: string;
   audio?: TranscriptionFileInput;
+  requestId?: string;
 }
 
 export interface TranscribeRecordingResponse {
@@ -25,7 +26,7 @@ export const MAX_TRANSCRIPTION_AUDIO_BYTES = MAX_AUDIO_BYTES_PHASE_1;
 
 function requireClinicId(clinicId: string | null): string {
   if (!clinicId) {
-    throw new HttpError(403, "Doctor must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   return clinicId;
@@ -84,48 +85,112 @@ function requireTranscriptionPatientId(recording: Recording): void {
 export async function transcribeRecording(
   auth: AuthContext,
   input: TranscribeRecordingInput,
-  deps: Pick<WorkerDependencies, "recordings" | "audioStorage" | "transcriptionClient">
+  deps: Pick<WorkerDependencies, "recordings" | "audioStorage" | "transcriptionClient" | "transcriptionAttempts" | "logger">
 ): Promise<TranscribeRecordingResponse> {
-  const clinicId = requireClinicId(auth.doctor.clinic_id);
-  const recordingId = requireRecordingId(input.recordingId);
-  const audio = requireAudio(input.audio);
-  const recording = requireTranscribableRecording(
-    await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
-  );
-  requireTranscriptionPatientId(recording);
+  let stage: TranscriptionAttemptStage = "validate_input";
+  let recordingId: string | null = input.recordingId?.trim() || null;
+  let audioStoragePath: string | null = null;
 
-  const audioStoragePath = await deps.audioStorage.uploadRecordingAudio({
-    audio: audio.buffer,
-    mimeType: audio.mimetype,
-    clinicId,
-    doctorId: auth.doctor.id,
-    recordingId: recording.id,
-    filename: audio.originalname
-  });
-  const transcript = (
-    await deps.transcriptionClient.transcribe({
+  try {
+    const clinicId = requireClinicId(auth.doctor.clinic_id);
+    const requiredRecordingId = requireRecordingId(input.recordingId);
+    recordingId = requiredRecordingId;
+    const audio = requireAudio(input.audio);
+
+    stage = "load_recording";
+    const recording = requireTranscribableRecording(
+      await deps.recordings.findRecordingForDoctor(requiredRecordingId, auth.doctor.id)
+    );
+
+    stage = "validate_recording";
+    requireTranscriptionPatientId(recording);
+
+    stage = "upload_audio";
+    audioStoragePath = await deps.audioStorage.uploadRecordingAudio({
       audio: audio.buffer,
       mimeType: audio.mimetype,
-      filename: audio.originalname,
-      language: auth.doctor.transcription_lang
-    })
-  ).trim();
+      clinicId,
+      doctorId: auth.doctor.id,
+      recordingId: recording.id,
+      filename: audio.originalname
+    });
+    deps.logger?.info("transcription.audio_uploaded", {
+      request_id: input.requestId,
+      recording_id: recording.id,
+      doctor_id: auth.doctor.id,
+      clinic_id: clinicId,
+      stage,
+      audio_size_bytes: audio.size,
+      audio_mime_type: audio.mimetype,
+      audio_storage_path: audioStoragePath
+    });
 
-  if (!transcript) {
-    throw new HttpError(502, "Transcription provider returned an empty response.", "TRANSCRIPT_EMPTY");
+    stage = "transcribe_audio";
+    const transcript = (
+      await deps.transcriptionClient.transcribe({
+        audio: audio.buffer,
+        mimeType: audio.mimetype,
+        filename: audio.originalname,
+        language: auth.doctor.transcription_lang
+      })
+    ).trim();
+
+    if (!transcript) {
+      throw new HttpError(502, "Transcription provider returned an empty response.", "TRANSCRIPT_EMPTY");
+    }
+
+    stage = "save_transcript";
+    await deps.recordings.markRecordingTranscribed({
+      recordingId: recording.id,
+      doctorId: auth.doctor.id,
+      transcript,
+      audioStoragePath
+    });
+
+    return {
+      recording_id: recording.id,
+      transcript,
+      audio_storage_path: audioStoragePath,
+      status: "transcribed"
+    };
+  } catch (error) {
+    const sanitizedError = sanitizeErrorForTelemetry(error);
+
+    deps.logger?.error("transcription.pipeline.failed", {
+      request_id: input.requestId,
+      recording_id: recordingId,
+      doctor_id: auth.doctor.id,
+      clinic_id: auth.doctor.clinic_id,
+      stage,
+      audio_storage_path: audioStoragePath,
+      ...sanitizedError
+    });
+
+    if (input.requestId && recordingId && deps.transcriptionAttempts) {
+      try {
+        await deps.transcriptionAttempts.recordFailedAttempt({
+          recordingId,
+          doctorId: auth.doctor.id,
+          clinicId: auth.doctor.clinic_id,
+          requestId: input.requestId,
+          stage,
+          errorCode: sanitizedError.error_code,
+          errorMessage: sanitizedError.error_message,
+          errorStatus: sanitizedError.error_status,
+          audioStoragePath
+        });
+      } catch (attemptError) {
+        deps.logger?.error("transcription.attempt_persist_failed", {
+          request_id: input.requestId,
+          recording_id: recordingId,
+          doctor_id: auth.doctor.id,
+          clinic_id: auth.doctor.clinic_id,
+          stage,
+          ...sanitizeErrorForTelemetry(attemptError)
+        });
+      }
+    }
+
+    throw error;
   }
-
-  await deps.recordings.markRecordingTranscribed({
-    recordingId: recording.id,
-    doctorId: auth.doctor.id,
-    transcript,
-    audioStoragePath
-  });
-
-  return {
-    recording_id: recording.id,
-    transcript,
-    audio_storage_path: audioStoragePath,
-    status: "transcribed"
-  };
 }

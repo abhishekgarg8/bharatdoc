@@ -4,7 +4,7 @@ import { SettingsPageClient } from "@/components/settings/settings-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
 
 describe("SettingsPageClient", () => {
-  it("loads authenticated owner settings and clinic admin details", async () => {
+  it("loads authenticated owner settings and hospital admin details", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
@@ -24,7 +24,6 @@ describe("SettingsPageClient", () => {
             account_status: "active",
             name: "Dr. Aparna Iyer",
             specialization: "General Physician",
-            medical_reg_no: null,
             phone: "+919876543210",
             profile_photo_path: null,
             custom_prompt: null,
@@ -38,7 +37,7 @@ describe("SettingsPageClient", () => {
         return Response.json({
           clinic: {
             id: "clinic-1",
-            name: "Sunrise Clinic",
+            name: "Sunrise Hospital",
             code: "MED42X",
             address: "24 Baner Road, Pune",
             activeDoctorsCount: 2
@@ -71,13 +70,13 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} fetcher={fetcher} />);
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
-    expect(screen.getByText("Clinic admin")).toBeInTheDocument();
-    expect(screen.getByText("MED42X")).toBeInTheDocument();
+    expect(screen.getByText("Hospital admin")).toBeInTheDocument();
+    expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
     expect(screen.getByText("No doctors waiting")).toBeInTheDocument();
     expect(screen.getByText("No pending join requests.")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: /active doctors/i })[0]!);
-    await expect(screen.findByText("Current clinic members with active BharatDoc access.")).resolves.toBeInTheDocument();
+    await expect(screen.findByText("Current hospital members with active BharatDoc access.")).resolves.toBeInTheDocument();
     expect(screen.getAllByText("Dr. Meera Shah")).toHaveLength(1);
   });
 
@@ -102,7 +101,6 @@ describe("SettingsPageClient", () => {
             account_status: "active",
             name: "Dr. Aparna Iyer",
             specialization: "General Physician",
-            medical_reg_no: null,
             phone: "+919876543210",
             profile_photo_path: null,
             custom_prompt: null,
@@ -116,7 +114,7 @@ describe("SettingsPageClient", () => {
         return Response.json({
           clinic: {
             id: "clinic-1",
-            name: "Sunrise Clinic",
+            name: "Sunrise Hospital",
             code: "MED42X",
             address: "24 Baner Road, Pune",
             activeDoctorsCount: 1
@@ -149,7 +147,7 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} demoOnMissingToken />);
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
-    expect(screen.getByText("MED42X")).toBeInTheDocument();
+    expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
   });
 
   it("allows demo fallback sign-out even without Supabase browser env", async () => {
@@ -203,7 +201,6 @@ describe("SettingsPageClient", () => {
           account_status: "rejected",
           name: "Dr. Aparna Iyer",
           specialization: "General Physician",
-          medical_reg_no: null,
           phone: "+919876543210",
           profile_photo_path: null,
           custom_prompt: null,

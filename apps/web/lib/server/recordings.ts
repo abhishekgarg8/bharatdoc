@@ -79,7 +79,7 @@ function clampLimit(limit: number | undefined, fallback: number): number {
 
 function requireClinicId(doctor: Doctor): string {
   if (!doctor.clinic_id) {
-    throw new AppError(403, "Doctor must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new AppError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   return doctor.clinic_id;

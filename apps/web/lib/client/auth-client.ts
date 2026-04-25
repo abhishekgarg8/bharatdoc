@@ -1,11 +1,12 @@
 "use client";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
+import { normalizeEmail, PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
 
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
   signInWithPassword(credentials: PasswordCredentials): Promise<string>;
+  resetPasswordForEmail?: (email: string) => Promise<void>;
   getCurrentIdToken(): Promise<string | null>;
   signOut(): Promise<void>;
 }
@@ -110,6 +111,17 @@ export function createSupabaseAuthClient(): AuthClient {
       }
 
       return data.session.access_token;
+    },
+
+    async resetPasswordForEmail(email: string): Promise<void> {
+      const parsedEmail = normalizeEmail(email);
+      const { error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(parsedEmail, {
+        redirectTo: getAuthRedirectUrl()
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
     },
 
     async getCurrentIdToken(): Promise<string | null> {

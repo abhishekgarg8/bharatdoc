@@ -8,6 +8,16 @@ export interface ClinicLookupResponse {
   clinic_address: string | null;
 }
 
+export interface HospitalOption {
+  hospital_id: string;
+  hospital_name: string;
+  hospital_address: string | null;
+}
+
+export interface HospitalListResponse {
+  hospitals: HospitalOption[];
+}
+
 export interface RegisterResponse {
   status: "active" | "pending_approval" | "existing_account";
   role: "owner" | "doctor";
@@ -27,6 +37,12 @@ async function readJsonOrThrow(response: Response): Promise<unknown> {
 export async function lookupClinic(code: string, fetcher: typeof fetch = fetch): Promise<ClinicLookupResponse> {
   const response = await fetcher(`/api/clinics/lookup?code=${encodeURIComponent(code)}`);
   return (await readJsonOrThrow(response)) as ClinicLookupResponse;
+}
+
+export async function fetchHospitals(fetcher: typeof fetch = fetch): Promise<HospitalOption[]> {
+  const response = await fetcher("/api/hospitals");
+  const payload = (await readJsonOrThrow(response)) as HospitalListResponse;
+  return payload.hospitals;
 }
 
 export async function registerAccount(

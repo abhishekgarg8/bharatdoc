@@ -18,7 +18,6 @@ create table if not exists public.doctors (
   account_status text not null,
   name text not null,
   specialization text not null,
-  medical_reg_no text,
   phone text not null,
   profile_photo_path text,
   custom_prompt text,

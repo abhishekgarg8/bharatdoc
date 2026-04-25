@@ -79,13 +79,13 @@ export async function getPendingApprovalStatusForUser(
   }
 
   if (!doctor.clinic_id) {
-    throw new AppError(403, "Pending doctor must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new AppError(403, "Pending doctor must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   const clinic = await repository.findClinicById(doctor.clinic_id);
 
   if (!clinic) {
-    throw new AppError(404, "Clinic profile was not found.", "CLINIC_NOT_FOUND");
+    throw new AppError(404, "Hospital profile was not found.", "CLINIC_NOT_FOUND");
   }
 
   const [owner, joinRequest] = await Promise.all([

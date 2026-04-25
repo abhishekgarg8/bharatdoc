@@ -13,7 +13,6 @@ const pendingDoctor: Doctor = {
   account_status: "pending_approval",
   name: "Dr. Pending",
   specialization: "General Physician",
-  medical_reg_no: null,
   phone: "+919876543210",
   profile_photo_path: null,
   custom_prompt: null,

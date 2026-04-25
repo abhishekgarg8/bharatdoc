@@ -29,7 +29,7 @@ describe("SearchScreen", () => {
     render(<SearchScreen initialRecords={records} />);
 
     expect(screen.getByRole("heading", { name: "Search" })).toBeInTheDocument();
-    expect(screen.getByText("Recent clinic records")).toBeInTheDocument();
+    expect(screen.getByText("Recent hospital records")).toBeInTheDocument();
     expect(screen.getByText("P-10481")).toBeInTheDocument();
     expect(screen.getByText("P-10470")).toBeInTheDocument();
   });
@@ -62,7 +62,7 @@ describe("SearchScreen", () => {
     });
   });
 
-  it("uses the clinic-scoped API when an id token is provided", async () => {
+  it("uses the hospital-scoped API when an id token is provided", async () => {
     const fetcher = vi.fn(async () =>
       Response.json({
         records: [
@@ -102,7 +102,7 @@ describe("SearchScreen", () => {
     expect(screen.queryByText("P-10481")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
 
-    expect(screen.getByText("Recent clinic records")).toBeInTheDocument();
+    expect(screen.getByText("Recent hospital records")).toBeInTheDocument();
     expect(screen.getByText("P-10481")).toBeInTheDocument();
     expect(screen.getByText("P-10470")).toBeInTheDocument();
   });

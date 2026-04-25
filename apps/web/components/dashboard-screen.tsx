@@ -36,7 +36,7 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 
 export function DashboardScreen({
   doctorName = "Dr. Aparna Iyer",
-  clinicName = "Sunrise Clinic, Pune",
+  clinicName = "Sunrise Hospital, Pune",
   records = demoDashboardRecords,
   localRepository,
   pendingApprovalsCount = 1,
@@ -93,9 +93,9 @@ export function DashboardScreen({
               {clinicName}
             </p>
           </div>
-          <button
+          <Link
+            href="/settings"
             className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
-            type="button"
             aria-label="Open settings"
           >
             <Settings className="h-[18px] w-[18px]" />
@@ -104,7 +104,7 @@ export function DashboardScreen({
                 {pendingApprovalsCount}
               </span>
             ) : null}
-          </button>
+          </Link>
         </header>
 
         <div className="px-5 pb-4">
@@ -116,7 +116,7 @@ export function DashboardScreen({
             <Search className="h-[18px] w-[18px] text-ink-muted" />
             <span className="flex-1 font-body text-sm text-ink-faint">Search by Patient ID</span>
             <span className="rounded border border-rule bg-paper px-1.5 py-0.5 font-mono text-[11px] text-ink-muted">
-              clinic
+              hospital
             </span>
           </Link>
         </div>

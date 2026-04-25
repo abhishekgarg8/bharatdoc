@@ -232,7 +232,6 @@ function ProfileSetupScreen() {
 
         <Field label="Full name" value="Aparna Iyer" />
         <Field label="Specialization" value="General Physician" suffix="Required"/>
-        <Field label="Medical registration no." placeholder="e.g. MCI-MH-45231" suffix="Optional"/>
         <div style={{
           marginTop: 8, padding: '10px 12px', borderRadius: 8,
           background: BD.paperDeep, border: `1px solid ${BD.rule}`,

@@ -33,7 +33,6 @@ export const DoctorSchema = z.object({
   account_status: AccountStatusSchema,
   name: z.string().min(1),
   specialization: z.string().min(1),
-  medical_reg_no: z.string().nullable(),
   phone: PhoneSchema,
   profile_photo_path: z.string().nullable(),
   custom_prompt: z.string().nullable(),
@@ -62,7 +61,6 @@ export const OwnerRegistrationSchema = z.object({
   phone: PhoneSchema,
   name: z.string().min(1),
   specialization: z.string().min(1),
-  medical_reg_no: z.string().optional(),
   profile_photo_path: z.string().optional(),
   clinic_name: z.string().min(1),
   clinic_address: z.string().optional(),
@@ -74,7 +72,6 @@ export const DoctorRegistrationSchema = z.object({
   phone: PhoneSchema,
   name: z.string().min(1),
   specialization: z.string().min(1),
-  medical_reg_no: z.string().optional(),
   profile_photo_path: z.string().optional(),
   clinic_id: UuidSchema
 });
@@ -82,7 +79,6 @@ export const DoctorRegistrationSchema = z.object({
 export const ProfileInputSchema = z.object({
   name: z.string().trim().min(1),
   specialization: z.string().trim().min(1),
-  medical_reg_no: z.string().trim().optional(),
   profile_photo_path: z.string().trim().optional()
 });
 
@@ -102,7 +98,25 @@ export const JoinClinicRegistrationInputSchema = z.object({
   clinic_code: ClinicCodeSchema
 });
 
+export const CreateHospitalRegistrationInputSchema = z.object({
+  mode: z.literal("create_hospital"),
+  profile: ProfileInputSchema,
+  hospital: z.object({
+    name: z.string().trim().min(1),
+    address: z.string().trim().optional(),
+    logo_storage_path: z.string().trim().optional()
+  })
+});
+
+export const JoinHospitalRegistrationInputSchema = z.object({
+  mode: z.literal("join_hospital"),
+  profile: ProfileInputSchema,
+  hospital_id: UuidSchema
+});
+
 export const RegistrationInputSchema = z.discriminatedUnion("mode", [
+  CreateHospitalRegistrationInputSchema,
+  JoinHospitalRegistrationInputSchema,
   CreateClinicRegistrationInputSchema,
   JoinClinicRegistrationInputSchema
 ]);
@@ -123,5 +137,7 @@ export type DoctorRegistration = z.infer<typeof DoctorRegistrationSchema>;
 export type ProfileInput = z.infer<typeof ProfileInputSchema>;
 export type CreateClinicRegistrationInput = z.infer<typeof CreateClinicRegistrationInputSchema>;
 export type JoinClinicRegistrationInput = z.infer<typeof JoinClinicRegistrationInputSchema>;
+export type CreateHospitalRegistrationInput = z.infer<typeof CreateHospitalRegistrationInputSchema>;
+export type JoinHospitalRegistrationInput = z.infer<typeof JoinHospitalRegistrationInputSchema>;
 export type RegistrationInput = z.infer<typeof RegistrationInputSchema>;
 export type RecordingCreate = z.infer<typeof RecordingCreateSchema>;

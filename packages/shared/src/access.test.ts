@@ -10,7 +10,6 @@ const activeOwner: Doctor = {
   account_status: "active",
   name: "Dr. Owner",
   specialization: "General Physician",
-  medical_reg_no: null,
   phone: "+919876543210",
   profile_photo_path: null,
   custom_prompt: null,
@@ -33,13 +32,13 @@ describe("access control helpers", () => {
     const doctor = { ...activeOwner, role: "doctor" as const };
 
     expect(assertOwner(activeOwner)).toBe(activeOwner);
-    expect(() => assertOwner(doctor)).toThrow("Clinic owner access is required.");
+    expect(() => assertOwner(doctor)).toThrow("Hospital owner access is required.");
   });
 
   it("enforces clinic scope on shared patient records", () => {
     expect(assertClinicScope(activeOwner, activeOwner.clinic_id!)).toBe(activeOwner);
     expect(() => assertClinicScope(activeOwner, "33333333-3333-4333-8333-333333333333")).toThrow(
-      "outside the doctor's clinic"
+      "outside the doctor's hospital"
     );
   });
 

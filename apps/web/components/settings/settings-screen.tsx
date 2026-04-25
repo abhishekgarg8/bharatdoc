@@ -3,7 +3,6 @@
 import { Check, ChevronRight, ClipboardList, Edit3, Languages, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ClinicCodeSchema } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import {
@@ -60,7 +59,7 @@ const defaultDoctor: SettingsDoctorProfile = {
 
 const defaultClinic: SettingsClinicProfile = {
   id: "demo-clinic",
-  name: "Sunrise Clinic",
+  name: "Sunrise Hospital",
   code: "MED42X",
   address: "24 Baner Road, Pune 411045",
   activeDoctorsCount: 3
@@ -171,8 +170,7 @@ export function SettingsScreen({
   const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "clinic-profile" | null>(null);
   const [clinicForm, setClinicForm] = useState({
     name: clinicForState.name,
-    address: clinicForState.address ?? "",
-    code: clinicForState.code
+    address: clinicForState.address ?? ""
   });
   const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -224,17 +222,10 @@ export function SettingsScreen({
     setMessage(null);
 
     const normalizedName = clinicForm.name.trim();
-    const normalizedCode = clinicForm.code.trim().toUpperCase();
     const normalizedAddress = clinicForm.address.trim();
-    const clinicCodeResult = ClinicCodeSchema.safeParse(normalizedCode);
 
     if (!normalizedName) {
-      setError("Clinic name is required.");
-      return;
-    }
-
-    if (!clinicCodeResult.success) {
-      setError("Clinic code must be 6 uppercase characters.");
+      setError("Hospital name is required.");
       return;
     }
 
@@ -250,7 +241,6 @@ export function SettingsScreen({
             idToken,
             {
               name: normalizedName,
-              clinic_code: clinicCodeResult.data,
               address: normalizedAddress || null
             },
             fetcher
@@ -258,19 +248,17 @@ export function SettingsScreen({
         : {
             ...clinicState,
             name: normalizedName,
-            code: clinicCodeResult.data,
             address: normalizedAddress || null
           };
       setClinicState(updatedClinic);
       setClinicForm({
         name: updatedClinic.name,
-        address: updatedClinic.address ?? "",
-        code: updatedClinic.code
+        address: updatedClinic.address ?? ""
       });
-      setMessage("Clinic profile saved.");
+      setMessage("Hospital profile saved.");
       setExpandedPanel(null);
     } catch {
-      setError("Unable to save clinic profile.");
+      setError("Unable to save hospital profile.");
     } finally {
       setSavingClinic(false);
     }
@@ -321,7 +309,7 @@ export function SettingsScreen({
           </section>
 
           {canManageClinic ? (
-            <SettingsGroup title="Clinic admin">
+            <SettingsGroup title="Hospital admin">
               <SettingsRow
                 title="Pending approvals"
                 subtitle={pendingSubtitle(pending.length)}
@@ -337,12 +325,8 @@ export function SettingsScreen({
                 expanded={expandedPanel === "active-doctors"}
               />
               <SettingsRow
-                title="Clinic profile"
-                subtitle={
-                  <span>
-                    Code: <span className="font-mono font-bold text-terracotta">{clinicState.code}</span>
-                  </span>
-                }
+                title="Hospital profile"
+                subtitle={<span>{clinicState.name || "Not configured"}</span>}
                 icon={<ClipboardList className="h-4 w-4" />}
                 onClick={() => togglePanel("clinic-profile")}
                 expanded={expandedPanel === "clinic-profile"}
@@ -356,7 +340,7 @@ export function SettingsScreen({
                 <div>
                   <h2 className="font-body text-sm font-bold text-ink">Active doctors</h2>
                   <p className="mt-0.5 font-body text-[11.5px] text-ink-muted">
-                    Current clinic members with active BharatDoc access.
+                    Current hospital members with active BharatDoc access.
                   </p>
                 </div>
                 <span className="rounded-full bg-paper-deep px-2 py-1 font-body text-[11px] font-bold text-ink-soft">
@@ -394,58 +378,41 @@ export function SettingsScreen({
           {canManageClinic && expandedPanel === "clinic-profile" ? (
             <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-4 shadow-[0_1px_0_#E5DAC5]">
               <div className="mb-4">
-                <h2 className="font-body text-sm font-bold text-ink">Clinic profile</h2>
+                <h2 className="font-body text-sm font-bold text-ink">Hospital profile</h2>
                 <p className="mt-1 font-body text-[11.5px] leading-relaxed text-ink-muted">
-                  Update the clinic name, address, and shareable code used by doctors during onboarding.
+                  Update the hospital name and address shown on records and PDFs.
                 </p>
               </div>
 
               <div className="grid gap-3">
                 <label className="block">
                   <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
-                    Clinic name
+                    Hospital name
                   </span>
                   <input
                     className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
                     value={clinicForm.name}
                     onChange={(event) => setClinicForm((current) => ({ ...current, name: event.target.value }))}
-                    aria-label="Clinic name"
+                    aria-label="Hospital name"
                   />
                 </label>
 
                 <label className="block">
                   <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
-                    Clinic address
+                    Hospital address
                   </span>
                   <textarea
                     className="mt-2 min-h-24 w-full resize-none rounded-xl border border-rule bg-paper-deep px-3 py-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
                     value={clinicForm.address}
                     onChange={(event) => setClinicForm((current) => ({ ...current, address: event.target.value }))}
-                    aria-label="Clinic address"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
-                    Clinic code
-                  </span>
-                  <input
-                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-mono text-base font-bold tracking-[0.08em] text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
-                    value={clinicForm.code}
-                    onChange={(event) =>
-                      setClinicForm((current) => ({
-                        ...current,
-                        code: event.target.value.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 6)
-                      }))
-                    }
-                    aria-label="Clinic code"
+                    aria-label="Hospital address"
                   />
                 </label>
               </div>
 
               <div className="mt-4 flex gap-2">
                 <BharatButton className="flex-1" disabled={savingClinic} onClick={saveClinic}>
-                  Save clinic
+                  Save hospital
                 </BharatButton>
                 <BharatButton
                   className="flex-1"
@@ -453,8 +420,7 @@ export function SettingsScreen({
                   onClick={() => {
                     setClinicForm({
                       name: clinicState.name,
-                      address: clinicState.address ?? "",
-                      code: clinicState.code
+                      address: clinicState.address ?? ""
                     });
                     setExpandedPanel(null);
                     setError(null);

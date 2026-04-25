@@ -109,7 +109,7 @@ export function DashboardPageClient({
     records,
     pendingApprovalsCount: doctor?.role === "owner" ? 1 : 0,
     ...(doctor?.name ? { doctorName: doctor.name } : {}),
-    ...(doctor?.clinic_id ? { clinicName: "Your clinic" } : {})
+    ...(doctor?.clinic_id ? { clinicName: "Your hospital" } : {})
   };
 
   return <DashboardScreen {...screenProps} />;

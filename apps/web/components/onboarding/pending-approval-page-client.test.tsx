@@ -26,7 +26,6 @@ describe("PendingApprovalPageClient", () => {
           account_status: "pending_approval",
           name: "Dr. Pending",
           specialization: "General Physician",
-          medical_reg_no: null,
           phone: "+919876543210",
           profile_photo_path: null,
           custom_prompt: null,
@@ -35,7 +34,7 @@ describe("PendingApprovalPageClient", () => {
         },
         clinic: {
           id: "clinic-1",
-          name: "Bharat QA Clinic",
+          name: "Bharat QA Hospital",
           code: "R2BJZZ",
           address: "Pune"
         },
@@ -53,8 +52,7 @@ describe("PendingApprovalPageClient", () => {
 
     render(<PendingApprovalPageClient authClient={authClient} fetcher={fetcher} />);
 
-    await expect(screen.findByText(/Bharat QA Clinic/)).resolves.toBeInTheDocument();
-    expect(screen.getByText("R2BJZZ")).toBeInTheDocument();
+    await expect(screen.findByText(/Bharat QA Hospital/)).resolves.toBeInTheDocument();
     expect(screen.getByText("Dr. QA Owner")).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith("/api/onboarding/pending-status", {
       headers: {
@@ -77,7 +75,6 @@ describe("PendingApprovalPageClient", () => {
           account_status: "active",
           name: "Dr. Active",
           specialization: "General Physician",
-          medical_reg_no: null,
           phone: "+919876543210",
           profile_photo_path: null,
           custom_prompt: null,
@@ -107,7 +104,6 @@ describe("PendingApprovalPageClient", () => {
           account_status: "pending_approval",
           name: "Dr. Pending",
           specialization: "General Physician",
-          medical_reg_no: null,
           phone: "+919876543210",
           profile_photo_path: null,
           custom_prompt: null,
@@ -116,7 +112,7 @@ describe("PendingApprovalPageClient", () => {
         },
         clinic: {
           id: "clinic-1",
-          name: "Bharat QA Clinic",
+          name: "Bharat QA Hospital",
           code: "R2BJZZ",
           address: "Pune"
         },
@@ -127,7 +123,7 @@ describe("PendingApprovalPageClient", () => {
 
     render(<PendingApprovalPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
-    await screen.findByText(/Bharat QA Clinic/);
+    await screen.findByText(/Bharat QA Hospital/);
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
@@ -156,7 +152,7 @@ describe("PendingApprovalPageClient", () => {
 
     render(<PendingApprovalPageClient authClient={authClient} demoOnMissingToken onNavigate={navigate} />);
 
-    await screen.findByText(/Sunrise Clinic/);
+    await screen.findByText(/Sunrise Hospital/);
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));

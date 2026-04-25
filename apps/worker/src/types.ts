@@ -1,4 +1,13 @@
 import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
+import type { StructuredLogger } from "./logger.js";
+
+export type TranscriptionAttemptStage =
+  | "validate_input"
+  | "load_recording"
+  | "validate_recording"
+  | "upload_audio"
+  | "transcribe_audio"
+  | "save_transcript";
 
 export interface VerifiedAuthToken {
   uid: string;
@@ -35,6 +44,20 @@ export interface RecordingProcessingRepository {
     doctorId: string;
     pdfStoragePath: string;
   }): Promise<Recording>;
+}
+
+export interface TranscriptionAttemptRepository {
+  recordFailedAttempt(input: {
+    recordingId: string;
+    doctorId: string;
+    clinicId: string | null;
+    requestId: string;
+    stage: TranscriptionAttemptStage;
+    errorCode: string;
+    errorMessage: string;
+    errorStatus: number;
+    audioStoragePath?: string | null;
+  }): Promise<void>;
 }
 
 export interface SummaryClient {
@@ -89,11 +112,13 @@ export interface WorkerDependencies {
   doctors: DoctorRepository;
   clinics: ClinicRepository;
   recordings: RecordingProcessingRepository;
+  transcriptionAttempts?: TranscriptionAttemptRepository;
   transcriptionClient: TranscriptionClient;
   summaryClient: SummaryClient;
   audioStorage: AudioStorage;
   pdfRenderer: PdfRenderer;
   pdfStorage: PdfStorage;
+  logger?: StructuredLogger;
 }
 
 export interface AuthContext {

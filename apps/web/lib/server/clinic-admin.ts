@@ -106,7 +106,7 @@ async function requireOwnerContext(user: VerifiedUser, repository: ClinicAdminRe
   assertOwner(doctor);
 
   if (!doctor.clinic_id) {
-    throw new AppError(403, "Owner must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new AppError(403, "Owner must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   return doctor;
@@ -117,7 +117,7 @@ async function requireOwnerClinic(user: VerifiedUser, repository: ClinicAdminRep
   const clinic = await repository.findClinicById(owner.clinic_id!);
 
   if (!clinic) {
-    throw new AppError(404, "Clinic profile was not found.", "CLINIC_NOT_FOUND");
+    throw new AppError(404, "Hospital profile was not found.", "CLINIC_NOT_FOUND");
   }
 
   return clinic;
@@ -206,14 +206,14 @@ export async function updateClinicProfileForOwner(
     const existingClinic = await repository.findClinicByCode(parsed.clinic_code);
 
     if (existingClinic && existingClinic.id !== clinic.id) {
-      throw new AppError(409, "Clinic code is already in use.", "CLINIC_CODE_TAKEN");
+      throw new AppError(409, "Hospital code is already in use.", "CLINIC_CODE_TAKEN");
     }
 
     update.clinic_code = parsed.clinic_code;
   }
 
   if (Object.keys(update).length === 0) {
-    throw new AppError(400, "No clinic fields were provided.", "EMPTY_CLINIC_UPDATE");
+    throw new AppError(400, "No hospital fields were provided.", "EMPTY_CLINIC_UPDATE");
   }
 
   const updatedClinic = await repository.updateClinicProfile(clinic.id, update);

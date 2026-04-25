@@ -1,0 +1,36 @@
+{
+  "observations": [
+    {
+      "prefix": "e06-approved-doctor",
+      "email": "abhishekgarg8+bd-e2e-doctor-approve-20260425095721@gmail.com",
+      "url": "https://bharatdoc-web.vercel.app/onboarding",
+      "text": "B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.\n\nCreate login\nSign up\nLog in\nEMAIL\nPASSWORD\n\nUse at least 8 characters.\n\nCreate account"
+    },
+    {
+      "prefix": "e08-rejected-doctor",
+      "email": "abhishekgarg8+bd-e2e-doctor-reject-20260425095721@gmail.com",
+      "url": "https://bharatdoc-web.vercel.app/onboarding",
+      "text": "B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.\n\nUnable to create account. Please try again.\nCreate login\nSign up\nLog in\nEMAIL\nPASSWORD\n\nUse at least 8 characters.\n\nCreate account"
+    }
+  ],
+  "responses": [
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/signup?redirect_to=https%3A%2F%2Fbharatdoc-web.vercel.app%2F"
+    },
+    {
+      "method": "POST",
+      "status": 429,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/signup?redirect_to=https%3A%2F%2Fbharatdoc-web.vercel.app%2F"
+    }
+  ],
+  "console": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 429 ()",
+      "url": "https://bharatdoc-web.vercel.app/onboarding"
+    }
+  ],
+  "pageErrors": []
+}

@@ -7,8 +7,7 @@ import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 interface PendingApprovalScreenProps {
-  clinicName?: string;
-  clinicCode?: string | null;
+  hospitalName?: string;
   ownerName?: string | null;
   requestedAt?: string | null;
   onSignOut?: () => void | Promise<void>;
@@ -36,8 +35,7 @@ function formatRequestedAt(requestedAt?: string | null): string {
 }
 
 export function PendingApprovalScreen({
-  clinicName = "your clinic",
-  clinicCode,
+  hospitalName = "your hospital",
   ownerName,
   requestedAt,
   onSignOut
@@ -66,14 +64,13 @@ export function PendingApprovalScreen({
       </div>
       <h1 className="mt-7 font-display text-[32px] italic leading-none tracking-normal text-ink">Waiting for approval</h1>
       <p className="mt-4 max-w-[320px] font-body text-sm leading-6 text-ink-soft">
-        Your request to join <strong className="font-bold text-ink">{clinicName}</strong> is pending review by the clinic
+        Your request to join <strong className="font-bold text-ink">{hospitalName}</strong> is pending review by the hospital
         owner. You will be notified once approved.
       </p>
 
       <div className="mt-7 w-full rounded-xl border border-rule bg-paper p-4 text-left">
         <InfoRow label="Requested on" value={formatRequestedAt(requestedAt)} />
-        <InfoRow label="Clinic code" value={clinicCode ?? "Not available"} mono />
-        <InfoRow label="Owner" value={ownerName ?? "Clinic owner"} />
+        <InfoRow label="Owner" value={ownerName ?? "Hospital owner"} />
       </div>
 
       <div className="mt-auto w-full pt-10">
@@ -85,11 +82,11 @@ export function PendingApprovalScreen({
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 border-b border-rule py-2.5 last:border-b-0">
       <span className="font-body text-xs text-ink-muted">{label}</span>
-      <span className={mono ? "font-mono text-xs font-bold text-ink" : "font-body text-xs font-bold text-ink"}>{value}</span>
+      <span className="font-body text-xs font-bold text-ink">{value}</span>
     </div>
   );
 }

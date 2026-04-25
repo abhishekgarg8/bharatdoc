@@ -1,8 +1,8 @@
 import {
   type Clinic,
   type Doctor,
+  type ProfileInput,
   RegistrationInputSchema,
-  type RegistrationInput,
   generateClinicCode
 } from "@bharatdoc/shared";
 import { AppError } from "@/lib/server/errors";
@@ -17,19 +17,32 @@ export interface PendingJoinRequest {
 
 export interface OnboardingRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
+  listHospitals(): Promise<Clinic[]>;
+  findClinicById(clinicId: string): Promise<Clinic | null>;
   findClinicByCode(clinicCode: string): Promise<Clinic | null>;
   createOwner(input: {
     authUid: string;
     phone: string;
-    profile: RegistrationInput & { mode: "create_clinic" };
+    profile: ProfileInput;
+    hospital: {
+      name: string;
+      address?: string | undefined;
+      logo_storage_path?: string | undefined;
+    };
     clinicCode: string;
   }): Promise<{ doctor: Doctor; clinic: Clinic }>;
   createDoctorJoinRequest(input: {
     authUid: string;
     phone: string;
-    profile: RegistrationInput & { mode: "join_clinic" };
+    profile: ProfileInput;
     clinic: Clinic;
   }): Promise<{ doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest }>;
+}
+
+export interface HospitalOption {
+  hospital_id: string;
+  hospital_name: string;
+  hospital_address: string | null;
 }
 
 export interface ClinicLookupResult {
@@ -66,7 +79,7 @@ export async function lookupClinicByCode(
   const clinic = await repository.findClinicByCode(clinicCode.trim().toUpperCase());
 
   if (!clinic) {
-    throw new AppError(404, "Clinic code was not found.", "CLINIC_NOT_FOUND");
+    throw new AppError(404, "Hospital code was not found.", "CLINIC_NOT_FOUND");
   }
 
   return {
@@ -74,6 +87,21 @@ export async function lookupClinicByCode(
     clinic_name: clinic.name,
     clinic_address: clinic.address
   };
+}
+
+function toHospitalOption(clinic: Clinic): HospitalOption {
+  return {
+    hospital_id: clinic.id,
+    hospital_name: clinic.name,
+    hospital_address: clinic.address
+  };
+}
+
+export async function listHospitalsForOnboarding(
+  repository: Pick<OnboardingRepository, "listHospitals">
+): Promise<HospitalOption[]> {
+  const hospitals = await repository.listHospitals();
+  return hospitals.map(toHospitalOption);
 }
 
 export async function registerDoctorAccount(
@@ -93,11 +121,13 @@ export async function registerDoctorAccount(
     };
   }
 
-  if (registrationInput.mode === "create_clinic") {
+  if (registrationInput.mode === "create_hospital" || registrationInput.mode === "create_clinic") {
+    const hospital = "hospital" in registrationInput ? registrationInput.hospital : registrationInput.clinic;
     const result = await repository.createOwner({
       authUid: user.uid,
       phone: user.phoneNumber,
-      profile: registrationInput,
+      profile: registrationInput.profile,
+      hospital,
       clinicCode: generateClinicCode()
     });
 
@@ -108,16 +138,19 @@ export async function registerDoctorAccount(
     };
   }
 
-  const clinic = await repository.findClinicByCode(registrationInput.clinic_code);
+  const clinic =
+    registrationInput.mode === "join_hospital"
+      ? await repository.findClinicById(registrationInput.hospital_id)
+      : await repository.findClinicByCode(registrationInput.clinic_code);
 
   if (!clinic) {
-    throw new AppError(404, "Clinic code was not found.", "CLINIC_NOT_FOUND");
+    throw new AppError(404, "Hospital was not found.", "CLINIC_NOT_FOUND");
   }
 
   const result = await repository.createDoctorJoinRequest({
     authUid: user.uid,
     phone: user.phoneNumber,
-    profile: registrationInput,
+    profile: registrationInput.profile,
     clinic
   });
 

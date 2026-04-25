@@ -92,13 +92,13 @@ export function SearchScreen({
           </Link>
           <div className="min-w-0 flex-1">
             <p className="font-body text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta">
-              Clinic records
+              Hospital records
             </p>
             <h1 className="mt-1 font-display text-[30px] italic leading-none tracking-normal text-ink">
               Search
             </h1>
             <p className="mt-2 font-body text-xs leading-relaxed text-ink-muted">
-              Find consultations by Patient ID across your clinic.
+              Find consultations by Patient ID across your hospital.
             </p>
           </div>
         </header>
@@ -139,7 +139,7 @@ export function SearchScreen({
 
         <div className="px-5 pb-2">
           <h2 className="font-body text-sm font-bold text-ink">
-            {hasSearched ? `Results for ${searchedQuery}` : "Recent clinic records"}
+            {hasSearched ? `Results for ${searchedQuery}` : "Recent hospital records"}
           </h2>
           <p className="mt-1 font-body text-xs text-ink-muted">
             {results.length} {results.length === 1 ? "consultation" : "consultations"}

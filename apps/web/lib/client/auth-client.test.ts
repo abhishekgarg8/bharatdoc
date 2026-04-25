@@ -4,6 +4,7 @@ import { authErrorMessage, createSupabaseAuthClient, getAuthRedirectUrl } from "
 const supabaseMocks = vi.hoisted(() => {
   const signUp = vi.fn();
   const signInWithPassword = vi.fn();
+  const resetPasswordForEmail = vi.fn();
   const getSession = vi.fn();
   const signOut = vi.fn();
   const createClient = vi.fn(() => ({
@@ -11,6 +12,7 @@ const supabaseMocks = vi.hoisted(() => {
       getSession,
       signUp,
       signInWithPassword,
+      resetPasswordForEmail,
       signOut
     }
   }));
@@ -20,6 +22,7 @@ const supabaseMocks = vi.hoisted(() => {
     getSession,
     signUp,
     signInWithPassword,
+    resetPasswordForEmail,
     signOut
   };
 });
@@ -33,6 +36,7 @@ afterEach(() => {
   supabaseMocks.getSession.mockReset();
   supabaseMocks.signUp.mockReset();
   supabaseMocks.signInWithPassword.mockReset();
+  supabaseMocks.resetPasswordForEmail.mockReset();
   supabaseMocks.signOut.mockReset();
   vi.unstubAllEnvs();
 });
@@ -102,6 +106,18 @@ describe("Supabase auth client", () => {
     vi.stubEnv("NEXT_PUBLIC_VERCEL_URL", "bharatdoc-web.vercel.app");
 
     expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
+  });
+
+  it("sends password reset links through Supabase with the production redirect", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+
+    await expect(createSupabaseAuthClient().resetPasswordForEmail?.("Doctor@Example.com")).resolves.toBeUndefined();
+
+    expect(supabaseMocks.resetPasswordForEmail).toHaveBeenCalledWith("doctor@example.com", {
+      redirectTo: "https://bharatdoc-web.vercel.app/"
+    });
   });
 
   it("returns the current access token from the persisted Supabase session", async () => {

@@ -5,7 +5,8 @@ import type {
   ClinicRepository,
   DoctorRepository,
   PdfStorage,
-  RecordingProcessingRepository
+  RecordingProcessingRepository,
+  TranscriptionAttemptRepository
 } from "./types.js";
 import { HttpError } from "./http-errors.js";
 
@@ -17,7 +18,6 @@ interface DoctorRow {
   account_status: "pending_approval" | "active" | "rejected";
   name: string;
   specialization: string;
-  medical_reg_no: string | null;
   phone: string;
   profile_photo_path: string | null;
   custom_prompt: string | null;
@@ -39,7 +39,6 @@ export function createDoctorRepository(supabase: SupabaseClient): DoctorReposito
             "account_status",
             "name",
             "specialization",
-            "medical_reg_no",
             "phone",
             "profile_photo_path",
             "custom_prompt",
@@ -158,6 +157,28 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
       }
 
       return data;
+    }
+  };
+}
+
+export function createTranscriptionAttemptRepository(supabase: SupabaseClient): TranscriptionAttemptRepository {
+  return {
+    async recordFailedAttempt(input): Promise<void> {
+      const { error } = await supabase.from("transcription_attempts").insert({
+        recording_id: input.recordingId,
+        doctor_id: input.doctorId,
+        clinic_id: input.clinicId,
+        request_id: input.requestId,
+        stage: input.stage,
+        error_code: input.errorCode,
+        error_message: input.errorMessage,
+        error_status: input.errorStatus,
+        audio_storage_path: input.audioStoragePath ?? null
+      });
+
+      if (error) {
+        throw error;
+      }
     }
   };
 }

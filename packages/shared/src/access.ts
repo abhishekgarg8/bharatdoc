@@ -31,7 +31,7 @@ export function assertOwner(doctor: Doctor): Doctor {
   assertActiveDoctor(doctor);
 
   if (doctor.role !== "owner") {
-    throw new AccessError("Clinic owner access is required.", "OWNER_REQUIRED");
+    throw new AccessError("Hospital owner access is required.", "OWNER_REQUIRED");
   }
 
   return doctor;
@@ -41,7 +41,7 @@ export function assertClinicScope(doctor: Doctor, clinicId: string): Doctor {
   assertActiveDoctor(doctor);
 
   if (!doctor.clinic_id || doctor.clinic_id !== clinicId) {
-    throw new AccessError("Requested resource is outside the doctor's clinic.", "CLINIC_SCOPE_REQUIRED");
+    throw new AccessError("Requested resource is outside the doctor's hospital.", "CLINIC_SCOPE_REQUIRED");
   }
 
   return doctor;
@@ -51,6 +51,6 @@ export function assertCanRemoveDoctor(owner: Doctor, targetDoctorId: string): vo
   assertOwner(owner);
 
   if (owner.id === targetDoctorId) {
-    throw new AccessError("Clinic owner cannot remove themself.", "SELF_REMOVAL_FORBIDDEN");
+    throw new AccessError("Hospital owner cannot remove themself.", "SELF_REMOVAL_FORBIDDEN");
   }
 }

@@ -23,7 +23,7 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "BharatDoc",
-  description: "AI-assisted clinical documentation for small Indian clinics.",
+  description: "AI-assisted clinical documentation for small Indian hospitals.",
   applicationName: "BharatDoc",
   icons: {
     icon: "/favicon.svg",

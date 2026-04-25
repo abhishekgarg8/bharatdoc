@@ -4,13 +4,13 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
   await page.goto("/dashboard?demo=1");
 
   await expect(page.getByText("Dr. Aparna Iyer")).toBeVisible();
-  await expect(page.getByText("Sunrise Clinic, Pune")).toBeVisible();
+  await expect(page.getByText("Sunrise Hospital, Pune")).toBeVisible();
   await expect(page.getByRole("button", { name: /Start recording/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Search by Patient ID/i })).toHaveAttribute("href", "/search");
   await expect(page.getByText("P-10482")).toBeVisible();
 });
 
-test("clinic search finds records and opens completed consultations", async ({ page }) => {
+test("hospital search finds records and opens completed consultations", async ({ page }) => {
   await page.goto("/search?demo=1");
 
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
@@ -70,9 +70,8 @@ test("demo onboarding join flow reaches pending approval", async ({ page }) => {
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page.getByText("Profile details")).toBeVisible();
   await page.getByRole("button", { name: /^continue$/i }).click();
-  await expect(page.getByText("Your clinic")).toBeVisible();
-  await page.getByRole("button", { name: /check clinic code/i }).click();
-  await expect(page.getByText("Clinic found")).toBeVisible();
+  await expect(page.getByText("Your hospital")).toBeVisible();
+  await expect(page.getByText("Hospital selected")).toBeVisible();
   await page.getByRole("button", { name: /request to join/i }).click();
   await expect(page).toHaveURL(/\/pending-approval\?demo=1$/);
 });
@@ -82,8 +81,8 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
 
   await page.getByRole("button", { name: /create account/i }).click();
   await page.getByRole("button", { name: /^continue$/i }).click();
-  await page.getByRole("button", { name: /create clinic/i }).click();
-  await page.getByRole("button", { name: /create clinic & continue/i }).click();
+  await page.getByRole("button", { name: /create hospital/i }).click();
+  await page.getByRole("button", { name: /create hospital & continue/i }).click();
   await expect(page).toHaveURL(/\/dashboard\?demo=1$/);
   await expect(page.getByText("Today's consultations")).toBeVisible();
 });
@@ -101,7 +100,7 @@ test("pending approval smoke renders locked state", async ({ page }) => {
   await page.goto("/pending-approval?demo=1");
 
   await expect(page.getByText("Waiting for approval")).toBeVisible();
-  await expect(page.getByText("MED42X")).toBeVisible();
+  await expect(page.getByText("Dr. Kavita Rao")).toBeVisible();
   await expect(page.getByRole("button", { name: /sign out/i })).toBeVisible();
 });
 
@@ -109,7 +108,7 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByText("Clinic admin")).toBeVisible();
+  await expect(page.getByText("Hospital admin")).toBeVisible();
   await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
   await expect(page.getByRole("button", { name: /approve/i })).toBeVisible();
 });
@@ -127,7 +126,7 @@ test("settings owner can inspect active doctors", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
   await page.getByRole("button", { name: /active doctors/i }).first().click();
-  await expect(page.getByText("Current clinic members with active BharatDoc access.")).toBeVisible();
+  await expect(page.getByText("Current hospital members with active BharatDoc access.")).toBeVisible();
   const leenaCard = page.locator("article").filter({ hasText: "Dr. Leena Joshi" });
   const ownerCard = page.locator("article").filter({ hasText: "Dr. Aparna Iyer" });
   await expect(leenaCard).toBeVisible();
@@ -135,16 +134,15 @@ test("settings owner can inspect active doctors", async ({ page }) => {
   await expect(ownerCard.getByText("owner", { exact: true })).toBeVisible();
 });
 
-test("settings owner can edit the clinic profile locally", async ({ page }) => {
+test("settings owner can edit the hospital profile locally", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
-  await page.getByRole("button", { name: /clinic profile/i }).first().click();
-  await page.getByLabel("Clinic name").fill("Sunrise Family Clinic");
-  await page.getByLabel("Clinic address").fill("24 Baner Road, Pune 411045");
-  await page.getByLabel("Clinic code").fill("MED43Y");
-  await page.getByRole("button", { name: /save clinic/i }).click();
-  await expect(page.getByText("Clinic profile saved.")).toBeVisible();
-  await expect(page.getByText("MED43Y")).toBeVisible();
+  await page.getByRole("button", { name: /hospital profile/i }).first().click();
+  await page.getByLabel("Hospital name").fill("Sunrise Family Hospital");
+  await page.getByLabel("Hospital address").fill("24 Baner Road, Pune 411045");
+  await page.getByRole("button", { name: /save hospital/i }).click();
+  await expect(page.getByText("Hospital profile saved.")).toBeVisible();
+  await expect(page.getByText("Sunrise Family Hospital")).toBeVisible();
 });
 
 test("settings prompt editor validates and previews prompts", async ({ page }) => {

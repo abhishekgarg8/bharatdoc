@@ -36,7 +36,7 @@ function firstDoctor(row: PendingApprovalRow): PendingApproval["doctor"] {
 
 function throwReviewError(error: { code?: string; message?: string }): never {
   if (error.code === "42501") {
-    throw new AppError(403, "Only an active clinic owner can review join requests.", "OWNER_REQUIRED");
+    throw new AppError(403, "Only an active hospital owner can review join requests.", "OWNER_REQUIRED");
   }
 
   if (error.code === "P0002") {

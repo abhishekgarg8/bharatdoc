@@ -17,7 +17,6 @@ const owner: Doctor = {
   account_status: "active",
   name: "Dr. Kavita Rao",
   specialization: "Pediatrician",
-  medical_reg_no: null,
   phone: "+919876543210",
   profile_photo_path: null,
   custom_prompt: null,
@@ -117,7 +116,7 @@ describe("clinic admin approvals", () => {
 
     await expect(
       listPendingApprovalsForOwner({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
-    ).rejects.toThrow("Clinic owner access is required.");
+    ).rejects.toThrow("Hospital owner access is required.");
   });
 
   it("approves pending join requests within the owner's clinic", async () => {

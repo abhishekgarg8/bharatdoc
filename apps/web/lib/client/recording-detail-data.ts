@@ -64,7 +64,7 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
   {
     id: "p-10478",
     patientId: "P-10478",
-    label: "Clinic consultation",
+    label: "Hospital consultation",
     time: "Today, 09:30",
     duration: "6:47",
     doctorName: "You",

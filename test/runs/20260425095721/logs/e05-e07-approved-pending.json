@@ -1,0 +1,120 @@
+{
+  "responses": [
+    {
+      "method": "GET",
+      "status": 303,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/verify?token=04d3fe5d43d69ab3b402eba563b1aef5c7810b67102a08f405e9b6db&type=signup&redirect_to=https://bharatdoc-web.vercel.app/"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/user"
+    },
+    {
+      "method": "GET",
+      "status": 404,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password"
+    },
+    {
+      "method": "GET",
+      "status": 404,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 404,
+      "url": "https://bharatdoc-web.vercel.app/api/clinics/lookup?code=ZZZZZZ"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/clinics/lookup?code=E6CUDM"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/auth/register"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/onboarding/pending-status"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/dashboard"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/onboarding/pending-status"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/onboarding/pending-status"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/dashboard"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/onboarding/pending-status"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/onboarding/pending-status"
+    },
+    {
+      "method": "POST",
+      "status": 204,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/logout?scope=global"
+    }
+  ],
+  "console": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://bharatdoc-web.vercel.app/#"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://bharatdoc-web.vercel.app/onboarding"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "url": "https://bharatdoc-web.vercel.app/onboarding"
+    }
+  ],
+  "pageErrors": [],
+  "observations": {
+    "invalidClinicLookup": "B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.\n\nClinic code was not found.\nYour clinic\nJoin clinic\nCreate clinic\nCLINIC CODE\nCheck clinic code\nRequest to join",
+    "pendingPageText": "B\nWaiting for approval\n\nYour request to join BharatDoc E2E Clinic 095721 is pending review by the clinic owner. You will be notified once approved.\n\nRequested on\n25 Apr 2026, 10:03 am\nClinic code\nE6CUDM\nOwner\nDr. E2E Owner 095721\nSign out",
+    "afterPendingSignout": {
+      "url": "https://bharatdoc-web.vercel.app/onboarding",
+      "text": "B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.\n\nCreate login\nSign up\nLog in\nEMAIL\nPASSWORD\n\nUse at least 8 characters.\n\nCreate account"
+    }
+  }
+}

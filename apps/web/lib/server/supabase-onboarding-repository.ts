@@ -1,5 +1,5 @@
 import "server-only";
-import type { Clinic, Doctor, JoinClinicRegistrationInput, CreateClinicRegistrationInput } from "@bharatdoc/shared";
+import type { Clinic, Doctor, ProfileInput } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OnboardingRepository, PendingJoinRequest } from "@/lib/server/onboarding";
 
@@ -19,6 +19,26 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       return data as Doctor | null;
     },
 
+    async listHospitals(): Promise<Clinic[]> {
+      const { data, error } = await supabase.from("clinics").select("*").order("name", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as Clinic[];
+    },
+
+    async findClinicById(clinicId: string): Promise<Clinic | null> {
+      const { data, error } = await supabase.from("clinics").select("*").eq("id", clinicId).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as Clinic | null;
+    },
+
     async findClinicByCode(clinicCode: string): Promise<Clinic | null> {
       const { data, error } = await supabase.from("clinics").select("*").eq("clinic_code", clinicCode).maybeSingle();
 
@@ -32,16 +52,21 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
     async createOwner(input: {
       authUid: string;
       phone: string;
-      profile: CreateClinicRegistrationInput;
+      profile: ProfileInput;
+      hospital: {
+        name: string;
+        address?: string | undefined;
+        logo_storage_path?: string | undefined;
+      };
       clinicCode: string;
     }): Promise<{ doctor: Doctor; clinic: Clinic }> {
       const { data: clinic, error: clinicError } = await supabase
         .from("clinics")
         .insert({
-          name: input.profile.clinic.name,
+          name: input.hospital.name,
           clinic_code: input.clinicCode,
-          address: normalizeOptional(input.profile.clinic.address),
-          logo_storage_path: normalizeOptional(input.profile.clinic.logo_storage_path)
+          address: normalizeOptional(input.hospital.address),
+          logo_storage_path: normalizeOptional(input.hospital.logo_storage_path)
         })
         .select("*")
         .single();
@@ -57,11 +82,10 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
           clinic_id: clinic.id,
           role: "owner",
           account_status: "active",
-          name: input.profile.profile.name,
-          specialization: input.profile.profile.specialization,
-          medical_reg_no: normalizeOptional(input.profile.profile.medical_reg_no),
+          name: input.profile.name,
+          specialization: input.profile.specialization,
           phone: input.phone,
-          profile_photo_path: normalizeOptional(input.profile.profile.profile_photo_path),
+          profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
           transcription_lang: "auto"
         })
         .select("*")
@@ -77,7 +101,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
     async createDoctorJoinRequest(input: {
       authUid: string;
       phone: string;
-      profile: JoinClinicRegistrationInput;
+      profile: ProfileInput;
       clinic: Clinic;
     }): Promise<{ doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest }> {
       const { data: doctor, error: doctorError } = await supabase
@@ -87,11 +111,10 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
           clinic_id: input.clinic.id,
           role: "doctor",
           account_status: "pending_approval",
-          name: input.profile.profile.name,
-          specialization: input.profile.profile.specialization,
-          medical_reg_no: normalizeOptional(input.profile.profile.medical_reg_no),
+          name: input.profile.name,
+          specialization: input.profile.specialization,
           phone: input.phone,
-          profile_photo_path: normalizeOptional(input.profile.profile.profile_photo_path),
+          profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
           transcription_lang: "auto"
         })
         .select("*")

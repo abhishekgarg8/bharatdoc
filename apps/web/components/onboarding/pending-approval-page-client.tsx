@@ -24,7 +24,6 @@ const demoStatus: Extract<PendingApprovalStatus, { account_status: "pending_appr
     account_status: "pending_approval",
     name: "Dr. Aparna Iyer",
     specialization: "General Physician",
-    medical_reg_no: null,
     phone: "+919876543210",
     profile_photo_path: null,
     custom_prompt: null,
@@ -33,7 +32,7 @@ const demoStatus: Extract<PendingApprovalStatus, { account_status: "pending_appr
   },
   clinic: {
     id: "demo-clinic",
-    name: "Sunrise Clinic",
+    name: "Sunrise Hospital",
     code: "MED42X",
     address: "24 Baner Road, Pune"
   },
@@ -129,8 +128,7 @@ export function PendingApprovalPageClient({
 
   return (
     <PendingApprovalScreen
-      clinicName={status.clinic.name}
-      clinicCode={status.clinic.code}
+      hospitalName={status.clinic.name}
       ownerName={status.owner?.name ?? null}
       requestedAt={status.join_request?.requested_at ?? null}
       onSignOut={async () => {

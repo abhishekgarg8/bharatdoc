@@ -16,7 +16,7 @@ export interface PdfResponse {
 
 function requireClinicId(clinicId: string | null): string {
   if (!clinicId) {
-    throw new HttpError(403, "Doctor must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   return clinicId;
@@ -34,7 +34,7 @@ function requireRecordingId(recordingId: string | undefined): string {
 
 function requireClinic(clinic: Clinic | null): Clinic {
   if (!clinic) {
-    throw new HttpError(404, "Clinic was not found.", "CLINIC_NOT_FOUND");
+    throw new HttpError(404, "Hospital was not found.", "CLINIC_NOT_FOUND");
   }
 
   return clinic;

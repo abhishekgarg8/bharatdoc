@@ -79,7 +79,7 @@ export async function fetchClinicAdminSnapshot(
     headers: authHeaders(idToken)
   });
 
-  return parseJson<ClinicAdminSnapshot>(response, "Unable to load clinic admin details.");
+  return parseJson<ClinicAdminSnapshot>(response, "Unable to load hospital admin details.");
 }
 
 export async function updateClinicProfile(
@@ -95,7 +95,7 @@ export async function updateClinicProfile(
     },
     body: JSON.stringify(input)
   });
-  const payload = await parseJson<{ clinic: ClinicProfile }>(response, "Unable to update clinic profile.");
+  const payload = await parseJson<{ clinic: ClinicProfile }>(response, "Unable to update hospital profile.");
 
   return payload.clinic;
 }

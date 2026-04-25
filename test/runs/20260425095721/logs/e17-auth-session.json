@@ -1,0 +1,53 @@
+{
+  "responses": [
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "POST",
+      "status": 204,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/logout?scope=global"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/dashboard"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/dashboard"
+    }
+  ],
+  "console": [],
+  "pageErrors": [],
+  "observations": {
+    "keysAfterSignout": [],
+    "keysAfterLogin": [
+      "sb-jtezgoegatwbvdqeogiy-auth-token"
+    ],
+    "finalUrl": "https://bharatdoc-web.vercel.app/dashboard"
+  }
+}

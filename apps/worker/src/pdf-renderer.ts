@@ -116,7 +116,7 @@ function pdfDocument(input: Parameters<PdfRenderer["render"]>[0]) {
       Page,
       { size: "A4", style: styles.page, wrap: true },
       h(Text, { style: styles.clinicName }, input.clinic.name),
-      h(Text, { style: styles.clinicAddress }, input.clinic.address ?? "Clinic address not provided"),
+      h(Text, { style: styles.clinicAddress }, input.clinic.address ?? "Hospital address not provided"),
       h(Text, { style: styles.title }, `Clinical Summary - Patient ${patientId}`),
       h(Text, { style: styles.meta }, `Doctor: ${input.doctor.name} (${input.doctor.specialization})`),
       h(Text, { style: styles.meta }, `Recorded: ${input.recording.recorded_at}`),

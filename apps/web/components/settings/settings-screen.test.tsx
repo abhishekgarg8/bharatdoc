@@ -33,19 +33,19 @@ const doctorProfile = {
 
 const clinic = {
   id: "demo-clinic",
-  name: "Sunrise Clinic",
+  name: "Sunrise Hospital",
   code: "MED42X",
   address: "24 Baner Road, Pune 411045",
   activeDoctorsCount: 1
 };
 
 describe("SettingsScreen", () => {
-  it("renders profile, clinic admin, transcription, and account groups", () => {
+  it("renders profile, hospital admin, transcription, and account groups", () => {
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
-    expect(screen.getByText("Clinic admin")).toBeInTheDocument();
+    expect(screen.getByText("Hospital admin")).toBeInTheDocument();
     expect(screen.getByText("1 doctor waiting")).toBeInTheDocument();
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /language/i })).toHaveAttribute("href", "/settings/language");
@@ -53,12 +53,12 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Delete account")).toBeInTheDocument();
   });
 
-  it("shows active doctor details when the owner expands the clinic team", async () => {
+  it("shows active doctor details when the owner expands the hospital team", async () => {
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
 
     fireEvent.click(screen.getByRole("button", { name: /active doctors/i }));
 
-    await waitFor(() => expect(screen.getByText("Current clinic members with active BharatDoc access.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Current hospital members with active BharatDoc access.")).toBeInTheDocument());
     expect(screen.getByText("Dr. Leena Joshi")).toBeInTheDocument();
     expect(screen.getByText("owner")).toBeInTheDocument();
   });
@@ -109,13 +109,13 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("updates the clinic profile through the owner API", async () => {
+  it("updates the hospital profile through the owner API", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       if (input.toString() === "/api/clinic/admin") {
         return Response.json({
           clinic: {
             id: "demo-clinic",
-            name: "Sunrise Family Clinic",
+            name: "Sunrise Family Hospital",
             code: "MED43Y",
             address: null,
             activeDoctorsCount: 3
@@ -128,13 +128,12 @@ describe("SettingsScreen", () => {
 
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
-    fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
-    fireEvent.change(screen.getByLabelText("Clinic address"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Clinic code"), { target: { value: "MED43Y" } });
-    fireEvent.click(screen.getByRole("button", { name: /save clinic/i }));
+    fireEvent.click(screen.getByRole("button", { name: /hospital profile/i }));
+    fireEvent.change(screen.getByLabelText("Hospital name"), { target: { value: "Sunrise Family Hospital" } });
+    fireEvent.change(screen.getByLabelText("Hospital address"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save hospital/i }));
 
-    await waitFor(() => expect(screen.getByText("Clinic profile saved.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Hospital profile saved.")).toBeInTheDocument());
     expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
       method: "PATCH",
       headers: {
@@ -142,24 +141,23 @@ describe("SettingsScreen", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        name: "Sunrise Family Clinic",
-        clinic_code: "MED43Y",
+        name: "Sunrise Family Hospital",
         address: null
       })
     });
   });
 
-  it("does not save clinic profile locally when authentication is missing", async () => {
+  it("does not save hospital profile locally when authentication is missing", async () => {
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
 
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} fetcher={fetcher} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /clinic profile/i }));
-    fireEvent.change(screen.getByLabelText("Clinic name"), { target: { value: "Sunrise Family Clinic" } });
-    fireEvent.click(screen.getByRole("button", { name: /save clinic/i }));
+    fireEvent.click(screen.getByRole("button", { name: /hospital profile/i }));
+    fireEvent.change(screen.getByLabelText("Hospital name"), { target: { value: "Sunrise Family Hospital" } });
+    fireEvent.click(screen.getByRole("button", { name: /save hospital/i }));
 
-    await waitFor(() => expect(screen.getByText("Unable to save clinic profile.")).toBeInTheDocument());
-    expect(screen.queryByText("Clinic profile saved.")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Unable to save hospital profile.")).toBeInTheDocument());
+    expect(screen.queryByText("Hospital profile saved.")).not.toBeInTheDocument();
     expect(fetcher).not.toHaveBeenCalled();
   });
 
@@ -167,7 +165,7 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen doctor={doctorProfile} activeDoctors={[]} pendingApprovals={[]} />);
 
     expect(screen.getByText("Dr. Nisha Shah")).toBeInTheDocument();
-    expect(screen.queryByText("Clinic admin")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hospital admin")).not.toBeInTheDocument();
     expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });

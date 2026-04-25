@@ -9,9 +9,10 @@ describe("DashboardScreen", () => {
     render(<DashboardScreen />);
 
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
-    expect(screen.getByText("Sunrise Clinic, Pune")).toBeInTheDocument();
+    expect(screen.getByText("Sunrise Hospital, Pune")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start recording/i })).toHaveAttribute("href", "/recordings/new");
     expect(screen.getByRole("link", { name: /search by patient id/i })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: /open settings/i })).toHaveAttribute("href", "/settings");
   });
 
   it("renders recent consultation records with status lifecycle", () => {

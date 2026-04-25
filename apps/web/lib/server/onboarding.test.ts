@@ -19,7 +19,6 @@ const activeOwner: Doctor = {
   account_status: "active",
   name: "Dr. Kavita Rao",
   specialization: "Pediatrician",
-  medical_reg_no: null,
   phone: "+919876543210",
   profile_photo_path: null,
   custom_prompt: null,
@@ -30,15 +29,17 @@ const activeOwner: Doctor = {
 function createRepository(overrides: Partial<OnboardingRepository> = {}): OnboardingRepository {
   return {
     findDoctorByAuthUid: vi.fn(async () => null),
+    listHospitals: vi.fn(async () => [clinic]),
+    findClinicById: vi.fn(async () => clinic),
     findClinicByCode: vi.fn(async () => clinic),
-    createOwner: vi.fn(async ({ authUid, phone, profile, clinicCode }) => ({
-      clinic: { ...clinic, clinic_code: clinicCode, name: profile.clinic.name },
+    createOwner: vi.fn(async ({ authUid, phone, profile, hospital, clinicCode }) => ({
+      clinic: { ...clinic, clinic_code: clinicCode, name: hospital.name },
       doctor: {
         ...activeOwner,
         firebase_uid: authUid,
         phone,
-        name: profile.profile.name,
-        specialization: profile.profile.specialization
+        name: profile.name,
+        specialization: profile.specialization
       }
     })),
     createDoctorJoinRequest: vi.fn(async ({ authUid, phone, profile }) => ({
@@ -50,8 +51,8 @@ function createRepository(overrides: Partial<OnboardingRepository> = {}): Onboar
         phone,
         role: "doctor" as const,
         account_status: "pending_approval" as const,
-        name: profile.profile.name,
-        specialization: profile.profile.specialization
+        name: profile.name,
+        specialization: profile.specialization
       },
       joinRequest: {
         id: "44444444-4444-4444-8444-444444444444",
@@ -174,6 +175,33 @@ describe("doctor registration", () => {
       expect.objectContaining({
         authUid: "verified-firebase",
         phone: "+919876543210"
+      })
+    );
+  });
+
+  it("drops legacy medical registration values before creating rows", async () => {
+    const repository = createRepository();
+
+    await registerDoctorAccount(
+      {
+        mode: "join_clinic",
+        profile: {
+          name: "Dr. Aparna Iyer",
+          specialization: "General Physician",
+          medical_reg_no: "MCI-MH-45231"
+        },
+        clinic_code: "MED42X"
+      },
+      { uid: "verified-firebase", phoneNumber: "+919876543210" },
+      repository
+    );
+
+    expect(repository.createDoctorJoinRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: {
+          name: "Dr. Aparna Iyer",
+          specialization: "General Physician"
+        }
       })
     );
   });

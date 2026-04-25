@@ -1,0 +1,54 @@
+{
+  "responses": [
+    {
+      "method": "POST",
+      "status": 200,
+      "url": "https://jtezgoegatwbvdqeogiy.supabase.co/auth/v1/token?grant_type=password"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/settings/preferences"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/settings/preferences"
+    },
+    {
+      "method": "PATCH",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/settings/preferences"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/me"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": "https://bharatdoc-web.vercel.app/api/settings/preferences"
+    }
+  ],
+  "console": [],
+  "pageErrors": [],
+  "observations": {
+    "finalText": "AI SUMMARY\n\nSummary prompt\n\nCustomize the instruction used when generating clinical summaries.\n\nMust contain {{transcript}} where the conversation should be inserted.\nPROMPT\nValid\n502 / 2000 chars\nTest sample\nSave prompt"
+  }
+}

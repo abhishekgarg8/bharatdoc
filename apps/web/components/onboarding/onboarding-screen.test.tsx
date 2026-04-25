@@ -17,7 +17,44 @@ describe("OnboardingScreen", () => {
     expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
   });
 
-  it("runs the join-clinic flow and navigates to pending approval", async () => {
+  it("toggles password visibility without changing the entered value", () => {
+    render(<OnboardingScreen />);
+
+    const passwordInput = screen.getByLabelText("Password");
+
+    fireEvent.change(passwordInput, { target: { value: "bharatdoc123" } });
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: /show password/i }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+    expect(passwordInput).toHaveValue("bharatdoc123");
+
+    fireEvent.click(screen.getByRole("button", { name: /hide password/i }));
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
+  it("sends forgot-password email only from the login mode", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(async () => "verified-id-token"),
+      signInWithPassword: vi.fn(async () => "verified-id-token"),
+      resetPasswordForEmail: vi.fn(async () => undefined),
+      getCurrentIdToken: vi.fn(async () => null),
+      signOut: vi.fn()
+    };
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    expect(screen.queryByRole("button", { name: /forgot password/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /log in/i }));
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "Doctor@Example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /forgot password/i }));
+
+    await waitFor(() => expect(authClient.resetPasswordForEmail).toHaveBeenCalledWith("doctor@example.com"));
+    expect(screen.getByText("Check your email for a reset link.")).toBeInTheDocument();
+  });
+
+  it("runs the join-hospital flow and navigates to pending approval", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(async () => "verified-id-token"),
       signInWithPassword: vi.fn(async () => "verified-id-token"),
@@ -25,14 +62,18 @@ describe("OnboardingScreen", () => {
       signOut: vi.fn()
     };
     const navigate = vi.fn();
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = input.toString();
 
-      if (url.startsWith("/api/clinics/lookup")) {
+      if (url === "/api/hospitals") {
         return Response.json({
-          clinic_id: "clinic-id",
-          clinic_name: "Sunrise Clinic",
-          clinic_address: "24 Baner Road, Pune"
+          hospitals: [
+            {
+              hospital_id: "hospital-id",
+              hospital_name: "Sunrise Hospital",
+              hospital_address: "24 Baner Road, Pune"
+            }
+          ]
         });
       }
 
@@ -50,11 +91,11 @@ describe("OnboardingScreen", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
+    expect(screen.queryByLabelText(/medical registration no/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
-    await screen.findByText("Your clinic");
-    fireEvent.click(screen.getByRole("button", { name: /check clinic code/i }));
-    await screen.findByText("Sunrise Clinic");
+    await screen.findByText("Your hospital");
+    await waitFor(() => expect(screen.getAllByText("Sunrise Hospital").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
@@ -68,6 +109,8 @@ describe("OnboardingScreen", () => {
         headers: expect.objectContaining({ Authorization: "Bearer verified-id-token" })
       })
     );
+    const registerCall = fetcher.mock.calls.find(([input]) => input.toString() === "/api/auth/register");
+    expect(JSON.parse((registerCall?.[1] as RequestInit).body as string).profile).not.toHaveProperty("medical_reg_no");
   });
 
   it("supports deterministic demo onboarding without external auth or API calls", async () => {
@@ -80,9 +123,8 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
-    await screen.findByText("Your clinic");
-    fireEvent.click(screen.getByRole("button", { name: /check clinic code/i }));
-    await screen.findByText("Clinic found");
+    await screen.findByText("Your hospital");
+    await screen.findByText("Hospital selected");
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval?demo=1"));

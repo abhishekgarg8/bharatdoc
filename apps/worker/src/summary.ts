@@ -18,7 +18,7 @@ export interface SummaryResponse {
 
 function requireClinicId(clinicId: string | null): string {
   if (!clinicId) {
-    throw new HttpError(403, "Doctor must belong to a clinic.", "CLINIC_REQUIRED");
+    throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
   }
 
   return clinicId;
