@@ -81,6 +81,63 @@ describe("SettingsPageClient", () => {
     expect(screen.getAllByText("Dr. Meera Shah")).toHaveLength(1);
   });
 
+  it("signs out through Supabase and returns to onboarding", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(async () => undefined),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+
+      if (url === "/api/me") {
+        return Response.json({
+          doctor: {
+            id: "doctor-1",
+            firebase_uid: "firebase-owner",
+            clinic_id: "clinic-1",
+            role: "owner",
+            account_status: "active",
+            name: "Dr. Aparna Iyer",
+            specialization: "General Physician",
+            medical_reg_no: null,
+            phone: "+919876543210",
+            profile_photo_path: null,
+            custom_prompt: null,
+            transcription_lang: "auto",
+            created_at: "2026-04-23T09:00:00.000Z"
+          }
+        });
+      }
+
+      if (url === "/api/clinic/admin") {
+        return Response.json({
+          clinic: {
+            id: "clinic-1",
+            name: "Sunrise Clinic",
+            code: "MED42X",
+            address: "24 Baner Road, Pune",
+            activeDoctorsCount: 1
+          },
+          activeDoctors: [],
+          pendingApprovals: []
+        });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(<SettingsPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+
+    await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
+    expect(navigate).toHaveBeenCalledWith("/onboarding");
+  });
+
   it("uses demo settings only when explicit demo fallback is enabled", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
@@ -93,6 +150,25 @@ describe("SettingsPageClient", () => {
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
     expect(screen.getByText("MED42X")).toBeInTheDocument();
+  });
+
+  it("allows demo fallback sign-out even without Supabase browser env", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(async () => {
+        throw new Error("Supabase client environment is not configured.");
+      }),
+      getCurrentIdToken: vi.fn(async () => null)
+    };
+    const navigate = vi.fn();
+
+    render(<SettingsPageClient authClient={authClient} demoOnMissingToken onNavigate={navigate} />);
+
+    await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
   });
 
   it("shows an error instead of demo settings when authenticated loading fails", async () => {

@@ -5,6 +5,7 @@ import OnboardingPage from "@/app/onboarding/page";
 import RecordingDetailPage from "@/app/recordings/[id]/page";
 import NewRecordingPage from "@/app/recordings/new/page";
 import SearchPage from "@/app/search/page";
+import PendingApprovalPage from "@/app/pending-approval/page";
 import LanguageSettingsPage from "@/app/settings/language/page";
 import SettingsPage from "@/app/settings/page";
 import PromptSettingsPage from "@/app/settings/prompt/page";
@@ -31,6 +32,7 @@ describe("production demo route gate", () => {
     expect(propsFor(DashboardPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(SearchPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(SettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(PendingApprovalPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(NewRecordingPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
     expect(
@@ -50,6 +52,7 @@ describe("production demo route gate", () => {
 
     expect(isExplicitDemoModeEnabled({ demo: "1" })).toBe(true);
     expect(propsFor(DashboardPage() as ReactElement).demoOnMissingToken).toBeUndefined();
+    expect(propsFor(PendingApprovalPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
     expect(propsFor(OnboardingPage() as ReactElement).demoMode).toBeUndefined();
   });

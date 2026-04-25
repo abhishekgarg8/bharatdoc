@@ -1,5 +1,7 @@
-import { PendingApprovalScreen } from "@/components/onboarding/pending-approval-screen";
+import { PendingApprovalPageClient } from "@/components/onboarding/pending-approval-page-client";
+
+export const dynamic = "force-static";
 
 export default function PendingApprovalPage() {
-  return <PendingApprovalScreen />;
+  return <PendingApprovalPageClient />;
 }

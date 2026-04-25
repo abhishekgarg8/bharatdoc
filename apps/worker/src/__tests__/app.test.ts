@@ -298,7 +298,14 @@ describe("worker app", () => {
   });
 
   it("rejects transcription when patient id is missing before audio work", async () => {
-    const deps = depsFor(activeDoctor, { ...recording, patient_id: null });
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      patient_id: null,
+      transcript: null,
+      summary: null,
+      pdf_storage_path: null,
+      status: "recorded"
+    });
 
     await request(createApp(deps))
       .post("/api/transcribe")

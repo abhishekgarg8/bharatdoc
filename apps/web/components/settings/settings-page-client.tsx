@@ -75,6 +75,17 @@ export function SettingsPageClient({
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  async function signOutAndNavigate(options: { ignoreMissingAuthClient?: boolean } = {}) {
+    if (options.ignoreMissingAuthClient) {
+      await client.signOut().catch(() => undefined);
+      navigate("/onboarding");
+      return;
+    }
+
+    await client.signOut();
+    navigate("/onboarding");
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -160,7 +171,14 @@ export function SettingsPageClient({
   }
 
   if (allowDemoFallback && !idToken && !doctor) {
-    return <SettingsScreen fetcher={fetcher} allowLocalDemoWrites demoMode />;
+    return (
+      <SettingsScreen
+        fetcher={fetcher}
+        allowLocalDemoWrites
+        demoMode
+        onSignOut={() => signOutAndNavigate({ ignoreMissingAuthClient: true })}
+      />
+    );
   }
 
   const screenProps = {
@@ -173,5 +191,10 @@ export function SettingsPageClient({
     ...(clinic ? { clinic } : {})
   };
 
-  return <SettingsScreen {...screenProps} />;
+  return (
+    <SettingsScreen
+      {...screenProps}
+      onSignOut={() => signOutAndNavigate()}
+    />
+  );
 }

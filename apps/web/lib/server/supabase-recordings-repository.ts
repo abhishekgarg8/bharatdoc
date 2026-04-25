@@ -2,6 +2,7 @@ import "server-only";
 import type { Doctor, Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreateRecordingRow, RecordingListItem, RecordingsRepository } from "@/lib/server/recordings";
+import { patientIdSearchPattern } from "@/lib/server/patient-id-search";
 
 interface RecordingWithDoctorRow extends Recording {
   doctors:
@@ -63,7 +64,7 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
         .from("recordings")
         .select("*, doctors!inner(name)")
         .eq("clinic_id", clinicId)
-        .eq("patient_id", patientId)
+        .ilike("patient_id", patientIdSearchPattern(patientId))
         .order("recorded_at", { ascending: false })
         .limit(limit);
 

@@ -180,4 +180,22 @@ describe("SettingsScreen", () => {
     expect(screen.queryByText("Dr. Meera Shah")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
+
+  it("calls the sign-out handler from the account section", async () => {
+    const onSignOut = vi.fn(async () => undefined);
+
+    render(
+      <SettingsScreen
+        doctor={ownerDoctor}
+        clinic={clinic}
+        activeDoctors={[]}
+        pendingApprovals={[]}
+        onSignOut={onSignOut}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1));
+  });
 });

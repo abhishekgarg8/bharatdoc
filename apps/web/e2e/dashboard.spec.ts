@@ -74,7 +74,7 @@ test("demo onboarding join flow reaches pending approval", async ({ page }) => {
   await page.getByRole("button", { name: /check clinic code/i }).click();
   await expect(page.getByText("Clinic found")).toBeVisible();
   await page.getByRole("button", { name: /request to join/i }).click();
-  await expect(page).toHaveURL(/\/pending-approval$/);
+  await expect(page).toHaveURL(/\/pending-approval\?demo=1$/);
 });
 
 test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
@@ -98,7 +98,7 @@ test("onboarding smoke renders email password entry", async ({ page }) => {
 });
 
 test("pending approval smoke renders locked state", async ({ page }) => {
-  await page.goto("/pending-approval");
+  await page.goto("/pending-approval?demo=1");
 
   await expect(page.getByText("Waiting for approval")).toBeVisible();
   await expect(page.getByText("MED42X")).toBeVisible();

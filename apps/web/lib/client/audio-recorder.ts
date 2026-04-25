@@ -43,6 +43,44 @@ interface RecordRtcConstructor {
 }
 
 const CHUNK_INTERVAL_MS = 30_000;
+const DEMO_AUDIO_DURATION_SECONDS = 12;
+const DEMO_AUDIO_SAMPLE_RATE = 16_000;
+
+function writeAscii(view: DataView, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+export function createDemoWavBlob(durationSeconds = DEMO_AUDIO_DURATION_SECONDS): Blob {
+  const channelCount = 1;
+  const bytesPerSample = 2;
+  const sampleCount = Math.max(1, Math.round(durationSeconds * DEMO_AUDIO_SAMPLE_RATE));
+  const dataSize = sampleCount * channelCount * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, DEMO_AUDIO_SAMPLE_RATE, true);
+  view.setUint32(28, DEMO_AUDIO_SAMPLE_RATE * channelCount * bytesPerSample, true);
+  view.setUint16(32, channelCount * bytesPerSample, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    const tone = Math.sin((2 * Math.PI * 440 * sampleIndex) / DEMO_AUDIO_SAMPLE_RATE);
+    view.setInt16(44 + sampleIndex * bytesPerSample, Math.round(tone * 1200), true);
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
 
 function createElapsedClock() {
   let startedAt = 0;
@@ -162,10 +200,12 @@ export async function createDemoAudioRecorder(): Promise<AudioRecorder> {
       return undefined;
     },
     async stop() {
+      const blob = createDemoWavBlob(DEMO_AUDIO_DURATION_SECONDS);
+
       return {
-        blob: new Blob(["demo audio"], { type: "audio/webm" }),
-        mimeType: "audio/webm",
-        durationSeconds: 12
+        blob,
+        mimeType: blob.type,
+        durationSeconds: DEMO_AUDIO_DURATION_SECONDS
       };
     },
     onChunk() {

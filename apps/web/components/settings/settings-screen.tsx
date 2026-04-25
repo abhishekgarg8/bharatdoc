@@ -48,6 +48,7 @@ interface SettingsScreenProps {
   fetcher?: typeof fetch;
   allowLocalDemoWrites?: boolean;
   demoMode?: boolean;
+  onSignOut?: () => void | Promise<void>;
 }
 
 const defaultDoctor: SettingsDoctorProfile = {
@@ -148,7 +149,8 @@ export function SettingsScreen({
   idToken,
   fetcher = fetch,
   allowLocalDemoWrites = false,
-  demoMode = false
+  demoMode = false,
+  onSignOut
 }: SettingsScreenProps) {
   const resolvedDoctor = doctor ?? (demoMode ? defaultDoctor : null);
   const resolvedClinic = clinic ?? (demoMode ? defaultClinic : null);
@@ -172,6 +174,7 @@ export function SettingsScreen({
     address: clinicForState.address ?? "",
     code: clinicForState.code
   });
+  const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isOwner = resolvedDoctor?.role === "owner";
@@ -277,6 +280,23 @@ export function SettingsScreen({
     setMessage(null);
     setError(null);
     setExpandedPanel((current) => (current === panel ? null : panel));
+  }
+
+  async function handleSignOut() {
+    if (!onSignOut || signingOut) {
+      return;
+    }
+
+    setSigningOut(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await onSignOut();
+    } catch {
+      setError("Unable to sign out. Please try again.");
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -505,7 +525,7 @@ export function SettingsScreen({
           </SettingsGroup>
 
           <SettingsGroup title="Account">
-            <SettingsRow title="Sign out" danger />
+            <SettingsRow title={signingOut ? "Signing out..." : "Sign out"} danger onClick={handleSignOut} disabled={signingOut} />
             <SettingsRow title="Delete account" subtitle="Permanently erase records" danger />
           </SettingsGroup>
         </div>
@@ -535,7 +555,8 @@ function SettingsRow({
   icon,
   href,
   onClick,
-  expanded = false
+  expanded = false,
+  disabled = false
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -547,6 +568,7 @@ function SettingsRow({
   href?: string;
   onClick?: () => void;
   expanded?: boolean;
+  disabled?: boolean;
 }) {
   const className = cn(
     "flex w-full items-center gap-3 border-b border-rule px-4 py-3.5 text-left last:border-b-0",
@@ -580,7 +602,7 @@ function SettingsRow({
   }
 
   return (
-    <button className={className} type="button" onClick={onClick}>
+    <button className={className} type="button" onClick={onClick} disabled={disabled}>
       {content}
     </button>
   );

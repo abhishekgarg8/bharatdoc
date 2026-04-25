@@ -180,7 +180,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
     try {
       if (effectiveDemoMode) {
-        navigate(clinicMode === "join_clinic" ? "/pending-approval" : "/dashboard?demo=1");
+        navigate(clinicMode === "join_clinic" ? "/pending-approval?demo=1" : "/dashboard?demo=1");
       } else {
         const result = await registerAccount(idToken, input);
         navigate(destinationForRegistration(result));

@@ -1,34 +1,18 @@
 # Current Gap Findings
 
-Fresh review date: April 24, 2026.
+Fresh review date: April 25, 2026.
 
 Scope: current codebase checked against `implementation-plan.md`, `Plan/BharatDoc_PRD.md`, web route/client code, server APIs, worker APIs, Supabase repositories/migrations, local recording logic, smoke scripts, and env validation.
 
 Notes:
 - Active gaps only are listed below.
 - Previously closed findings have been pruned from this file.
-- Source code review was read-only; this Markdown file was updated because the request explicitly asked for gaps to be maintained here.
+- Revalidated against the current tree on April 25, 2026; the previously active P1 stale transcription artifact gap has been fixed.
+- This file was updated after implementing the active P1 remediation.
 
 ## P1 Findings
 
-### P1-1. Re-transcription can leave stale summary/PDF artifacts attached to a changed transcript
-
-Files:
-- `apps/worker/src/transcription.ts:89`
-- `apps/worker/src/repositories.ts:92`
-
-Problem:
-- The worker transcription path accepts any doctor-owned recording and then updates `audio_storage_path`, `transcript`, and `status = 'transcribed'`.
-- It does not constrain the current recording status to `recorded`.
-- It does not clear `summary` or `pdf_storage_path`.
-- A direct or retried `/api/transcribe` call against a recording that already reached `summary_ready` or `pdf_saved` can change the transcript while leaving old summary/PDF content in the row.
-- That reintroduces a clinical integrity problem: derived documentation can remain attached to source text it no longer represents.
-
-Fix:
-- Make transcription state transitions explicit.
-- Either reject transcription unless the recording is still `recorded`, or clear all derived fields (`summary`, `pdf_storage_path`) when transcript/audio changes.
-- Prefer a database update predicate such as `where status = 'recorded'` or a versioned transcript/summary/PDF model.
-- Add tests for re-transcribing `summary_ready` and `pdf_saved` recordings.
+No active P1 findings.
 
 ## P2 Findings
 

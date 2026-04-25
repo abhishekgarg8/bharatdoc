@@ -62,6 +62,14 @@ function requireTranscribableRecording(recording: Recording | null): Recording {
     throw new HttpError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
   }
 
+  if (recording.status !== "recorded") {
+    throw new HttpError(
+      409,
+      "Recording has already been transcribed or finalized.",
+      "RECORDING_NOT_TRANSCRIBABLE"
+    );
+  }
+
   return recording;
 }
 

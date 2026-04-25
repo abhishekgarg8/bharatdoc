@@ -7,6 +7,7 @@ import type {
   PdfStorage,
   RecordingProcessingRepository
 } from "./types.js";
+import { HttpError } from "./http-errors.js";
 
 interface DoctorRow {
   id: string;
@@ -95,15 +96,26 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
         .update({
           audio_storage_path: input.audioStoragePath,
           transcript: input.transcript,
+          summary: null,
+          pdf_storage_path: null,
           status: "transcribed"
         })
         .eq("id", input.recordingId)
         .eq("doctor_id", input.doctorId)
+        .eq("status", "recorded")
         .select("*")
-        .single<Recording>();
+        .maybeSingle<Recording>();
 
       if (error) {
         throw error;
+      }
+
+      if (!data) {
+        throw new HttpError(
+          409,
+          "Recording has already been transcribed or finalized.",
+          "RECORDING_NOT_TRANSCRIBABLE"
+        );
       }
 
       return data;

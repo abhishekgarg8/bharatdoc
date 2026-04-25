@@ -23,6 +23,24 @@ function workerTranscriptionUrl(): string {
   return `${workerBaseUrl.replace(/\/$/, "")}/api/transcribe`;
 }
 
+export function audioFilenameExtension(mimeType: string): "m4a" | "ogg" | "wav" | "webm" {
+  const normalizedMimeType = mimeType.toLowerCase();
+
+  if (normalizedMimeType.includes("mp4") || normalizedMimeType.includes("m4a")) {
+    return "m4a";
+  }
+
+  if (normalizedMimeType.includes("ogg")) {
+    return "ogg";
+  }
+
+  if (normalizedMimeType.includes("wav") || normalizedMimeType.includes("wave")) {
+    return "wav";
+  }
+
+  return "webm";
+}
+
 export async function transcribeRecordingAudio(
   idToken: string,
   recordingId: string,
@@ -32,7 +50,7 @@ export async function transcribeRecordingAudio(
 ): Promise<WorkerTranscriptionResponse> {
   const body = new FormData();
   body.set("recording_id", recordingId);
-  body.set("audio", audio, `recording.${mimeType.includes("mp4") ? "m4a" : "webm"}`);
+  body.set("audio", audio, `recording.${audioFilenameExtension(mimeType)}`);
 
   const response = await fetcher(workerTranscriptionUrl(), {
     method: "POST",

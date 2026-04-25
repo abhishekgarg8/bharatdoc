@@ -85,6 +85,6 @@ describe("OnboardingScreen", () => {
     await screen.findByText("Clinic found");
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval?demo=1"));
   });
 });

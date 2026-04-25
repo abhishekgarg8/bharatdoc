@@ -90,6 +90,12 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] P1-1: Upload transcription audio directly from the browser to Railway and gate worker CORS.
 - [x] P1-2: Align Vercel/Railway env docs with required web API route secrets.
 - [x] P1-3: Reconcile validation records with current live-smoke and staging-smoke status.
+- [x] Close active P1 gap: reject finalized recording re-transcription and clear derived summary/PDF artifacts on valid transcription.
+- [x] P1-4: Restore Settings sign-out so Supabase sessions are cleared and users return to onboarding.
+- [x] P2-1: Support clinic-scoped partial Patient ID search while preserving clinic isolation.
+- [x] P2-2: Replace pending approval hardcoded clinic details with authenticated live clinic, owner, and request data.
+- [x] P3-1: Replace the fake recorder's mislabeled text blob with a valid WAV payload and matching upload extension.
+- [ ] Config follow-up: replace the local `.env` anon key with the anon key for Supabase project `jtezgoegatwbvdqeogiy` once the correct public anon key is available.
 
 ### 10. Production latency remediation
 

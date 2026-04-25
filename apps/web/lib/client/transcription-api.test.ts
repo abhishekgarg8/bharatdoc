@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { transcribeRecordingAudio } from "@/lib/client/transcription-api";
+import { audioFilenameExtension, transcribeRecordingAudio } from "@/lib/client/transcription-api";
 
 describe("transcription api client", () => {
   afterEach(() => {
@@ -50,6 +50,14 @@ describe("transcription api client", () => {
         fetcher
       )
     ).rejects.toThrow("Unable to transcribe recording.");
+  });
+
+  it("uses upload filenames that match supported audio MIME types", () => {
+    expect(audioFilenameExtension("audio/webm")).toBe("webm");
+    expect(audioFilenameExtension("audio/wav")).toBe("wav");
+    expect(audioFilenameExtension("audio/x-wav")).toBe("wav");
+    expect(audioFilenameExtension("audio/mp4")).toBe("m4a");
+    expect(audioFilenameExtension("audio/ogg")).toBe("ogg");
   });
 
   it("fails fast when the public worker URL is missing", async () => {

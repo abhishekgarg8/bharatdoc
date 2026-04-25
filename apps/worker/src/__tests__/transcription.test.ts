@@ -190,6 +190,31 @@ describe("transcribeRecording", () => {
     expect(deps.recordings.markRecordingTranscribed).not.toHaveBeenCalled();
   });
 
+  it.each(["summary_ready", "pdf_saved"] as const)(
+    "rejects re-transcription for %s recordings before audio work",
+    async (status) => {
+      const deps = depsFor({
+        ...recording,
+        audio_storage_path: "clinic/doctor/original.webm",
+        transcript: "Original transcript.",
+        summary: "Original summary.",
+        pdf_storage_path: status === "pdf_saved" ? "clinic/doctor/original.pdf" : null,
+        status
+      });
+
+      await expect(
+        transcribeRecording(
+          { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
+          { recordingId: recording.id, audio: fileInput() },
+          deps
+        )
+      ).rejects.toMatchObject({ code: "RECORDING_NOT_TRANSCRIBABLE" });
+      expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+      expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
+      expect(deps.recordings.markRecordingTranscribed).not.toHaveBeenCalled();
+    }
+  );
+
   it("does not mark recordings when upload or transcription fails", async () => {
     const storageFailure = depsFor();
     vi.mocked(storageFailure.audioStorage.uploadRecordingAudio).mockRejectedValueOnce(new Error("storage failed"));
