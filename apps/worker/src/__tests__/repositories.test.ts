@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createRecordingProcessingRepository } from "../repositories.js";
+import {
+  createRecordingProcessingRepository,
+  createTranscriptionAttemptRepository,
+} from "../repositories.js";
 
 const transcribedRecording: Recording = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -16,7 +19,7 @@ const transcribedRecording: Recording = {
   pdf_storage_path: null,
   status: "transcribed",
   recorded_at: "2026-04-23T06:20:00.000Z",
-  created_at: "2026-04-23T06:20:01.000Z"
+  created_at: "2026-04-23T06:20:01.000Z",
 };
 
 function supabaseFor(result: { data: Recording | null; error: Error | null }) {
@@ -29,20 +32,36 @@ function supabaseFor(result: { data: Recording | null; error: Error | null }) {
     update: vi.fn(() => query),
     eq: vi.fn(() => query),
     select: vi.fn(() => query),
-    maybeSingle: vi.fn(async () => result)
+    maybeSingle: vi.fn(async () => result),
   };
 
   return {
     query,
     supabase: {
-      from: vi.fn(() => query)
-    } as unknown as SupabaseClient
+      from: vi.fn(() => query),
+    } as unknown as SupabaseClient,
+  };
+}
+
+function supabaseForInsert(result: { error: Error | null }) {
+  const query = {
+    insert: vi.fn(async () => result),
+  };
+
+  return {
+    query,
+    supabase: {
+      from: vi.fn(() => query),
+    } as unknown as SupabaseClient,
   };
 }
 
 describe("createRecordingProcessingRepository", () => {
   it("marks only recorded rows transcribed and clears stale derived artifacts", async () => {
-    const { supabase, query } = supabaseFor({ data: transcribedRecording, error: null });
+    const { supabase, query } = supabaseFor({
+      data: transcribedRecording,
+      error: null,
+    });
     const repository = createRecordingProcessingRepository(supabase);
 
     await expect(
@@ -50,8 +69,8 @@ describe("createRecordingProcessingRepository", () => {
         recordingId: transcribedRecording.id,
         doctorId: transcribedRecording.doctor_id,
         transcript: "Updated transcript.",
-        audioStoragePath: "clinic/doctor/new.webm"
-      })
+        audioStoragePath: "clinic/doctor/new.webm",
+      }),
     ).resolves.toEqual(transcribedRecording);
 
     expect(supabase.from).toHaveBeenCalledWith("recordings");
@@ -60,10 +79,14 @@ describe("createRecordingProcessingRepository", () => {
       transcript: "Updated transcript.",
       summary: null,
       pdf_storage_path: null,
-      status: "transcribed"
+      status: "transcribed",
     });
     expect(query.eq).toHaveBeenNthCalledWith(1, "id", transcribedRecording.id);
-    expect(query.eq).toHaveBeenNthCalledWith(2, "doctor_id", transcribedRecording.doctor_id);
+    expect(query.eq).toHaveBeenNthCalledWith(
+      2,
+      "doctor_id",
+      transcribedRecording.doctor_id,
+    );
     expect(query.eq).toHaveBeenNthCalledWith(3, "status", "recorded");
   });
 
@@ -76,8 +99,62 @@ describe("createRecordingProcessingRepository", () => {
         recordingId: transcribedRecording.id,
         doctorId: transcribedRecording.doctor_id,
         transcript: "Updated transcript.",
-        audioStoragePath: "clinic/doctor/new.webm"
-      })
+        audioStoragePath: "clinic/doctor/new.webm",
+      }),
     ).rejects.toMatchObject({ code: "RECORDING_NOT_TRANSCRIBABLE" });
+  });
+});
+
+describe("createTranscriptionAttemptRepository", () => {
+  it("persists failed transcription attempt metadata without transcript content", async () => {
+    const { supabase, query } = supabaseForInsert({ error: null });
+    const repository = createTranscriptionAttemptRepository(supabase);
+
+    await expect(
+      repository.recordFailedAttempt({
+        recordingId: transcribedRecording.id,
+        doctorId: transcribedRecording.doctor_id,
+        clinicId: transcribedRecording.clinic_id,
+        requestId: "req-test-123",
+        stage: "transcribe_audio",
+        errorCode: "INTERNAL_ERROR",
+        errorMessage: "Internal server error.",
+        errorStatus: 500,
+        audioStoragePath: "clinic/doctor/new.webm",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(supabase.from).toHaveBeenCalledWith("transcription_attempts");
+    expect(query.insert).toHaveBeenCalledWith({
+      recording_id: transcribedRecording.id,
+      doctor_id: transcribedRecording.doctor_id,
+      clinic_id: transcribedRecording.clinic_id,
+      request_id: "req-test-123",
+      stage: "transcribe_audio",
+      error_code: "INTERNAL_ERROR",
+      error_message: "Internal server error.",
+      error_status: 500,
+      audio_storage_path: "clinic/doctor/new.webm",
+    });
+  });
+
+  it("surfaces failed attempt insert errors to the caller", async () => {
+    const { supabase } = supabaseForInsert({
+      error: new Error("insert failed"),
+    });
+    const repository = createTranscriptionAttemptRepository(supabase);
+
+    await expect(
+      repository.recordFailedAttempt({
+        recordingId: transcribedRecording.id,
+        doctorId: transcribedRecording.doctor_id,
+        clinicId: transcribedRecording.clinic_id,
+        requestId: "req-test-123",
+        stage: "transcribe_audio",
+        errorCode: "INTERNAL_ERROR",
+        errorMessage: "Internal server error.",
+        errorStatus: 500,
+      }),
+    ).rejects.toThrow("insert failed");
   });
 });

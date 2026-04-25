@@ -90,6 +90,9 @@ describe("RecordingDetailPageClient", () => {
     render(<RecordingDetailPageClient recordingId="p-10481" authClient={authClient} fetcher={fetcher} />);
 
     await expect(screen.findByText("Unable to load recording.")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /go back/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("href", "/dashboard");
     expect(screen.queryByRole("heading", { name: "P-10481" })).not.toBeInTheDocument();
   });
 

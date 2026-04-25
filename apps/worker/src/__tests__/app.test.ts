@@ -16,7 +16,7 @@ const activeDoctor: Doctor = {
   profile_photo_path: null,
   custom_prompt: null,
   transcription_lang: "auto",
-  created_at: "2026-04-23T09:00:00.000Z"
+  created_at: "2026-04-23T09:00:00.000Z",
 };
 
 const recording: Recording = {
@@ -32,7 +32,7 @@ const recording: Recording = {
   pdf_storage_path: null,
   status: "summary_ready",
   recorded_at: "2026-04-23T06:20:00.000Z",
-  created_at: "2026-04-23T06:20:01.000Z"
+  created_at: "2026-04-23T06:20:01.000Z",
 };
 
 const clinic: Clinic = {
@@ -41,10 +41,13 @@ const clinic: Clinic = {
   clinic_code: "MED42X",
   address: "Pune",
   logo_storage_path: null,
-  created_at: "2026-04-23T05:00:00.000Z"
+  created_at: "2026-04-23T05:00:00.000Z",
 };
 
-function depsFor(doctor: Doctor | null, recordingResult: Recording | null = recording): WorkerDependencies {
+function depsFor(
+  doctor: Doctor | null,
+  recordingResult: Recording | null = recording,
+): WorkerDependencies {
   return {
     tokenVerifier: {
       verifyIdToken: vi.fn(async (token: string) => {
@@ -53,13 +56,13 @@ function depsFor(doctor: Doctor | null, recordingResult: Recording | null = reco
         }
 
         return { uid: doctor?.firebase_uid ?? "missing-auth-user" };
-      })
+      }),
     },
     doctors: {
-      findByAuthUid: vi.fn(async () => doctor)
+      findByAuthUid: vi.fn(async () => doctor),
     },
     clinics: {
-      findClinicById: vi.fn(async () => clinic)
+      findClinicById: vi.fn(async () => clinic),
     },
     recordings: {
       findRecordingForDoctor: vi.fn(async () => recordingResult),
@@ -67,36 +70,45 @@ function depsFor(doctor: Doctor | null, recordingResult: Recording | null = reco
         ...(recordingResult ?? recording),
         audio_storage_path: input.audioStoragePath,
         transcript: input.transcript,
-        status: "transcribed" as const
+        status: "transcribed" as const,
       })),
       markRecordingSummarized: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
         summary: input.summary,
         status: "summary_ready" as const,
-        pdf_storage_path: null
+        pdf_storage_path: null,
       })),
       markRecordingPdfSaved: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
         pdf_storage_path: input.pdfStoragePath,
-        status: "pdf_saved" as const
-      }))
+        status: "pdf_saved" as const,
+      })),
     },
     transcriptionClient: {
-      transcribe: vi.fn(async () => "Patient reports fever for two days.")
+      transcribe: vi.fn(async () => "Patient reports fever for two days."),
     },
     summaryClient: {
-      summarize: vi.fn(async () => "Chief Complaint: Fever\nPlan: Fluids and paracetamol.")
+      summarize: vi.fn(
+        async () => "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+      ),
     },
     audioStorage: {
-      uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm")
+      uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm"),
     },
     pdfRenderer: {
-      render: vi.fn(async () => Buffer.from("%PDF-1.4\n"))
+      render: vi.fn(async () => Buffer.from("%PDF-1.4\n")),
     },
     pdfStorage: {
       uploadRecordingPdf: vi.fn(async () => "clinic/doctor/recording.pdf"),
-      createSignedUrl: vi.fn(async () => "https://signed.example.com/recording.pdf")
-    }
+      createSignedUrl: vi.fn(
+        async () => "https://signed.example.com/recording.pdf",
+      ),
+    },
+    logger: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    },
   };
 }
 
@@ -113,8 +125,8 @@ describe("worker app", () => {
   it("allows browser requests only from configured CORS origins", async () => {
     await request(
       createApp(depsFor(null), {
-        corsOrigins: "https://bharatdoc-web.vercel.app,http://127.0.0.1:3000"
-      })
+        corsOrigins: "https://bharatdoc-web.vercel.app,http://127.0.0.1:3000",
+      }),
     )
       .options("/api/transcribe")
       .set("Origin", "https://bharatdoc-web.vercel.app")
@@ -124,8 +136,8 @@ describe("worker app", () => {
 
     await request(
       createApp(depsFor(null), {
-        corsOrigins: "https://bharatdoc-web.vercel.app"
-      })
+        corsOrigins: "https://bharatdoc-web.vercel.app",
+      }),
     )
       .options("/api/transcribe")
       .set("Origin", "https://evil.example")
@@ -165,7 +177,11 @@ describe("worker app", () => {
   });
 
   it("rejects pending doctors before owner approval", async () => {
-    await request(createApp(depsFor({ ...activeDoctor, account_status: "pending_approval" })))
+    await request(
+      createApp(
+        depsFor({ ...activeDoctor, account_status: "pending_approval" }),
+      ),
+    )
       .get("/api/me")
       .set("Authorization", "Bearer valid-token")
       .expect(403)
@@ -193,7 +209,7 @@ describe("worker app", () => {
       .field("recording_id", recording.id)
       .attach("audio", Buffer.from("audio"), {
         filename: "recording.webm",
-        contentType: "audio/webm"
+        contentType: "audio/webm",
       })
       .expect(401)
       .expect(({ body }) => {
@@ -211,7 +227,7 @@ describe("worker app", () => {
       .set("Authorization", "Bearer valid-token")
       .attach("audio", Buffer.from("audio"), {
         filename: "recording.webm",
-        contentType: "audio/webm"
+        contentType: "audio/webm",
       })
       .expect(400)
       .expect(({ body }) => {
@@ -229,7 +245,12 @@ describe("worker app", () => {
   });
 
   it("transcribes uploaded audio for active doctors", async () => {
-    const deps = depsFor(activeDoctor, { ...recording, status: "recorded", transcript: null, summary: null });
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+    });
 
     await request(createApp(deps))
       .post("/api/transcribe")
@@ -237,7 +258,7 @@ describe("worker app", () => {
       .field("recording_id", recording.id)
       .attach("audio", Buffer.from("audio"), {
         filename: "recording.webm",
-        contentType: "audio/webm"
+        contentType: "audio/webm",
       })
       .expect(200)
       .expect(({ body }) => {
@@ -245,35 +266,121 @@ describe("worker app", () => {
           recording_id: recording.id,
           transcript: "Patient reports fever for two days.",
           audio_storage_path: "clinic/doctor/recording.webm",
-          status: "transcribed"
+          status: "transcribed",
         });
       });
 
-    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(
+      recording.id,
+      activeDoctor.id,
+    );
     expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalledWith({
       audio: expect.any(Buffer),
       mimeType: "audio/webm",
       clinicId: activeDoctor.clinic_id,
       doctorId: activeDoctor.id,
       recordingId: recording.id,
-      filename: "recording.webm"
+      filename: "recording.webm",
     });
     expect(deps.transcriptionClient.transcribe).toHaveBeenCalledWith({
       audio: expect.any(Buffer),
       mimeType: "audio/webm",
       filename: "recording.webm",
-      language: "auto"
+      language: "auto",
     });
     expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
       transcript: "Patient reports fever for two days.",
-      audioStoragePath: "clinic/doctor/recording.webm"
+      audioStoragePath: "clinic/doctor/recording.webm",
     });
   });
 
+  it("logs and persists failed transcription requests with the request id", async () => {
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const deps = {
+      ...depsFor(activeDoctor, {
+        ...recording,
+        status: "recorded",
+        transcript: null,
+        summary: null,
+      }),
+      logger,
+      transcriptionAttempts: {
+        recordFailedAttempt: vi.fn(async () => undefined),
+      },
+    };
+    vi.mocked(deps.transcriptionClient.transcribe).mockRejectedValueOnce(
+      new Error("provider failed with secret detail"),
+    );
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("x-request-id", "req-transcribe-failure")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("audio"), {
+        filename: "recording.webm",
+        contentType: "audio/webm",
+      })
+      .expect("x-request-id", "req-transcribe-failure")
+      .expect(500)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("INTERNAL_ERROR");
+      });
+
+    expect(deps.transcriptionAttempts.recordFailedAttempt).toHaveBeenCalledWith(
+      {
+        recordingId: recording.id,
+        doctorId: activeDoctor.id,
+        clinicId: activeDoctor.clinic_id,
+        requestId: "req-transcribe-failure",
+        stage: "transcribe_audio",
+        errorCode: "INTERNAL_ERROR",
+        errorMessage: "Internal server error.",
+        errorStatus: 500,
+        audioStoragePath: "clinic/doctor/recording.webm",
+      },
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "transcription.request.received",
+      expect.objectContaining({
+        request_id: "req-transcribe-failure",
+        recording_id: recording.id,
+        audio_mime_type: "audio/webm",
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "transcription.request.failed",
+      expect.objectContaining({
+        request_id: "req-transcribe-failure",
+        recording_id: recording.id,
+        error_code: "INTERNAL_ERROR",
+        error_message: "Internal server error.",
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "http.request.failed",
+      expect.objectContaining({
+        request_id: "req-transcribe-failure",
+        path: "/api/transcribe",
+        error_code: "INTERNAL_ERROR",
+        error_message: "Internal server error.",
+      }),
+    );
+  });
+
   it("accepts realistic mobile audio uploads under the Phase 1 limit", async () => {
-    const deps = depsFor(activeDoctor, { ...recording, status: "recorded", transcript: null, summary: null });
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+    });
 
     await request(createApp(deps))
       .post("/api/transcribe")
@@ -281,7 +388,7 @@ describe("worker app", () => {
       .field("recording_id", recording.id)
       .attach("audio", Buffer.alloc(5 * 1024 * 1024, "a"), {
         filename: "one-hour-mobile-recording.webm",
-        contentType: "audio/webm"
+        contentType: "audio/webm",
       })
       .expect(200)
       .expect(({ body }) => {
@@ -291,8 +398,8 @@ describe("worker app", () => {
     expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalledWith(
       expect.objectContaining({
         filename: "one-hour-mobile-recording.webm",
-        mimeType: "audio/webm"
-      })
+        mimeType: "audio/webm",
+      }),
     );
   });
 
@@ -303,7 +410,7 @@ describe("worker app", () => {
       transcript: null,
       summary: null,
       pdf_storage_path: null,
-      status: "recorded"
+      status: "recorded",
     });
 
     await request(createApp(deps))
@@ -312,7 +419,7 @@ describe("worker app", () => {
       .field("recording_id", recording.id)
       .attach("audio", Buffer.from("audio"), {
         filename: "recording.webm",
-        contentType: "audio/webm"
+        contentType: "audio/webm",
       })
       .expect(400)
       .expect(({ body }) => {
@@ -363,16 +470,19 @@ describe("worker app", () => {
         expect(body).toEqual({
           recording_id: recording.id,
           summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
-          status: "summary_ready"
+          status: "summary_ready",
         });
       });
 
-    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(
+      recording.id,
+      activeDoctor.id,
+    );
     expect(deps.summaryClient.summarize).toHaveBeenCalled();
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol."
+      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
     });
   });
 
@@ -416,22 +526,24 @@ describe("worker app", () => {
           recording_id: recording.id,
           pdf_storage_path: "clinic/doctor/recording.pdf",
           signed_url: "https://signed.example.com/recording.pdf",
-          status: "pdf_saved"
+          status: "pdf_saved",
         });
       });
 
-    expect(deps.clinics.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
+    expect(deps.clinics.findClinicById).toHaveBeenCalledWith(
+      activeDoctor.clinic_id,
+    );
     expect(deps.pdfRenderer.render).toHaveBeenCalledWith({
       clinic,
       doctor: activeDoctor,
       recording,
-      generatedAt: expect.any(Date)
+      generatedAt: expect.any(Date),
     });
     expect(deps.pdfStorage.uploadRecordingPdf).toHaveBeenCalled();
     expect(deps.recordings.markRecordingPdfSaved).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      pdfStoragePath: "clinic/doctor/recording.pdf"
+      pdfStoragePath: "clinic/doctor/recording.pdf",
     });
   });
 });

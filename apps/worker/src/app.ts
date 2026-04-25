@@ -1,11 +1,20 @@
+import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express from "express";
 import multer from "multer";
 import { authenticateRequest } from "./auth.js";
-import { errorHandler } from "./http-errors.js";
+import {
+  createErrorHandler,
+  sanitizeErrorForTelemetry,
+} from "./http-errors.js";
+import { consoleStructuredLogger } from "./logger.js";
 import { generateRecordingPdf } from "./pdf-generation.js";
 import { summarizeRecording } from "./summary.js";
-import { MAX_TRANSCRIPTION_AUDIO_BYTES, transcribeRecording, type TranscribeRecordingInput } from "./transcription.js";
+import {
+  MAX_TRANSCRIPTION_AUDIO_BYTES,
+  transcribeRecording,
+  type TranscribeRecordingInput,
+} from "./transcription.js";
 import type { WorkerDependencies } from "./types.js";
 
 interface WorkerAppOptions {
@@ -19,17 +28,56 @@ function parseCorsOrigins(corsOrigins: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = {}): express.Express {
+function requestIdFromHeader(
+  header: string | string[] | undefined,
+): string | null {
+  if (typeof header === "string" && header.trim()) {
+    return header.trim();
+  }
+
+  if (Array.isArray(header)) {
+    const value = header.find((entry) => entry.trim());
+    return value?.trim() ?? null;
+  }
+
+  return null;
+}
+
+function recordingIdFromBody(body: unknown): string | null {
+  if (!body || typeof body !== "object" || !("recording_id" in body)) {
+    return null;
+  }
+
+  const recordingId = (body as { recording_id?: unknown }).recording_id;
+  return typeof recordingId === "string" && recordingId.trim()
+    ? recordingId.trim()
+    : null;
+}
+
+export function createApp(
+  deps: WorkerDependencies,
+  options: WorkerAppOptions = {},
+): express.Express {
   const app = express();
   const allowedOrigins = parseCorsOrigins(options.corsOrigins);
+  const logger = deps.logger ?? consoleStructuredLogger;
   const audioUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: MAX_TRANSCRIPTION_AUDIO_BYTES
-    }
+      fileSize: MAX_TRANSCRIPTION_AUDIO_BYTES,
+    },
   });
 
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    const requestId =
+      requestIdFromHeader(req.headers["x-request-id"]) ??
+      requestIdFromHeader(req.headers["x-railway-request-id"]) ??
+      randomUUID();
+    res.locals.requestId = requestId;
+    res.setHeader("x-request-id", requestId);
+    next();
+  });
   app.use(
     cors({
       allowedHeaders: ["Authorization", "Content-Type"],
@@ -41,15 +89,15 @@ export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = 
         }
 
         callback(null, false);
-      }
-    })
+      },
+    }),
   );
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({
       ok: true,
-      service: "bharatdoc-worker"
+      service: "bharatdoc-worker",
     });
   });
 
@@ -57,33 +105,71 @@ export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = 
     try {
       const auth = await authenticateRequest(req, deps);
       res.json({
-        doctor: auth.doctor
+        doctor: auth.doctor,
       });
     } catch (error) {
       next(error);
     }
   });
 
-  app.post("/api/transcribe", audioUpload.single("audio"), async (req, res, next) => {
-    try {
-      const auth = await authenticateRequest(req, deps);
-      const input: TranscribeRecordingInput = {};
+  app.post(
+    "/api/transcribe",
+    audioUpload.single("audio"),
+    async (req, res, next) => {
+      const requestId = res.locals.requestId as string;
+      const startedAt = Date.now();
+      const recordingId = recordingIdFromBody(req.body);
 
-      if (typeof req.body.recording_id === "string") {
-        input.recordingId = req.body.recording_id;
+      logger.info("transcription.request.received", {
+        request_id: requestId,
+        recording_id: recordingId,
+        method: req.method,
+        path: req.path,
+        content_length: req.header("content-length") ?? null,
+        audio_size_bytes: req.file?.size ?? null,
+        audio_mime_type: req.file?.mimetype ?? null,
+      });
+
+      try {
+        const auth = await authenticateRequest(req, deps);
+        logger.info("transcription.request.authenticated", {
+          request_id: requestId,
+          recording_id: recordingId,
+          doctor_id: auth.doctor.id,
+          clinic_id: auth.doctor.clinic_id,
+        });
+        const input: TranscribeRecordingInput = {};
+
+        if (typeof req.body.recording_id === "string") {
+          input.recordingId = req.body.recording_id;
+        }
+
+        if (req.file) {
+          input.audio = req.file;
+        }
+
+        input.requestId = requestId;
+        const result = await transcribeRecording(auth, input, deps);
+
+        logger.info("transcription.request.succeeded", {
+          request_id: requestId,
+          recording_id: result.recording_id,
+          doctor_id: auth.doctor.id,
+          clinic_id: auth.doctor.clinic_id,
+          duration_ms: Date.now() - startedAt,
+        });
+        res.json(result);
+      } catch (error) {
+        logger.error("transcription.request.failed", {
+          request_id: requestId,
+          recording_id: recordingId,
+          duration_ms: Date.now() - startedAt,
+          ...sanitizeErrorForTelemetry(error),
+        });
+        next(error);
       }
-
-      if (req.file) {
-        input.audio = req.file;
-      }
-
-      const result = await transcribeRecording(auth, input, deps);
-
-      res.json(result);
-    } catch (error) {
-      next(error);
-    }
-  });
+    },
+  );
 
   app.post("/api/summarize", async (req, res, next) => {
     try {
@@ -91,9 +177,12 @@ export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = 
       const result = await summarizeRecording(
         auth,
         {
-          recordingId: typeof req.body.recording_id === "string" ? req.body.recording_id : undefined
+          recordingId:
+            typeof req.body.recording_id === "string"
+              ? req.body.recording_id
+              : undefined,
         },
-        deps
+        deps,
       );
 
       res.json(result);
@@ -108,9 +197,12 @@ export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = 
       const result = await generateRecordingPdf(
         auth,
         {
-          recordingId: typeof req.body.recording_id === "string" ? req.body.recording_id : undefined
+          recordingId:
+            typeof req.body.recording_id === "string"
+              ? req.body.recording_id
+              : undefined,
         },
-        deps
+        deps,
       );
 
       res.json(result);
@@ -119,7 +211,7 @@ export function createApp(deps: WorkerDependencies, options: WorkerAppOptions = 
     }
   });
 
-  app.use(errorHandler);
+  app.use(createErrorHandler(logger));
 
   return app;
 }
