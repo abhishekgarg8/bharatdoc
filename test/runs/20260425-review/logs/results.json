@@ -1,0 +1,222 @@
+{
+  "passed": 43,
+  "failed": 0,
+  "results": [
+    {
+      "id": "R01a",
+      "status": "PASS",
+      "note": "Worker health 200 ok=true service=bharatdoc-worker"
+    },
+    {
+      "id": "R01b",
+      "status": "PASS",
+      "note": "Manifest 200 name=BharatDoc display=standalone start_url=/"
+    },
+    {
+      "id": "R02",
+      "status": "PASS",
+      "note": "Web root 200 HTML contains BharatDoc (~7KB)"
+    },
+    {
+      "id": "R11",
+      "status": "PASS",
+      "note": "/api/me → 401 (correct auth guard)"
+    },
+    {
+      "id": "R12",
+      "status": "PASS",
+      "note": "/api/dashboard → 401 (correct auth guard)"
+    },
+    {
+      "id": "R13",
+      "status": "PASS",
+      "note": "/api/patients/search → 401 (correct auth guard)"
+    },
+    {
+      "id": "R14",
+      "status": "PASS",
+      "note": "/api/recordings → 401 (correct auth guard)"
+    },
+    {
+      "id": "R15",
+      "status": "PASS",
+      "note": "worker /api/transcribe → 401 (correct auth guard)"
+    },
+    {
+      "id": "R03-/dashboard",
+      "status": "PASS",
+      "note": "/dashboard → /onboarding ✓ (https://bharatdoc-web.vercel.app/onboarding)"
+    },
+    {
+      "id": "R03-/recordings/new",
+      "status": "PASS",
+      "note": "/recordings/new → /onboarding ✓ (https://bharatdoc-web.vercel.app/onboarding)"
+    },
+    {
+      "id": "R03-/search",
+      "status": "PASS",
+      "note": "/search → /onboarding ✓ (https://bharatdoc-web.vercel.app/onboarding)"
+    },
+    {
+      "id": "R03-/settings",
+      "status": "PASS",
+      "note": "/settings → /onboarding ✓ (https://bharatdoc-web.vercel.app/onboarding)"
+    },
+    {
+      "id": "R03-/",
+      "status": "PASS",
+      "note": "/ → /onboarding ✓"
+    },
+    {
+      "id": "R04a",
+      "status": "PASS",
+      "note": "BharatDoc text visible on onboarding"
+    },
+    {
+      "id": "R04b",
+      "status": "PASS",
+      "note": "'Sign up' tab visible"
+    },
+    {
+      "id": "R04c",
+      "status": "PASS",
+      "note": "'Log in' tab visible"
+    },
+    {
+      "id": "R05a",
+      "status": "PASS",
+      "note": "Empty form submit stays on onboarding (did not navigate away)"
+    },
+    {
+      "id": "R05b",
+      "status": "PASS",
+      "note": "Short password: error visible or stayed on onboarding"
+    },
+    {
+      "id": "R06a",
+      "status": "PASS",
+      "note": "Wrong credentials: stayed on onboarding (no dashboard nav)"
+    },
+    {
+      "id": "R07",
+      "status": "PASS",
+      "note": "Join clinic path not reachable from initial onboarding state (signup-first flow)"
+    },
+    {
+      "id": "R08",
+      "status": "PASS",
+      "note": "/access-rejected page rendered"
+    },
+    {
+      "id": "R16",
+      "status": "PASS",
+      "note": "Unauthenticated /pending-approval redirects to /onboarding"
+    },
+    {
+      "id": "R17",
+      "status": "PASS",
+      "note": "No app console errors on onboarding page load"
+    },
+    {
+      "id": "R18",
+      "status": "PASS",
+      "note": "User-readable error shown for empty email (no raw JSON)"
+    },
+    {
+      "id": "R19",
+      "status": "PASS",
+      "note": "Join option not directly visible on signup tab (requires email signup first)"
+    },
+    {
+      "id": "R22",
+      "status": "PASS",
+      "note": "All 2 input(s) have aria-label, placeholder, or associated label"
+    },
+    {
+      "id": "R24a",
+      "status": "PASS",
+      "note": "Password input initially type=password (hidden) ✓"
+    },
+    {
+      "id": "R24b",
+      "status": "PASS",
+      "note": "Eye toggle in container clicked → input type=text (password visible) ✓"
+    },
+    {
+      "id": "R25a",
+      "status": "PASS",
+      "note": "Forgot password link is visible in login mode"
+    },
+    {
+      "id": "R25b",
+      "status": "PASS",
+      "note": "Forgot password shows email input / reset form"
+    },
+    {
+      "id": "R27a",
+      "status": "PASS",
+      "note": "Credential submit result (no crash): url=https://bharatdoc-web.vercel.app/onboarding text=B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries."
+    },
+    {
+      "id": "R09",
+      "status": "PASS",
+      "note": "No horizontal overflow (docWidth=390, winWidth=390)"
+    },
+    {
+      "id": "R10",
+      "status": "PASS",
+      "note": "No horizontal overflow (docWidth=1366, winWidth=1366)"
+    },
+    {
+      "id": "R20a",
+      "status": "PASS",
+      "note": "/api/me unauth → 401 structured {code, message} ✓"
+    },
+    {
+      "id": "R20b",
+      "status": "PASS",
+      "note": "/api/dashboard unauth → 401 structured {code, message} ✓"
+    },
+    {
+      "id": "R20c",
+      "status": "PASS",
+      "note": "/api/recordings unauth → 401 structured {code, message} ✓"
+    },
+    {
+      "id": "R21a",
+      "status": "PASS",
+      "note": "OPTIONS preflight → 204, Access-Control-Allow-Origin: https://bharatdoc-web.vercel.app, Methods: GET,POST,OPTIONS"
+    },
+    {
+      "id": "R21b",
+      "status": "PASS",
+      "note": "GET /health with Origin → 200, Access-Control-Allow-Origin: https://bharatdoc-web.vercel.app"
+    },
+    {
+      "id": "R23a",
+      "status": "PASS",
+      "note": "Invalid code → 404 CLINIC_NOT_FOUND"
+    },
+    {
+      "id": "R23b",
+      "status": "PASS",
+      "note": "Empty code → 404 error (CLINIC_NOT_FOUND)"
+    },
+    {
+      "id": "R23c",
+      "status": "PASS",
+      "note": "Known code E6CUDM → 200 {\"clinic_id\":\"976f32d0-4c55-41b2-9129-e4d354d76024\",\"clinic_name\":\"BharatDoc E2E"
+    },
+    {
+      "id": "R26a",
+      "status": "PASS",
+      "note": "worker /api/summarize → 401 (auth guard ✓)"
+    },
+    {
+      "id": "R26b",
+      "status": "PASS",
+      "note": "worker /api/generate-pdf → 401 (auth guard ✓)"
+    }
+  ],
+  "timestamp": "2026-04-25T20:08:22.564Z"
+}
