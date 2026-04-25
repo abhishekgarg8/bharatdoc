@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowLeft, Search, XCircle } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileText, Search, XCircle } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { normalizePatientId } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
-import { DashboardRecordCard } from "@/components/dashboard-record-card";
+import { StatusTick } from "@/components/status-tick";
 import {
   demoDashboardRecords,
   searchPatientRecords,
@@ -28,6 +28,65 @@ function demoSearch(records: DashboardRecord[], query: string): DashboardRecord[
   }
 
   return records.filter((record) => normalizePatientId(record.patientId).includes(normalizedQuery));
+}
+
+function SearchResultCard({ record }: { record: DashboardRecord }) {
+  const hasPdf = Boolean(record.pdfSignedUrl || record.pdfStoragePath || record.status === "pdf_saved");
+
+  return (
+    <article className="rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]">
+      <Link
+        className="flex items-start gap-3 transition active:scale-[0.99]"
+        href={`/recordings/${record.id}`}
+        aria-label={`Open recording ${record.patientId}`}
+      >
+        <div className="min-w-[72px] shrink-0 rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
+          <div className="font-body text-[9px] font-bold uppercase tracking-[0.12em] text-ochre">Patient</div>
+          <div className="mt-0.5 font-mono text-[13px] font-bold text-ink">{record.patientId}</div>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 font-body text-[13px] font-bold text-ink">
+            <span>{record.time}</span>
+            {record.label ? <span className="truncate text-ink-muted">· {record.label}</span> : null}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 font-body text-[11.5px] text-ink-muted">
+            <span>{record.clinicName ?? "Hospital record"}</span>
+            <span className="h-0.5 w-0.5 rounded-full bg-ink-faint" />
+            <span>{record.doctorName}</span>
+            <span className="h-0.5 w-0.5 rounded-full bg-ink-faint" />
+            <span>{record.duration}</span>
+          </div>
+          <div className="mt-2">
+            <StatusTick status={record.status} />
+          </div>
+        </div>
+
+        <ChevronRight className="mt-1 h-4.5 w-4.5 shrink-0 text-ink-faint" />
+      </Link>
+
+      {hasPdf ? (
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-rule bg-paper-deep px-3 py-2">
+          <span className="flex items-center gap-2 font-body text-[11.5px] font-semibold text-ink-muted">
+            <FileText className="h-3.5 w-3.5 text-terracotta" />
+            PDF available
+          </span>
+          {record.pdfSignedUrl ? (
+            <a
+              className="font-body text-[11.5px] font-bold text-terracotta underline-offset-2 hover:underline"
+              href={record.pdfSignedUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open PDF
+            </a>
+          ) : (
+            <span className="font-body text-[11.5px] font-bold text-ink-muted">Saved</span>
+          )}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function SearchScreen({
@@ -157,7 +216,7 @@ export function SearchScreen({
             </div>
           ) : null}
           {results.map((record) => (
-            <DashboardRecordCard key={record.id} record={record} />
+            <SearchResultCard key={record.id} record={record} />
           ))}
         </div>
 

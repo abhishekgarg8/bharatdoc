@@ -69,11 +69,14 @@ describe("SearchScreen", () => {
           {
             id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             patient_id: "P-10470",
-            label: null,
+            label: "Follow-up",
+            clinic_name: "Sunrise Hospital",
             duration_seconds: 862,
             doctor_name: "Dr. Rao",
             status: "pdf_saved",
-            recorded_at: "2026-04-22T12:50:00.000Z"
+            recorded_at: "2026-04-22T12:50:00.000Z",
+            pdf_storage_path: "pdfs/p-10470.pdf",
+            pdf_signed_url: "https://signed.example.com/p-10470.pdf"
           }
         ]
       })
@@ -94,6 +97,9 @@ describe("SearchScreen", () => {
       });
     });
     expect(screen.getByText("P-10470")).toBeInTheDocument();
+    expect(screen.getByText(/Follow-up/)).toBeInTheDocument();
+    expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute("href", "https://signed.example.com/p-10470.pdf");
   });
 
   it("clears search results back to recent records", async () => {

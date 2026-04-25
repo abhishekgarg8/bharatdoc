@@ -41,7 +41,17 @@ describe("DashboardPageClient", () => {
       const url = input.toString();
 
       if (url === "/api/dashboard") {
-        return Response.json({ doctor: activeDoctor, records: [apiRecord] });
+        return Response.json({
+          doctor: activeDoctor,
+          clinic: {
+            id: activeDoctor.clinic_id,
+            name: "Care Hospital",
+            code: "CARE42",
+            address: "Surat"
+          },
+          pending_approvals_count: 0,
+          records: [apiRecord]
+        });
       }
 
       return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
@@ -50,12 +60,40 @@ describe("DashboardPageClient", () => {
     render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
 
     await expect(screen.findAllByText("Dr. Nisha Shah")).resolves.toHaveLength(2);
+    expect(screen.getByText("Care Hospital")).toBeInTheDocument();
     expect(screen.getByText("P-20001")).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
       headers: { Authorization: "Bearer id-token" }
     });
     expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
+  });
+
+  it("uses the dashboard API pending approval count for owners", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor: { ...activeDoctor, role: "owner" },
+        clinic: {
+          id: activeDoctor.clinic_id,
+          name: "Care Hospital",
+          code: "CARE42",
+          address: "Surat"
+        },
+        pending_approvals_count: 0,
+        records: []
+      })
+    ) as unknown as typeof fetch;
+
+    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Care Hospital")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open settings/i })).toHaveTextContent("");
   });
 
   it("uses demo dashboard only when explicit demo fallback is enabled", async () => {
@@ -97,7 +135,12 @@ describe("DashboardPageClient", () => {
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       if (input.toString() === "/api/dashboard") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" }, records: [] });
+        return Response.json({
+          doctor: { ...activeDoctor, account_status: "pending_approval" },
+          clinic: null,
+          pending_approvals_count: 0,
+          records: []
+        });
       }
 
       return Response.json({ records: [apiRecord] });

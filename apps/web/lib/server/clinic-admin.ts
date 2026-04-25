@@ -1,4 +1,4 @@
-import { assertOwner, ClinicCodeSchema, type Clinic, type Doctor } from "@bharatdoc/shared";
+import { assertOwner, type Clinic, type Doctor } from "@bharatdoc/shared";
 import { z } from "zod";
 import type { VerifiedUser } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
@@ -43,7 +43,6 @@ export interface ClinicAdminSnapshot {
 export interface ClinicProfileUpdate {
   name?: string;
   address?: string | null;
-  clinic_code?: string;
 }
 
 export interface JoinRequestForReview {
@@ -56,7 +55,6 @@ export interface JoinRequestForReview {
 export interface ClinicAdminRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   findClinicById(clinicId: string): Promise<Clinic | null>;
-  findClinicByCode(clinicCode: string): Promise<Clinic | null>;
   listActiveDoctors(clinicId: string): Promise<ActiveClinicDoctor[]>;
   listPendingApprovals(clinicId: string): Promise<PendingApproval[]>;
   findJoinRequestForClinic(requestId: string, clinicId: string): Promise<JoinRequestForReview | null>;
@@ -68,8 +66,7 @@ export interface ClinicAdminRepository {
 const ClinicProfileUpdateSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
-    address: z.string().trim().optional().nullable(),
-    clinic_code: ClinicCodeSchema.optional()
+    address: z.string().trim().optional().nullable()
   })
   .strict();
 
@@ -200,16 +197,6 @@ export async function updateClinicProfileForOwner(
     if (address !== undefined) {
       update.address = address;
     }
-  }
-
-  if (parsed.clinic_code !== undefined) {
-    const existingClinic = await repository.findClinicByCode(parsed.clinic_code);
-
-    if (existingClinic && existingClinic.id !== clinic.id) {
-      throw new AppError(409, "Hospital code is already in use.", "CLINIC_CODE_TAKEN");
-    }
-
-    update.clinic_code = parsed.clinic_code;
   }
 
   if (Object.keys(update).length === 0) {

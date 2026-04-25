@@ -11,11 +11,18 @@ import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-cli
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
 import { fetchRecordingDetail } from "@/lib/client/summary-api";
+import { transcribeRecordingAudio, type WorkerTranscriptionResponse } from "@/lib/client/transcription-api";
+import {
+  createIndexedDbLocalRecordingRepository,
+  localRecordingAudioBlob,
+  type LocalRecordingRepository
+} from "@/lib/client/local-recordings";
 
 interface RecordingDetailPageClientProps {
   recordingId: string;
   authClient?: AuthClient;
   fetcher?: typeof fetch;
+  localRepository?: LocalRecordingRepository;
   demoOnMissingToken?: boolean;
   onNavigate?: (href: string) => void;
 }
@@ -24,10 +31,15 @@ export function RecordingDetailPageClient({
   recordingId,
   authClient,
   fetcher = fetch,
+  localRepository,
   demoOnMissingToken,
   onNavigate
 }: RecordingDetailPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
+  const repository = useMemo(
+    () => localRepository ?? createIndexedDbLocalRecordingRepository(),
+    [localRepository]
+  );
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const queryDemoMode = useExplicitDemoMode();
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
@@ -106,9 +118,32 @@ export function RecordingDetailPageClient({
     return <PageError message={error ?? "Recording was not found."} />;
   }
 
+  async function generateTranscriptFromLocalAudio(recordingIdToTranscribe: string): Promise<WorkerTranscriptionResponse> {
+    if (!idToken) {
+      throw new Error("Authentication is required.");
+    }
+
+    const localRecording = (await repository.list()).find(
+      (item) => item.serverRecordingId === recordingIdToTranscribe || item.id === recordingIdToTranscribe
+    );
+    const audioBlob = localRecording ? localRecordingAudioBlob(localRecording) : null;
+    const audioMimeType = localRecording?.audioMimeType ?? null;
+
+    if (!localRecording || !audioBlob || !audioMimeType) {
+      throw new Error("Local audio is not available.");
+    }
+
+    await repository.markTranscribing(localRecording.id);
+    const result = await transcribeRecordingAudio(idToken, recordingIdToTranscribe, audioBlob, audioMimeType, fetcher);
+    await repository.markTranscribed(localRecording.id, result.transcript);
+
+    return result;
+  }
+
   const detailProps = {
     recording,
     fetcher,
+    onGenerateTranscript: generateTranscriptFromLocalAudio,
     ...(idToken ? { idToken } : {})
   };
 

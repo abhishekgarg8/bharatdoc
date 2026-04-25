@@ -37,7 +37,6 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
   return {
     findDoctorByAuthUid: vi.fn(async () => doctor),
     findClinicById: vi.fn(async () => clinic),
-    findClinicByCode: vi.fn(async (clinicCode: string) => (clinicCode === clinic.clinic_code ? clinic : null)),
     listActiveDoctors: vi.fn(async () => [
       {
         id: owner.id,
@@ -80,8 +79,7 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
     updateClinicProfile: vi.fn(async (_clinicId: string, input) => ({
       ...clinic,
       name: input.name ?? clinic.name,
-      address: input.address !== undefined ? input.address : clinic.address,
-      clinic_code: input.clinic_code ?? clinic.clinic_code
+      address: input.address !== undefined ? input.address : clinic.address
     }))
   };
 }
@@ -178,32 +176,24 @@ describe("clinic admin approvals", () => {
         { uid: "firebase-owner", phoneNumber: "+919876543210" },
         {
           name: "Sunrise Family Clinic",
-          address: "   ",
-          clinic_code: "MED43Y"
+          address: "   "
         },
         repository
       )
     ).resolves.toMatchObject({
       name: "Sunrise Family Clinic",
       address: null,
-      code: "MED43Y",
+      code: "MED42X",
       activeDoctorsCount: 2
     });
     expect(repository.updateClinicProfile).toHaveBeenCalledWith(clinic.id, {
       name: "Sunrise Family Clinic",
-      address: null,
-      clinic_code: "MED43Y"
+      address: null
     });
   });
 
-  it("rejects clinic code updates that collide with another clinic", async () => {
-    const repository = {
-      ...createRepository(),
-      findClinicByCode: vi.fn(async () => ({
-        ...clinic,
-        id: "66666666-6666-4666-8666-666666666666"
-      }))
-    };
+  it("rejects clinic code updates because the code is read-only", async () => {
+    const repository = createRepository();
 
     await expect(
       updateClinicProfileForOwner(
@@ -211,7 +201,8 @@ describe("clinic admin approvals", () => {
         { clinic_code: "MED43Y" },
         repository
       )
-    ).rejects.toMatchObject({ code: "CLINIC_CODE_TAKEN" });
+    ).rejects.toThrow();
+    expect(repository.updateClinicProfile).not.toHaveBeenCalled();
   });
 
   it("rejects empty clinic profile updates", async () => {

@@ -11,6 +11,15 @@ import {
   type RecordingsRepository
 } from "@/lib/server/recordings";
 
+const clinic = {
+  id: "22222222-2222-4222-8222-222222222222",
+  name: "Sunrise Hospital",
+  clinic_code: "MED42X",
+  address: "24 Baner Road, Pune",
+  logo_storage_path: null,
+  created_at: "2026-04-23T09:00:00.000Z"
+};
+
 const activeDoctor: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
   firebase_uid: "firebase-doctor",
@@ -46,6 +55,8 @@ const recording: RecordingListItem = {
 function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepository {
   return {
     findDoctorByAuthUid: vi.fn(async () => doctor),
+    findClinicById: vi.fn(async () => clinic),
+    countPendingJoinRequests: vi.fn(async () => 0),
     listRecentRecordings: vi.fn(async () => [recording]),
     searchPatientRecordings: vi.fn(async () => [recording]),
     createRecording: vi.fn(async (input) => ({
@@ -82,10 +93,13 @@ describe("recordings service", () => {
         id: recording.id,
         patient_id: "P-10482",
         label: null,
+        clinic_name: null,
         duration_seconds: 494,
         doctor_name: "Dr. Aparna Iyer",
         status: "transcribed",
-        recorded_at: "2026-04-23T06:12:00.000Z"
+        recorded_at: "2026-04-23T06:12:00.000Z",
+        pdf_storage_path: null,
+        pdf_signed_url: null
       }
     ]);
     expect(repository.listRecentRecordings).toHaveBeenCalledWith(activeDoctor.id, 10);
@@ -106,15 +120,36 @@ describe("recordings service", () => {
       getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
     ).resolves.toMatchObject({
       doctor: activeDoctor,
+      clinic: {
+        id: clinic.id,
+        name: "Sunrise Hospital",
+        code: "MED42X"
+      },
+      pending_approvals_count: 0,
       records: [
         {
           id: recording.id,
           patient_id: "P-10482",
+          clinic_name: "Sunrise Hospital",
           doctor_name: "Dr. Aparna Iyer"
         }
       ]
     });
+    expect(repository.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
+    expect(repository.countPendingJoinRequests).not.toHaveBeenCalled();
     expect(repository.listRecentRecordings).toHaveBeenCalledWith(activeDoctor.id, 10);
+  });
+
+  it("returns real pending approval counts for owner dashboard snapshots", async () => {
+    const repository = createRepository({ ...activeDoctor, role: "owner" });
+    vi.mocked(repository.countPendingJoinRequests).mockResolvedValueOnce(2);
+
+    await expect(
+      getDashboardSnapshotForUser({ uid: "firebase-owner", phoneNumber: "+919876543210" }, repository)
+    ).resolves.toMatchObject({
+      pending_approvals_count: 2
+    });
+    expect(repository.countPendingJoinRequests).toHaveBeenCalledWith(activeDoctor.clinic_id);
   });
 
   it("returns inactive doctor context without loading dashboard recordings", async () => {
@@ -124,6 +159,8 @@ describe("recordings service", () => {
       getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
     ).resolves.toMatchObject({
       doctor: { account_status: "pending_approval" },
+      clinic: null,
+      pending_approvals_count: 0,
       records: []
     });
     expect(repository.listRecentRecordings).not.toHaveBeenCalled();
@@ -139,7 +176,36 @@ describe("recordings service", () => {
         repository
       )
     ).resolves.toHaveLength(1);
+    expect(repository.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
     expect(repository.searchPatientRecordings).toHaveBeenCalledWith(activeDoctor.clinic_id, "P-10482", 25);
+  });
+
+  it("returns search-specific clinic, label, and signed PDF context", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.searchPatientRecordings).mockResolvedValueOnce([
+      {
+        ...recording,
+        label: "Follow-up",
+        status: "pdf_saved",
+        pdf_storage_path: "pdfs/p-10482.pdf"
+      }
+    ]);
+
+    await expect(
+      searchPatientRecordingsForClinic(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        "P-10482",
+        repository
+      )
+    ).resolves.toMatchObject([
+      {
+        label: "Follow-up",
+        clinic_name: "Sunrise Hospital",
+        pdf_storage_path: "pdfs/p-10482.pdf",
+        pdf_signed_url: "https://signed.example.com/recording.pdf"
+      }
+    ]);
+    expect(repository.createPdfSignedUrl).toHaveBeenCalledWith("pdfs/p-10482.pdf");
   });
 
   it("requires patient IDs for patient search", async () => {

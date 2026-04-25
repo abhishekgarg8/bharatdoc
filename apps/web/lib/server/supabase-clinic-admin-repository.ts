@@ -72,16 +72,6 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
       return data as Clinic | null;
     },
 
-    async findClinicByCode(clinicCode: string): Promise<Clinic | null> {
-      const { data, error } = await supabase.from("clinics").select("*").eq("clinic_code", clinicCode).maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as Clinic | null;
-    },
-
     async listActiveDoctors(clinicId: string): Promise<ActiveClinicDoctor[]> {
       const { data, error } = await supabase
         .from("doctors")

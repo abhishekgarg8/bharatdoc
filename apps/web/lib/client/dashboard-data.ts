@@ -3,11 +3,15 @@ import type { Doctor, RecordingStatus } from "@bharatdoc/shared";
 export interface DashboardRecord {
   id: string;
   patientId: string;
+  label?: string | null;
+  clinicName?: string | null;
   time: string;
   duration: string;
   doctorName: string;
   status: RecordingStatus;
   recordedAt?: string;
+  pdfStoragePath?: string | null;
+  pdfSignedUrl?: string | null;
   offline?: boolean;
 }
 
@@ -15,10 +19,13 @@ export interface DashboardApiRecord {
   id: string;
   patient_id: string | null;
   label: string | null;
+  clinic_name?: string | null;
   duration_seconds: number | null;
   doctor_name: string;
   status: RecordingStatus;
   recorded_at: string;
+  pdf_storage_path?: string | null;
+  pdf_signed_url?: string | null;
 }
 
 export interface DashboardRecordListResponse {
@@ -27,11 +34,20 @@ export interface DashboardRecordListResponse {
 
 export interface DashboardSnapshotResponse {
   doctor: Doctor;
+  clinic: {
+    id: string;
+    name: string;
+    code: string;
+    address: string | null;
+  } | null;
+  pending_approvals_count: number;
   records: DashboardApiRecord[];
 }
 
 export interface DashboardSnapshot {
   doctor: Doctor;
+  clinic: DashboardSnapshotResponse["clinic"];
+  pendingApprovalsCount: number;
   records: DashboardRecord[];
 }
 
@@ -147,11 +163,15 @@ export function mapApiRecordingToDashboardRecord(record: DashboardApiRecord, now
   return {
     id: record.id,
     patientId: record.patient_id ?? record.label ?? "Unassigned",
+    label: record.label,
+    clinicName: record.clinic_name ?? null,
     time: formatRecordedAt(record.recorded_at, now),
     duration: formatRecordingDuration(record.duration_seconds),
     doctorName: record.doctor_name,
     status: record.status,
-    recordedAt: record.recorded_at
+    recordedAt: record.recorded_at,
+    pdfStoragePath: record.pdf_storage_path ?? null,
+    pdfSignedUrl: record.pdf_signed_url ?? null
   };
 }
 
@@ -211,6 +231,8 @@ export async function fetchDashboardSnapshot(
 
   return {
     doctor: payload.doctor,
+    clinic: payload.clinic ?? null,
+    pendingApprovalsCount: payload.pending_approvals_count ?? 0,
     records: payload.records.map((record) => mapApiRecordingToDashboardRecord(record))
   };
 }

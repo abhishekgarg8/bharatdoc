@@ -98,6 +98,9 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Brand the Supabase signup confirmation email subject and HTML template as BharatDoc.
 - [x] Remove Medical registration no. from shared schemas, onboarding UI, backend writes/selects, database migrations, PRD/design references, and tests.
 - [x] Fix UI audit Critical issues: forgot password, password visibility, access-rejected actions, and dashboard settings navigation.
+- [x] Finish partial gap #7: dashboard now uses live hospital context and pending approval counts instead of hardcoded owner badges.
+- [x] Finish partial gap #11: hospital code is read-only/copyable in settings and removed from normal profile update contracts.
+- [x] Finish partial gap #19: search results now render hospital, label, and PDF availability context from search-specific DTO fields.
 - [ ] Config follow-up: replace the local `.env` anon key with the anon key for Supabase project `jtezgoegatwbvdqeogiy` once the correct public anon key is available.
 
 ### 10. Production latency remediation

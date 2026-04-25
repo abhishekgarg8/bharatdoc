@@ -47,6 +47,36 @@ describe("TranscriptSummaryScreen", () => {
     expect(screen.getByText("Summary generated.")).toBeInTheDocument();
   });
 
+  it("generates a missing transcript before summary generation", async () => {
+    const generateTranscript = vi.fn(async () => ({
+      recording_id: recording.id,
+      transcript: "Generated transcript.",
+      audio_storage_path: "hospital/doctor/recording.webm",
+      status: "transcribed" as const
+    }));
+
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          status: "recorded",
+          transcript: null
+        }}
+        onGenerateTranscript={generateTranscript}
+      />
+    );
+
+    const generateButton = screen.getByRole("button", { name: /generate/i });
+    expect(generateButton).toBeEnabled();
+    fireEvent.click(generateButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Generated transcript.")).toBeInTheDocument();
+    });
+    expect(generateTranscript).toHaveBeenCalledWith(recording.id);
+    expect(screen.getByLabelText("Transcribed")).toBeInTheDocument();
+  });
+
   it("saves edited summaries", async () => {
     const save = vi.fn(async (_recordingId: string, summary: string) => ({
       ...recording,

@@ -42,7 +42,6 @@ export interface ClinicAdminSnapshot {
 export interface ClinicProfileUpdate {
   name?: string;
   address?: string | null;
-  clinic_code?: string;
 }
 
 async function parseJson<T>(response: Response, errorMessage: string): Promise<T> {

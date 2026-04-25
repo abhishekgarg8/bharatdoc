@@ -1,5 +1,5 @@
 import "server-only";
-import type { Doctor, Recording } from "@bharatdoc/shared";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreateRecordingRow, RecordingListItem, RecordingsRepository } from "@/lib/server/recordings";
 import { patientIdSearchPattern } from "@/lib/server/patient-id-search";
@@ -42,6 +42,30 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       }
 
       return data as Doctor | null;
+    },
+
+    async findClinicById(clinicId: string): Promise<Clinic | null> {
+      const { data, error } = await supabase.from("clinics").select("*").eq("id", clinicId).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as Clinic | null;
+    },
+
+    async countPendingJoinRequests(clinicId: string): Promise<number> {
+      const { count, error } = await supabase
+        .from("clinic_join_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("clinic_id", clinicId)
+        .eq("status", "pending");
+
+      if (error) {
+        throw error;
+      }
+
+      return count ?? 0;
     },
 
     async listRecentRecordings(doctorId: string, limit: number): Promise<RecordingListItem[]> {

@@ -17,12 +17,14 @@ import {
   type WorkerPdfResponse,
   type WorkerSummaryResponse
 } from "@/lib/client/summary-api";
+import type { WorkerTranscriptionResponse } from "@/lib/client/transcription-api";
 import { cn } from "@/lib/utils";
 
 interface TranscriptSummaryScreenProps {
   recording: RecordingDetailRecord;
   idToken?: string;
   fetcher?: typeof fetch;
+  onGenerateTranscript?: (recordingId: string) => Promise<WorkerTranscriptionResponse>;
   onGenerateSummary?: (recordingId: string) => Promise<WorkerSummaryResponse>;
   onSaveSummary?: (recordingId: string, summary: string) => Promise<RecordingDetailRecord>;
   onGeneratePdf?: (recordingId: string) => Promise<WorkerPdfResponse>;
@@ -38,11 +40,13 @@ export function TranscriptSummaryScreen({
   recording,
   idToken,
   fetcher = fetch,
+  onGenerateTranscript,
   onGenerateSummary,
   onSaveSummary,
   onGeneratePdf
 }: TranscriptSummaryScreenProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>(recording.summary ? "summary" : "transcript");
+  const [transcript, setTranscript] = useState(recording.transcript ?? "");
   const [summary, setSummary] = useState(recording.summary ?? "");
   const [status, setStatus] = useState(recording.status);
   const [savedSummary, setSavedSummary] = useState(recording.summary ?? "");
@@ -54,16 +58,39 @@ export function TranscriptSummaryScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pdfPanelRef = useRef<HTMLDivElement>(null);
-  const transcriptBlocks = useMemo(() => linesFor(recording.transcript), [recording.transcript]);
+  const transcriptBlocks = useMemo(() => linesFor(transcript), [transcript]);
   const summaryBlocks = useMemo(() => linesFor(summary), [summary]);
-  const canGenerate = Boolean(recording.transcript?.trim());
+  const hasTranscript = Boolean(transcript.trim());
   const canSave = summary.trim() !== savedSummary.trim();
+
+  async function generateTranscript() {
+    setMessage(null);
+    setError(null);
+    setGenerating(true);
+
+    try {
+      if (!onGenerateTranscript) {
+        throw new Error("Audio is not available.");
+      }
+
+      const result = await onGenerateTranscript(recording.id);
+
+      setTranscript(result.transcript);
+      setStatus(result.status);
+      setActiveTab("transcript");
+      setMessage("Transcript ready.");
+    } catch {
+      setError("Original audio is not available on this device. Open this recording on the device that captured it and try again.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function generateSummary() {
     setMessage(null);
     setError(null);
 
-    if (!canGenerate) {
+    if (!hasTranscript) {
       setError("Transcript is required before summary generation.");
       return;
     }
@@ -93,6 +120,15 @@ export function TranscriptSummaryScreen({
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function generatePrimary() {
+    if (hasTranscript) {
+      await generateSummary();
+      return;
+    }
+
+    await generateTranscript();
   }
 
   async function saveSummary() {
@@ -335,8 +371,8 @@ export function TranscriptSummaryScreen({
             className="flex-1"
             variant="ghost"
             icon={<Sparkles className="h-4 w-4" />}
-            disabled={!canGenerate || generating}
-            onClick={generateSummary}
+            disabled={generating}
+            onClick={generatePrimary}
           >
             {generating ? "Generating" : "Generate"}
           </BharatButton>

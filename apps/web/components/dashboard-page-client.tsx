@@ -32,6 +32,8 @@ export function DashboardPageClient({
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [clinicName, setClinicName] = useState<string | null>(allowDemoFallback ? "Sunrise Hospital, Pune" : null);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(allowDemoFallback ? 1 : 0);
   const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,11 +75,15 @@ export function DashboardPageClient({
 
         if (isMounted) {
           setDoctor(snapshot.doctor);
+          setClinicName(snapshot.clinic?.name ?? null);
+          setPendingApprovalsCount(snapshot.pendingApprovalsCount);
           setRecords(snapshot.records);
         }
       } catch {
         if (isMounted) {
           if (allowDemoFallback) {
+            setClinicName("Sunrise Hospital, Pune");
+            setPendingApprovalsCount(1);
             setRecords(demoDashboardRecords);
           } else {
             setError("Unable to load dashboard. Please sign in again.");
@@ -107,9 +113,9 @@ export function DashboardPageClient({
 
   const screenProps = {
     records,
-    pendingApprovalsCount: doctor?.role === "owner" ? 1 : 0,
-    ...(doctor?.name ? { doctorName: doctor.name } : {}),
-    ...(doctor?.clinic_id ? { clinicName: "Your hospital" } : {})
+    pendingApprovalsCount,
+    ...(doctor?.name ? { doctorName: doctor.name } : allowDemoFallback ? { doctorName: "Dr. Aparna Iyer" } : {}),
+    ...(clinicName ? { clinicName } : {})
   };
 
   return <DashboardScreen {...screenProps} />;

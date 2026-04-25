@@ -5,6 +5,7 @@ import {
   requirePatientId,
   RecordingCreateSchema,
   type Doctor,
+  type Clinic,
   type Recording,
   type RecordingStatus
 } from "@bharatdoc/shared";
@@ -19,14 +20,26 @@ export interface DashboardRecording {
   id: string;
   patient_id: string | null;
   label: string | null;
+  clinic_name: string | null;
   duration_seconds: number | null;
   doctor_name: string;
   status: RecordingStatus;
   recorded_at: string;
+  pdf_storage_path: string | null;
+  pdf_signed_url: string | null;
+}
+
+export interface DashboardClinicContext {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
 }
 
 export interface DashboardSnapshot {
   doctor: Doctor;
+  clinic: DashboardClinicContext | null;
+  pending_approvals_count: number;
   records: DashboardRecording[];
 }
 
@@ -56,6 +69,8 @@ export interface CreateRecordingRow {
 
 export interface RecordingsRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
+  findClinicById(clinicId: string): Promise<Clinic | null>;
+  countPendingJoinRequests(clinicId: string): Promise<number>;
   listRecentRecordings(doctorId: string, limit: number): Promise<RecordingListItem[]>;
   searchPatientRecordings(clinicId: string, patientId: string, limit: number): Promise<RecordingListItem[]>;
   createRecording(input: CreateRecordingRow): Promise<RecordingListItem>;
@@ -67,6 +82,15 @@ export interface RecordingsRepository {
     summary: string;
   }): Promise<RecordingListItem>;
   createPdfSignedUrl(path: string): Promise<string>;
+}
+
+function toDashboardClinicContext(clinic: Clinic): DashboardClinicContext {
+  return {
+    id: clinic.id,
+    name: clinic.name,
+    code: clinic.clinic_code,
+    address: clinic.address
+  };
 }
 
 function clampLimit(limit: number | undefined, fallback: number): number {
@@ -148,15 +172,23 @@ async function requireActiveDoctorContext(user: VerifiedUser, repository: Record
   return assertActiveDoctor(doctor);
 }
 
-export function toDashboardRecording(recording: RecordingListItem, fallbackDoctorName: string): DashboardRecording {
+export function toDashboardRecording(
+  recording: RecordingListItem,
+  fallbackDoctorName: string,
+  clinicName: string | null = null,
+  pdfSignedUrl: string | null = null
+): DashboardRecording {
   return {
     id: recording.id,
     patient_id: recording.patient_id,
     label: recording.label,
+    clinic_name: clinicName,
     duration_seconds: recording.duration_seconds,
     doctor_name: recording.doctor_name ?? fallbackDoctorName,
     status: recording.status,
-    recorded_at: recording.recorded_at
+    recorded_at: recording.recorded_at,
+    pdf_storage_path: recording.pdf_storage_path,
+    pdf_signed_url: pdfSignedUrl
   };
 }
 
@@ -204,15 +236,21 @@ export async function getDashboardSnapshotForUser(
   }
 
   if (doctor.account_status !== "active") {
-    return { doctor, records: [] };
+    return { doctor, clinic: null, pending_approvals_count: 0, records: [] };
   }
 
-  requireClinicId(doctor);
+  const clinicId = requireClinicId(doctor);
+  const [clinic, recordings, pendingApprovalsCount] = await Promise.all([
+    repository.findClinicById(clinicId),
+    repository.listRecentRecordings(doctor.id, clampLimit(limit, 10)),
+    doctor.role === "owner" ? repository.countPendingJoinRequests(clinicId) : Promise.resolve(0)
+  ]);
 
-  const recordings = await repository.listRecentRecordings(doctor.id, clampLimit(limit, 10));
   return {
     doctor,
-    records: recordings.map((recording) => toDashboardRecording(recording, doctor.name))
+    clinic: clinic ? toDashboardClinicContext(clinic) : null,
+    pending_approvals_count: pendingApprovalsCount,
+    records: recordings.map((recording) => toDashboardRecording(recording, doctor.name, clinic?.name ?? null))
   };
 }
 
@@ -245,9 +283,23 @@ export async function searchPatientRecordingsForClinic(
   const doctor = await requireActiveDoctorContext(user, repository);
   const clinicId = requireClinicId(doctor);
   const normalizedPatientId = requireSearchPatientId(patientId);
-  const recordings = await repository.searchPatientRecordings(clinicId, normalizedPatientId, clampLimit(limit, 25));
+  const [clinic, recordings] = await Promise.all([
+    repository.findClinicById(clinicId),
+    repository.searchPatientRecordings(clinicId, normalizedPatientId, clampLimit(limit, 25))
+  ]);
+  const clinicName = clinic?.name ?? null;
+  const recordsWithSignedPdfs = await Promise.all(
+    recordings.map(async (recording) =>
+      toDashboardRecording(
+        recording,
+        recording.doctor_name ?? doctor.name,
+        clinicName,
+        recording.pdf_storage_path ? await repository.createPdfSignedUrl(recording.pdf_storage_path) : null
+      )
+    )
+  );
 
-  return recordings.map((recording) => toDashboardRecording(recording, doctor.name));
+  return recordsWithSignedPdfs;
 }
 
 export async function saveRecordingSummaryForDoctor(

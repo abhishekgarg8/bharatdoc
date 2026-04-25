@@ -16,11 +16,14 @@ import type { Doctor } from "@bharatdoc/shared";
 const apiRecord: DashboardApiRecord = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   patient_id: "P-10482",
-  label: null,
+  label: "Follow-up",
+  clinic_name: "Sunrise Hospital",
   duration_seconds: 494,
   doctor_name: "Dr. Aparna",
   status: "recorded",
-  recorded_at: "2026-04-23T06:12:00.000Z"
+  recorded_at: "2026-04-23T06:12:00.000Z",
+  pdf_storage_path: "pdfs/p-10482.pdf",
+  pdf_signed_url: "https://signed.example.com/p-10482.pdf"
 };
 
 const doctor: Doctor = {
@@ -51,10 +54,14 @@ describe("dashboard data helpers", () => {
     expect(record).toMatchObject({
       id: apiRecord.id,
       patientId: "P-10482",
+      label: "Follow-up",
+      clinicName: "Sunrise Hospital",
       duration: "8:14",
       doctorName: "Dr. Aparna",
       status: "recorded",
-      recordedAt: apiRecord.recorded_at
+      recordedAt: apiRecord.recorded_at,
+      pdfStoragePath: "pdfs/p-10482.pdf",
+      pdfSignedUrl: "https://signed.example.com/p-10482.pdf"
     });
     expect(record.time).toContain("Today");
   });
@@ -112,14 +119,32 @@ describe("dashboard data helpers", () => {
   });
 
   it("fetches dashboard snapshot with doctor context and records in one request", async () => {
-    const fetcher = vi.fn(async () => Response.json({ doctor, records: [apiRecord] })) as unknown as typeof fetch;
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor,
+        clinic: {
+          id: doctor.clinic_id,
+          name: "Sunrise Hospital",
+          code: "MED42X",
+          address: "Pune"
+        },
+        pending_approvals_count: 2,
+        records: [apiRecord]
+      })
+    ) as unknown as typeof fetch;
 
     await expect(fetchDashboardSnapshot("id-token", fetcher)).resolves.toMatchObject({
       doctor,
+      clinic: {
+        name: "Sunrise Hospital",
+        code: "MED42X"
+      },
+      pendingApprovalsCount: 2,
       records: [
         {
           id: apiRecord.id,
           patientId: "P-10482",
+          clinicName: "Sunrise Hospital",
           doctorName: "Dr. Aparna"
         }
       ]

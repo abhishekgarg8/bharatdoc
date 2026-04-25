@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "@/components/bottom-nav";
 import { DashboardRecordCard } from "@/components/dashboard-record-card";
 import {
-  demoDashboardRecords,
   mergeDashboardRecords,
   type DashboardRecord,
   type LocalDashboardRecord
@@ -35,11 +34,11 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 }
 
 export function DashboardScreen({
-  doctorName = "Dr. Aparna Iyer",
-  clinicName = "Sunrise Hospital, Pune",
-  records = demoDashboardRecords,
+  doctorName = "Doctor",
+  clinicName = "Hospital",
+  records = [],
   localRepository,
-  pendingApprovalsCount = 1,
+  pendingApprovalsCount = 0,
   pendingTranscriptionsCount
 }: DashboardScreenProps) {
   const [localRecords, setLocalRecords] = useState<LocalDashboardRecord[]>([]);

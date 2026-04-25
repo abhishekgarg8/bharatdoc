@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronRight, ClipboardList, Edit3, Languages, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
+import { Check, ChevronRight, Clipboard, ClipboardList, Edit3, Languages, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
@@ -270,6 +270,22 @@ export function SettingsScreen({
     setExpandedPanel((current) => (current === panel ? null : panel));
   }
 
+  async function copyHospitalCode() {
+    if (!clinicState.code) {
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+
+    try {
+      await navigator.clipboard.writeText(clinicState.code);
+      setMessage("Hospital code copied.");
+    } catch {
+      setError("Unable to copy hospital code.");
+    }
+  }
+
   async function handleSignOut() {
     if (!onSignOut || signingOut) {
       return;
@@ -330,6 +346,12 @@ export function SettingsScreen({
                 icon={<ClipboardList className="h-4 w-4" />}
                 onClick={() => togglePanel("clinic-profile")}
                 expanded={expandedPanel === "clinic-profile"}
+              />
+              <SettingsRow
+                title="Hospital code"
+                subtitle={<span className="font-mono">{clinicState.code}</span>}
+                icon={<Clipboard className="h-4 w-4" />}
+                onClick={copyHospitalCode}
               />
             </SettingsGroup>
           ) : null}

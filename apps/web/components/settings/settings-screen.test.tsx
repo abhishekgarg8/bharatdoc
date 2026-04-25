@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsScreen } from "@/components/settings/settings-screen";
 import type { PendingApproval } from "@/lib/client/clinic-admin-api";
 
@@ -39,6 +39,10 @@ const clinic = {
   activeDoctorsCount: 1
 };
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("SettingsScreen", () => {
   it("renders profile, hospital admin, transcription, and account groups", () => {
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
@@ -47,6 +51,7 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
     expect(screen.getByText("Hospital admin")).toBeInTheDocument();
     expect(screen.getByText("1 doctor waiting")).toBeInTheDocument();
+    expect(screen.getByText("Hospital code")).toBeInTheDocument();
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /language/i })).toHaveAttribute("href", "/settings/language");
     expect(screen.getByRole("link", { name: /summary prompt/i })).toHaveAttribute("href", "/settings/prompt");
@@ -145,6 +150,34 @@ describe("SettingsScreen", () => {
         address: null
       })
     });
+  });
+
+  it("copies the read-only hospital code without sending profile updates", async () => {
+    const writeText = vi.fn(async () => undefined);
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: {
+        writeText
+      }
+    });
+
+    render(
+      <SettingsScreen
+        doctor={ownerDoctor}
+        clinic={clinic}
+        activeDoctors={[]}
+        pendingApprovals={[]}
+        idToken="id-token"
+        fetcher={fetcher}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /hospital code/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("MED42X"));
+    expect(screen.getByText("Hospital code copied.")).toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("does not save hospital profile locally when authentication is missing", async () => {

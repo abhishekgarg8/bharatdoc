@@ -1,8 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecordingDetailPageClient } from "@/components/recordings/recording-detail-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
 import type { Doctor } from "@bharatdoc/shared";
+import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const activeDoctor: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -94,6 +99,88 @@ describe("RecordingDetailPageClient", () => {
     expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("href", "/dashboard");
     expect(screen.queryByRole("heading", { name: "P-10481" })).not.toBeInTheDocument();
+  });
+
+  it("retries transcription from local audio when a server recording has no transcript", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const repository = createMemoryLocalRecordingRepository([
+      {
+        id: "local-recording",
+        patientId: "P-20001",
+        label: null,
+        durationSeconds: 180,
+        recordedAt: "2026-04-23T06:12:00.000Z",
+        updatedAt: "2026-04-23T06:13:00.000Z",
+        audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+        audioChunks: [],
+        audioMimeType: "audio/webm",
+        captureState: "stopped",
+        syncState: "synced",
+        serverRecordingId: apiRecording.id,
+        transcript: null,
+        error: null
+      }
+    ]);
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+
+      if (url === "/api/me") {
+        return Response.json({ doctor: activeDoctor });
+      }
+
+      if (url === `/api/recordings/${apiRecording.id}`) {
+        return Response.json({
+          recording: {
+            ...apiRecording,
+            status: "recorded",
+            transcript: null
+          }
+        });
+      }
+
+      if (url === "https://worker.example.com/api/transcribe") {
+        return Response.json({
+          recording_id: apiRecording.id,
+          transcript: "Generated transcript from local audio.",
+          audio_storage_path: "hospital/doctor/recording.webm",
+          status: "transcribed"
+        });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId={apiRecording.id}
+        authClient={authClient}
+        fetcher={fetcher}
+        localRepository={repository}
+      />
+    );
+
+    await screen.findByText("Transcript is not available yet.");
+    const generateButton = screen.getByRole("button", { name: /generate/i });
+    expect(generateButton).toBeEnabled();
+    fireEvent.click(generateButton);
+
+    await expect(screen.findByText("Generated transcript from local audio.")).resolves.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith("https://worker.example.com/api/transcribe", expect.objectContaining({
+      method: "POST",
+      headers: { Authorization: "Bearer id-token" },
+      body: expect.any(FormData)
+    }));
+    await expect(repository.get("local-recording")).resolves.toMatchObject({
+      captureState: "transcribed",
+      syncState: "transcribed",
+      transcript: "Generated transcript from local audio."
+    });
   });
 
   it("redirects rejected users away from recording details", async () => {

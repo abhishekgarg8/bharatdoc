@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DashboardScreen } from "@/components/dashboard-screen";
-import type { DashboardRecord } from "@/lib/client/dashboard-data";
+import { demoDashboardRecords, type DashboardRecord } from "@/lib/client/dashboard-data";
 import { createMemoryLocalRecordingRepository, type LocalRecording } from "@/lib/client/local-recordings";
 
 describe("DashboardScreen", () => {
   it("renders clinic context and primary recording action", () => {
-    render(<DashboardScreen />);
+    render(<DashboardScreen doctorName="Dr. Aparna Iyer" clinicName="Sunrise Hospital, Pune" />);
 
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
     expect(screen.getByText("Sunrise Hospital, Pune")).toBeInTheDocument();
@@ -15,8 +15,20 @@ describe("DashboardScreen", () => {
     expect(screen.getByRole("link", { name: /open settings/i })).toHaveAttribute("href", "/settings");
   });
 
+  it("does not show a settings badge when there are zero pending approvals", () => {
+    render(<DashboardScreen pendingApprovalsCount={0} />);
+
+    expect(screen.getByRole("link", { name: /open settings/i })).toHaveTextContent("");
+  });
+
+  it("shows the owner pending approval count on the settings link", () => {
+    render(<DashboardScreen pendingApprovalsCount={3} />);
+
+    expect(screen.getByRole("link", { name: /open settings/i })).toHaveTextContent("3");
+  });
+
   it("renders recent consultation records with status lifecycle", () => {
-    render(<DashboardScreen />);
+    render(<DashboardScreen records={demoDashboardRecords} />);
 
     expect(screen.getByText("P-10482")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open recording P-10482" })).toHaveAttribute(
