@@ -15,6 +15,7 @@ const withPWA = withPWAInit({
       handler: "NetworkFirst",
       options: {
         cacheName: "bharatdoc-app-shell",
+        networkTimeoutSeconds: 3,
         expiration: {
           maxEntries: 24,
           maxAgeSeconds: 60 * 60 * 24

@@ -28,11 +28,8 @@ describe("PromptEditorPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
       return Response.json({
+          doctor: activeDoctor,
           preferences: {
             custom_prompt: "Summarize {{transcript}} into SOAP.",
             transcription_lang: "auto"
@@ -68,16 +65,15 @@ describe("PromptEditorPageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" } });
-      }
-
-      return Response.json({ preferences: { custom_prompt: null, transcription_lang: "auto" } });
+      return Response.json({
+        doctor: { ...activeDoctor, account_status: "pending_approval" },
+        preferences: null
+      });
     }) as unknown as typeof fetch;
 
     render(<PromptEditorPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
-    expect(fetcher).not.toHaveBeenCalledWith("/api/settings/preferences", expect.anything());
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

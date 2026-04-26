@@ -47,11 +47,7 @@ describe("RecordingDetailPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
-      return Response.json({ recording: apiRecording });
+      return Response.json({ doctor: activeDoctor, recording: apiRecording });
     }) as unknown as typeof fetch;
 
     render(
@@ -156,12 +152,9 @@ describe("RecordingDetailPageClient", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
 
-      if (url === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
       if (url === `/api/recordings/${apiRecording.id}`) {
         return Response.json({
+          doctor: activeDoctor,
           recording: {
             ...apiRecording,
             status: "recorded",
@@ -218,11 +211,7 @@ describe("RecordingDetailPageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "rejected" } });
-      }
-
-      return Response.json({ recording: apiRecording });
+      return Response.json({ doctor: { ...activeDoctor, account_status: "rejected" }, recording: apiRecording });
     }) as unknown as typeof fetch;
 
     render(
@@ -235,9 +224,6 @@ describe("RecordingDetailPageClient", () => {
     );
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
-    expect(fetcher).not.toHaveBeenCalledWith(
-      "/api/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      expect.anything()
-    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

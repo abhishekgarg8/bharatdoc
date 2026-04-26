@@ -10,8 +10,8 @@ import {
 } from "@/lib/client/recording-detail-data";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
-import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
-import { fetchRecordingDetail } from "@/lib/client/summary-api";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
+import { fetchRecordingDetailBootstrap } from "@/lib/client/summary-api";
 import { transcribeRecordingAudio, type WorkerTranscriptionResponse } from "@/lib/client/transcription-api";
 import {
   createIndexedDbLocalRecordingRepository,
@@ -74,13 +74,13 @@ export function RecordingDetailPageClient({
       let didRedirect = false;
 
       try {
-        const me = await fetchCurrentDoctor(token, fetcher);
+        const bootstrap = await fetchRecordingDetailBootstrap(token, recordingId, fetcher);
 
         if (!isMounted) {
           return;
         }
 
-        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+        const inactiveDestination = destinationForInactiveDoctor(bootstrap.doctor);
 
         if (inactiveDestination) {
           didRedirect = true;
@@ -88,10 +88,8 @@ export function RecordingDetailPageClient({
           return;
         }
 
-        const detail = await fetchRecordingDetail(token, recordingId, fetcher);
-
         if (isMounted) {
-          setRecording(detail);
+          setRecording(bootstrap.recording);
         }
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {

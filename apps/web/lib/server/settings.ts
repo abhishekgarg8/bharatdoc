@@ -14,6 +14,11 @@ export interface DoctorPreferences {
   transcription_lang: TranscriptionLanguage;
 }
 
+export interface DoctorPreferencesBootstrap {
+  doctor: Doctor;
+  preferences: DoctorPreferences | null;
+}
+
 export interface DoctorPreferencesUpdate {
   custom_prompt?: string | null;
   transcription_lang?: TranscriptionLanguage;
@@ -75,6 +80,26 @@ export async function getDoctorPreferencesForUser(
 ): Promise<DoctorPreferences> {
   const doctor = await requireActiveDoctorForSettings(user, repository);
   return toPreferences(doctor);
+}
+
+export async function getDoctorPreferencesBootstrapForUser(
+  user: VerifiedUser,
+  repository: DoctorPreferencesRepository
+): Promise<DoctorPreferencesBootstrap> {
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
+
+  if (!doctor) {
+    throw new AppError(404, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");
+  }
+
+  if (doctor.account_status !== "active") {
+    return { doctor, preferences: null };
+  }
+
+  return {
+    doctor,
+    preferences: toPreferences(assertActiveDoctor(doctor))
+  };
 }
 
 export async function updateDoctorPreferencesForUser(

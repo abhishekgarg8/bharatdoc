@@ -12,7 +12,7 @@ import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import {
-  fetchClinicAdminSnapshot,
+  fetchSettingsBootstrap,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
 import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
@@ -34,7 +34,7 @@ function toSettingsDoctor(doctor: Awaited<ReturnType<typeof fetchCurrentDoctor>>
 }
 
 function toSettingsClinic(
-  clinic: Awaited<ReturnType<typeof fetchClinicAdminSnapshot>>["clinic"]
+  clinic: NonNullable<Awaited<ReturnType<typeof fetchSettingsBootstrap>>["clinic"]>
 ): SettingsClinicProfile {
   return {
     id: clinic.id,
@@ -46,7 +46,7 @@ function toSettingsClinic(
 }
 
 function toSettingsActiveDoctors(
-  activeDoctors: Awaited<ReturnType<typeof fetchClinicAdminSnapshot>>["activeDoctors"]
+  activeDoctors: Awaited<ReturnType<typeof fetchSettingsBootstrap>>["activeDoctors"]
 ): SettingsActiveDoctor[] {
   return activeDoctors.map((doctor) => ({
     id: doctor.id,
@@ -111,13 +111,13 @@ export function SettingsPageClient({
       let didRedirect = false;
 
       try {
-        const me = await fetchCurrentDoctor(token, fetcher);
+        const snapshot = await fetchSettingsBootstrap(token, fetcher);
 
         if (!isMounted) {
           return;
         }
 
-        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+        const inactiveDestination = destinationForInactiveDoctor(snapshot.doctor);
 
         if (inactiveDestination) {
           didRedirect = true;
@@ -125,19 +125,10 @@ export function SettingsPageClient({
           return;
         }
 
-        setDoctor(toSettingsDoctor(me.doctor));
-
-        if (me.doctor.role === "owner") {
-          const snapshot = await fetchClinicAdminSnapshot(token, fetcher);
-
-          if (!isMounted) {
-            return;
-          }
-
-          setClinic(toSettingsClinic(snapshot.clinic));
-          setActiveDoctors(toSettingsActiveDoctors(snapshot.activeDoctors));
-          setPendingApprovals(snapshot.pendingApprovals);
-        }
+        setDoctor(toSettingsDoctor(snapshot.doctor));
+        setClinic(snapshot.clinic ? toSettingsClinic(snapshot.clinic) : null);
+        setActiveDoctors(toSettingsActiveDoctors(snapshot.activeDoctors));
+        setPendingApprovals(snapshot.pendingApprovals);
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
           didRedirect = true;

@@ -63,6 +63,33 @@ describe("environment validation", () => {
     });
   });
 
+  it("accepts an optional Supabase JWT secret for local token verification", () => {
+    expect(
+      parseWebEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
+        RAILWAY_WORKER_URL: "https://worker.example.com",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_JWT_SECRET: "jwt-secret"
+      })
+    ).toMatchObject({
+      SUPABASE_JWT_SECRET: "jwt-secret"
+    });
+
+    expect(
+      parseWorkerEnv({
+        OPENAI_API_KEY: "openai",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_JWT_SECRET: "jwt-secret"
+      })
+    ).toMatchObject({
+      SUPABASE_JWT_SECRET: "jwt-secret"
+    });
+  });
+
   it("rejects invalid URLs", () => {
     expect(() =>
       parseWorkerEnv({

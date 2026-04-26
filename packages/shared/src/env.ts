@@ -10,13 +10,15 @@ export const WebEnvSchema = z.object({
   NEXT_PUBLIC_RAILWAY_WORKER_URL: z.string().url(),
   RAILWAY_WORKER_URL: z.string().url(),
   SUPABASE_URL: z.string().url(),
-  SUPABASE_SERVICE_ROLE_KEY: nonEmpty
+  SUPABASE_SERVICE_ROLE_KEY: nonEmpty,
+  SUPABASE_JWT_SECRET: nonEmpty.optional()
 });
 
 export const WorkerEnvSchema = z.object({
   OPENAI_API_KEY: nonEmpty,
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: nonEmpty,
+  SUPABASE_JWT_SECRET: nonEmpty.optional(),
   PORT: z.coerce.number().int().positive().default(8080),
   OPENAI_TRANSCRIPTION_MODEL: nonEmpty.default("gpt-4o-mini-transcribe"),
   OPENAI_SUMMARY_MODEL: nonEmpty.default("gpt-4o-mini"),

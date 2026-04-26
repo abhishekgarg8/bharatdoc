@@ -4,9 +4,16 @@ import {
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
 import { parseJsonOrThrow } from "@/lib/client/api-error";
+import type { Doctor } from "@bharatdoc/shared";
 
 export interface RecordingDetailResponse {
+  doctor?: Doctor;
   recording: RecordingDetailApiRecord;
+}
+
+export interface RecordingDetailBootstrap {
+  doctor: Doctor;
+  recording: RecordingDetailRecord;
 }
 
 export interface WorkerSummaryResponse {
@@ -35,6 +42,27 @@ export async function fetchRecordingDetail(
   const payload = await parseJsonOrThrow<RecordingDetailResponse>(response, "Unable to load recording.");
 
   return mapApiRecordingToDetail(payload.recording);
+}
+
+export async function fetchRecordingDetailBootstrap(
+  idToken: string,
+  recordingId: string,
+  fetcher: typeof fetch = fetch
+): Promise<RecordingDetailBootstrap> {
+  const response = await fetcher(`/api/recordings/${encodeURIComponent(recordingId)}`, {
+    headers: {
+      Authorization: `Bearer ${idToken}`
+    }
+  });
+  const payload = await parseJsonOrThrow<{ doctor: Doctor; recording: RecordingDetailApiRecord }>(
+    response,
+    "Unable to load recording."
+  );
+
+  return {
+    doctor: payload.doctor,
+    recording: mapApiRecordingToDetail(payload.recording)
+  };
 }
 
 export async function summarizeRecording(

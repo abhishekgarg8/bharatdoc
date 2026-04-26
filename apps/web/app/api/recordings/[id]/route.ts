@@ -1,7 +1,8 @@
 import { verifyRequestUser } from "@/lib/server/auth";
 import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
-import { getRecordingDetailForDoctor } from "@/lib/server/recordings";
+import { getRecordingDetailBootstrapForDoctor } from "@/lib/server/recordings";
+import { createServerTiming, jsonWithServerTiming } from "@/lib/server/server-timing";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
@@ -14,12 +15,16 @@ interface RouteContext {
 }
 
 export async function GET(request: Request, { params }: RouteContext) {
-  try {
-    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
-    const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
-    const recording = await getRecordingDetailForDoctor(user, params.id, repository);
+  const timing = createServerTiming();
 
-    return Response.json({ recording });
+  try {
+    const user = await timing.measure("auth", () => verifyRequestUser(request, createSupabaseAuthVerifier()));
+    const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
+    const bootstrap = await timing.measure("recording_detail", () =>
+      getRecordingDetailBootstrapForDoctor(user, params.id, repository)
+    );
+
+    return jsonWithServerTiming(bootstrap, timing);
   } catch (error) {
     return errorResponse(error);
   }

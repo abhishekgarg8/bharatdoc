@@ -28,11 +28,8 @@ describe("TranscriptionLanguagePageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: activeDoctor });
-      }
-
       return Response.json({
+        doctor: activeDoctor,
         preferences: {
           custom_prompt: null,
           transcription_lang: "hien"
@@ -68,16 +65,15 @@ describe("TranscriptionLanguagePageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/me") {
-        return Response.json({ doctor: { ...activeDoctor, account_status: "rejected" } });
-      }
-
-      return Response.json({ preferences: { custom_prompt: null, transcription_lang: "auto" } });
+      return Response.json({
+        doctor: { ...activeDoctor, account_status: "rejected" },
+        preferences: null
+      });
     }) as unknown as typeof fetch;
 
     render(<TranscriptionLanguagePageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
-    expect(fetcher).not.toHaveBeenCalledWith("/api/settings/preferences", expect.anything());
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

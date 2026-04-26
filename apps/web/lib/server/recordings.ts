@@ -57,6 +57,11 @@ export interface RecordingDetail {
   pdf_signed_url: string | null;
 }
 
+export interface RecordingDetailBootstrap {
+  doctor: Doctor;
+  recording: RecordingDetail;
+}
+
 export interface CreateRecordingRow {
   id: string;
   doctorId: string;
@@ -272,6 +277,29 @@ export async function getRecordingDetailForDoctor(
     : null;
 
   return toRecordingDetail(recording, doctor.name, pdfSignedUrl);
+}
+
+export async function getRecordingDetailBootstrapForDoctor(
+  user: VerifiedUser,
+  recordingId: string | null | undefined,
+  repository: RecordingsRepository
+): Promise<RecordingDetailBootstrap> {
+  const doctor = await requireActiveDoctorContext(user, repository);
+  const clinicId = requireClinicId(doctor);
+  const recording = await repository.findRecordingForClinic(requireRecordingId(recordingId), clinicId);
+
+  if (!recording) {
+    throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
+  }
+
+  const pdfSignedUrl = recording.pdf_storage_path
+    ? await repository.createPdfSignedUrl(recording.pdf_storage_path)
+    : null;
+
+  return {
+    doctor,
+    recording: toRecordingDetail(recording, recording.doctor_name ?? doctor.name, pdfSignedUrl)
+  };
 }
 
 export async function searchPatientRecordingsForClinic(

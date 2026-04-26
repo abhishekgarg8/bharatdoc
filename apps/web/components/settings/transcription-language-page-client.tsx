@@ -6,8 +6,8 @@ import { PageError, PageLoading } from "@/components/session/page-loading";
 import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
-import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
-import { fetchDoctorPreferences, type DoctorPreferences } from "@/lib/client/settings-api";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
+import { fetchDoctorPreferencesBootstrap, type DoctorPreferences } from "@/lib/client/settings-api";
 
 interface TranscriptionLanguagePageClientProps {
   authClient?: AuthClient;
@@ -55,13 +55,13 @@ export function TranscriptionLanguagePageClient({
       let didRedirect = false;
 
       try {
-        const me = await fetchCurrentDoctor(token, fetcher);
+        const bootstrap = await fetchDoctorPreferencesBootstrap(token, fetcher);
 
         if (!isMounted) {
           return;
         }
 
-        const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+        const inactiveDestination = destinationForInactiveDoctor(bootstrap.doctor);
 
         if (inactiveDestination) {
           didRedirect = true;
@@ -69,10 +69,8 @@ export function TranscriptionLanguagePageClient({
           return;
         }
 
-        const nextPreferences = await fetchDoctorPreferences(token, fetcher);
-
         if (isMounted) {
-          setPreferences(nextPreferences);
+          setPreferences(bootstrap.preferences);
         }
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {

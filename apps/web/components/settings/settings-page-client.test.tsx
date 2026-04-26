@@ -14,7 +14,7 @@ describe("SettingsPageClient", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
 
-      if (url === "/api/me") {
+      if (url === "/api/settings/bootstrap") {
         return Response.json({
           doctor: {
             id: "doctor-1",
@@ -29,12 +29,7 @@ describe("SettingsPageClient", () => {
             custom_prompt: null,
             transcription_lang: "auto",
             created_at: "2026-04-23T09:00:00.000Z"
-          }
-        });
-      }
-
-      if (url === "/api/clinic/admin") {
-        return Response.json({
+          },
           clinic: {
             id: "clinic-1",
             name: "Sunrise Hospital",
@@ -91,7 +86,7 @@ describe("SettingsPageClient", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
 
-      if (url === "/api/me") {
+      if (url === "/api/settings/bootstrap") {
         return Response.json({
           doctor: {
             id: "doctor-1",
@@ -106,12 +101,7 @@ describe("SettingsPageClient", () => {
             custom_prompt: null,
             transcription_lang: "auto",
             created_at: "2026-04-23T09:00:00.000Z"
-          }
-        });
-      }
-
-      if (url === "/api/clinic/admin") {
-        return Response.json({
+          },
           clinic: {
             id: "clinic-1",
             name: "Sunrise Hospital",
@@ -232,6 +222,8 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
-    expect(fetcher).not.toHaveBeenCalledWith("/api/clinic/admin", expect.anything());
+    expect(fetcher).toHaveBeenCalledWith("/api/settings/bootstrap", {
+      headers: { Authorization: "Bearer id-token" }
+    });
   });
 });

@@ -1,5 +1,7 @@
 import { parseJsonOrThrow } from "@/lib/client/api-error";
 
+import type { Doctor } from "@bharatdoc/shared";
+
 export interface PendingApprovalDoctor {
   id: string;
   name: string;
@@ -41,6 +43,13 @@ export interface ClinicAdminSnapshot {
   pendingApprovals: PendingApproval[];
 }
 
+export interface SettingsBootstrapSnapshot {
+  doctor: Doctor;
+  clinic: ClinicProfile | null;
+  activeDoctors: ActiveClinicDoctor[];
+  pendingApprovals: PendingApproval[];
+}
+
 export interface ClinicProfileUpdate {
   name?: string;
   address?: string | null;
@@ -73,6 +82,17 @@ export async function fetchClinicAdminSnapshot(
   });
 
   return parseJsonOrThrow<ClinicAdminSnapshot>(response, "Unable to load hospital admin details.");
+}
+
+export async function fetchSettingsBootstrap(
+  idToken: string,
+  fetcher: typeof fetch = fetch
+): Promise<SettingsBootstrapSnapshot> {
+  const response = await fetcher("/api/settings/bootstrap", {
+    headers: authHeaders(idToken)
+  });
+
+  return parseJson<SettingsBootstrapSnapshot>(response, "Unable to load settings.");
 }
 
 export async function updateClinicProfile(

@@ -40,6 +40,13 @@ export interface ClinicAdminSnapshot {
   pendingApprovals: PendingApproval[];
 }
 
+export interface SettingsBootstrap {
+  doctor: Doctor;
+  clinic: ClinicProfile | null;
+  activeDoctors: ActiveClinicDoctor[];
+  pendingApprovals: PendingApproval[];
+}
+
 export interface ClinicProfileUpdate {
   name?: string;
   address?: string | null;
@@ -131,6 +138,48 @@ export async function getClinicAdminSnapshotForOwner(
   ]);
 
   return {
+    clinic: toClinicProfile(clinic, activeDoctors.length),
+    activeDoctors,
+    pendingApprovals
+  };
+}
+
+export async function getSettingsBootstrapForUser(
+  user: VerifiedUser,
+  repository: ClinicAdminRepository
+): Promise<SettingsBootstrap> {
+  const doctor = await repository.findDoctorByAuthUid(user.uid);
+
+  if (!doctor) {
+    throw new AppError(401, "Doctor profile has not been created.", "PROFILE_NOT_FOUND");
+  }
+
+  if (doctor.account_status !== "active" || doctor.role !== "owner") {
+    return {
+      doctor,
+      clinic: null,
+      activeDoctors: [],
+      pendingApprovals: []
+    };
+  }
+
+  if (!doctor.clinic_id) {
+    throw new AppError(403, "Owner must belong to a hospital.", "CLINIC_REQUIRED");
+  }
+
+  const clinic = await repository.findClinicById(doctor.clinic_id);
+
+  if (!clinic) {
+    throw new AppError(404, "Hospital profile was not found.", "CLINIC_NOT_FOUND");
+  }
+
+  const [activeDoctors, pendingApprovals] = await Promise.all([
+    repository.listActiveDoctors(clinic.id),
+    repository.listPendingApprovals(clinic.id)
+  ]);
+
+  return {
+    doctor,
     clinic: toClinicProfile(clinic, activeDoctors.length),
     activeDoctors,
     pendingApprovals

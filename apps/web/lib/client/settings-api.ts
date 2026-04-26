@@ -1,4 +1,4 @@
-import type { TranscriptionLanguage } from "@bharatdoc/shared";
+import type { Doctor, TranscriptionLanguage } from "@bharatdoc/shared";
 import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface DoctorPreferences {
@@ -7,7 +7,13 @@ export interface DoctorPreferences {
 }
 
 export interface DoctorPreferencesResponse {
-  preferences: DoctorPreferences;
+  doctor?: Doctor;
+  preferences: DoctorPreferences | null;
+}
+
+export interface DoctorPreferencesBootstrap {
+  doctor: Doctor;
+  preferences: DoctorPreferences | null;
 }
 
 export interface DoctorPreferencesUpdate {
@@ -28,9 +34,20 @@ export async function fetchDoctorPreferences(
   const response = await fetcher("/api/settings/preferences", {
     headers: authHeaders(idToken)
   });
-  const payload = await parseJsonOrThrow<DoctorPreferencesResponse>(response, "Unable to load settings preferences.");
+  const payload = await parseJsonOrThrow<{ preferences: DoctorPreferences }>(response, "Unable to load settings preferences.");
 
   return payload.preferences;
+}
+
+export async function fetchDoctorPreferencesBootstrap(
+  idToken: string,
+  fetcher: typeof fetch = fetch
+): Promise<DoctorPreferencesBootstrap> {
+  const response = await fetcher("/api/settings/preferences", {
+    headers: authHeaders(idToken)
+  });
+
+  return parseJsonOrThrow<DoctorPreferencesBootstrap>(response, "Unable to load settings preferences.");
 }
 
 export async function updateDoctorPreferences(
@@ -46,7 +63,7 @@ export async function updateDoctorPreferences(
     },
     body: JSON.stringify(input)
   });
-  const payload = await parseJsonOrThrow<DoctorPreferencesResponse>(response, "Unable to save settings preferences.");
+  const payload = await parseJsonOrThrow<{ preferences: DoctorPreferences }>(response, "Unable to save settings preferences.");
 
   return payload.preferences;
 }
