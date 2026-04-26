@@ -3,5 +3,5 @@ export function escapePatientIdLikePattern(patientId: string): string {
 }
 
 export function patientIdSearchPattern(patientId: string): string {
-  return `%${escapePatientIdLikePattern(patientId)}%`;
+  return `${escapePatientIdLikePattern(patientId)}%`;
 }

@@ -15,7 +15,8 @@ import {
   fetchSettingsBootstrap,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
-import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
+import type { Doctor } from "@bharatdoc/shared";
 
 interface SettingsPageClientProps {
   authClient?: AuthClient;
@@ -24,7 +25,7 @@ interface SettingsPageClientProps {
   onNavigate?: (href: string) => void;
 }
 
-function toSettingsDoctor(doctor: Awaited<ReturnType<typeof fetchCurrentDoctor>>["doctor"]): SettingsDoctorProfile {
+function toSettingsDoctor(doctor: Doctor): SettingsDoctorProfile {
   return {
     name: doctor.name,
     specialization: doctor.specialization,

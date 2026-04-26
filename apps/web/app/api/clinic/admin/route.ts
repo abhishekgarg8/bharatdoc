@@ -1,6 +1,7 @@
 import { verifyRequestUser } from "@/lib/server/auth";
 import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
+import { createServerTiming, jsonWithServerTiming } from "@/lib/server/server-timing";
 import {
   getClinicAdminSnapshotForOwner,
   updateClinicProfileForOwner
@@ -11,12 +12,14 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 export const preferredRegion = "bom1";
 
 export async function GET(request: Request) {
-  try {
-    const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
-    const repository = createSupabaseClinicAdminRepository(createSupabaseServerClient());
-    const snapshot = await getClinicAdminSnapshotForOwner(user, repository);
+  const timing = createServerTiming();
 
-    return Response.json(snapshot);
+  try {
+    const user = await timing.measure("auth", () => verifyRequestUser(request, createSupabaseAuthVerifier()));
+    const repository = createSupabaseClinicAdminRepository(createSupabaseServerClient());
+    const snapshot = await timing.measure("clinic_admin", () => getClinicAdminSnapshotForOwner(user, repository));
+
+    return jsonWithServerTiming(snapshot, timing);
   } catch (error) {
     return errorResponse(error);
   }
