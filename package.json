@@ -10,11 +10,13 @@
     "lint": "pnpm -r lint",
     "smoke:live-flow": "cd apps/web && node --env-file=../../.env ../../scripts/live-flow-smoke.mjs",
     "smoke:pwa": "cd apps/web && node ../../scripts/pwa-offline-smoke.mjs",
+    "smoke:real-browser": "node --env-file=.env scripts/real-account-browser-e2e.mjs",
     "smoke:staging": "node --env-file=.env scripts/staging-smoke.mjs",
     "test": "pnpm -r test",
     "test:unit": "pnpm -r test:unit",
     "test:e2e": "pnpm --filter @bharatdoc/web test:e2e",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "with:current-supabase-anon": "node --env-file=.env scripts/with-current-supabase-anon-key.mjs --"
   },
   "devDependencies": {
     "@railway/cli": "^4.42.1",

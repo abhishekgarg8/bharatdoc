@@ -10,6 +10,7 @@ const recording: RecordingDetailRecord = {
   time: "Today, 10:55",
   duration: "12:03",
   doctorName: "You",
+  canEdit: true,
   status: "transcribed",
   recordedAt: "2026-04-23T05:25:00.000Z",
   transcript: "Patient reports fever for two days.\n\nDoctor advised fluids and paracetamol.",
@@ -208,6 +209,36 @@ describe("TranscriptSummaryScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
 
     expect(screen.getByText("Save summary before PDF generation.")).toBeInTheDocument();
+  });
+
+  it("renders same-clinic non-owner recordings as read-only", () => {
+    const save = vi.fn();
+    const generate = vi.fn();
+    const generatePdf = vi.fn();
+
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          canEdit: false,
+          summary: "Initial summary",
+          status: "summary_ready"
+        }}
+        onGenerateSummary={generate}
+        onGeneratePdf={generatePdf}
+        onSaveSummary={save}
+      />
+    );
+
+    const summaryInput = screen.getByRole("textbox", { name: "Summary" });
+    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(summaryInput).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: /generate/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(save).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+    expect(generatePdf).not.toHaveBeenCalled();
   });
 
   it("shows validation when saving an empty summary", () => {

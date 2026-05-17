@@ -4,7 +4,9 @@ import {
   approveJoinRequestForOwner,
   getClinicAdminSnapshotForOwner,
   listPendingApprovalsForOwner,
+  reapproveDoctorForOwner,
   rejectJoinRequestForOwner,
+  removeDoctorFromClinicForOwner,
   updateClinicProfileForOwner,
   type ClinicAdminRepository
 } from "@/lib/server/clinic-admin";
@@ -44,6 +46,7 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
         specialization: owner.specialization,
         phone: owner.phone,
         role: "owner" as const,
+        recordings_count: 3,
         created_at: owner.created_at
       },
       {
@@ -52,7 +55,20 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
         specialization: "General Physician",
         phone: "+919812345678",
         role: "doctor" as const,
+        recordings_count: 2,
         created_at: "2026-04-23T10:00:00.000Z"
+      }
+    ]),
+    listRejectedDoctors: vi.fn(async () => [
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        name: "Dr. Sameer Kulkarni",
+        specialization: "General Physician",
+        phone: "+919800011122",
+        role: "doctor" as const,
+        account_status: "rejected" as const,
+        recordings_count: 1,
+        created_at: "2026-04-22T10:00:00.000Z"
       }
     ]),
     listPendingApprovals: vi.fn(async () => [
@@ -74,8 +90,14 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
       doctor_id: "33333333-3333-4333-8333-333333333333",
       status: "pending" as const
     })),
+    countRecordingsByDoctorIds: vi.fn(async () => ({
+      [owner.id]: 3,
+      "55555555-5555-4555-8555-555555555555": 2,
+      "66666666-6666-4666-8666-666666666666": 1
+    })),
     approveJoinRequest: vi.fn(async () => undefined),
     rejectJoinRequest: vi.fn(async () => undefined),
+    updateDoctorAccountStatus: vi.fn(async () => undefined),
     updateClinicProfile: vi.fn(async (_clinicId: string, input) => ({
       ...clinic,
       name: input.name ?? clinic.name,
@@ -98,8 +120,13 @@ describe("clinic admin approvals", () => {
         activeDoctorsCount: 2
       },
       activeDoctors: [{ id: owner.id }, { name: "Dr. Leena Joshi" }],
+      rejectedDoctors: [{ name: "Dr. Sameer Kulkarni", recordings_count: 1 }],
       pendingApprovals: [{ id: "44444444-4444-4444-8444-444444444444" }]
     });
+    expect(repository.countRecordingsByDoctorIds).toHaveBeenCalledWith(clinic.id, [
+      owner.id,
+      "55555555-5555-4555-8555-555555555555"
+    ]);
   });
 
   it("lists pending approvals for active owners", async () => {
@@ -166,6 +193,48 @@ describe("clinic admin approvals", () => {
         repository
       )
     ).rejects.toMatchObject({ code: "JOIN_REQUEST_NOT_FOUND" });
+  });
+
+  it("removes active doctors from the clinic without allowing self-removal", async () => {
+    const repository = createRepository();
+
+    await expect(
+      removeDoctorFromClinicForOwner(
+        { uid: "firebase-owner", phoneNumber: "+919876543210" },
+        "55555555-5555-4555-8555-555555555555",
+        repository
+      )
+    ).resolves.toEqual({ ok: true });
+    expect(repository.updateDoctorAccountStatus).toHaveBeenCalledWith(
+      "55555555-5555-4555-8555-555555555555",
+      owner.clinic_id,
+      "rejected"
+    );
+
+    await expect(
+      removeDoctorFromClinicForOwner(
+        { uid: "firebase-owner", phoneNumber: "+919876543210" },
+        owner.id,
+        createRepository()
+      )
+    ).rejects.toMatchObject({ code: "SELF_REMOVAL_FORBIDDEN" });
+  });
+
+  it("re-approves rejected doctors in the owner's clinic", async () => {
+    const repository = createRepository();
+
+    await expect(
+      reapproveDoctorForOwner(
+        { uid: "firebase-owner", phoneNumber: "+919876543210" },
+        "66666666-6666-4666-8666-666666666666",
+        repository
+      )
+    ).resolves.toEqual({ ok: true });
+    expect(repository.updateDoctorAccountStatus).toHaveBeenCalledWith(
+      "66666666-6666-4666-8666-666666666666",
+      owner.clinic_id,
+      "active"
+    );
   });
 
   it("updates the clinic profile for owners and normalizes empty addresses to null", async () => {

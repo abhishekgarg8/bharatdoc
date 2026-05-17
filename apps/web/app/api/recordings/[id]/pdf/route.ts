@@ -5,6 +5,7 @@ import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { proxyPdfRequest } from "@/lib/server/worker-pdf-proxy";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 interface RouteContext {
   params: {

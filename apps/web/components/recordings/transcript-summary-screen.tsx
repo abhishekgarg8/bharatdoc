@@ -61,9 +61,24 @@ export function TranscriptSummaryScreen({
   const transcriptBlocks = useMemo(() => linesFor(transcript), [transcript]);
   const summaryBlocks = useMemo(() => linesFor(summary), [summary]);
   const hasTranscript = Boolean(transcript.trim());
+  const canEditRecording = recording.canEdit;
   const canSave = summary.trim() !== savedSummary.trim();
 
+  function guardEditable(): boolean {
+    if (canEditRecording) {
+      return true;
+    }
+
+    setMessage(null);
+    setError("Only the recording doctor can edit this record.");
+    return false;
+  }
+
   async function generateTranscript() {
+    if (!guardEditable()) {
+      return;
+    }
+
     setMessage(null);
     setError(null);
     setGenerating(true);
@@ -87,6 +102,10 @@ export function TranscriptSummaryScreen({
   }
 
   async function generateSummary() {
+    if (!guardEditable()) {
+      return;
+    }
+
     setMessage(null);
     setError(null);
 
@@ -132,6 +151,10 @@ export function TranscriptSummaryScreen({
   }
 
   async function saveSummary() {
+    if (!guardEditable()) {
+      return;
+    }
+
     setMessage(null);
     setError(null);
 
@@ -169,6 +192,10 @@ export function TranscriptSummaryScreen({
   }
 
   async function generatePdf() {
+    if (!guardEditable()) {
+      return;
+    }
+
     setMessage(null);
     setError(null);
 
@@ -236,6 +263,12 @@ export function TranscriptSummaryScreen({
               <span>{recording.duration}</span>
               <span className="h-0.5 w-0.5 rounded-full bg-ink-faint" />
               <span>{recording.doctorName}</span>
+              {!canEditRecording ? (
+                <>
+                  <span className="h-0.5 w-0.5 rounded-full bg-ink-faint" />
+                  <span>Read-only</span>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="mt-1 shrink-0">
@@ -301,9 +334,13 @@ export function TranscriptSummaryScreen({
               </label>
               <textarea
                 id="recording-summary"
-                className="min-h-[340px] w-full resize-none rounded-xl border-2 border-terracotta bg-paper px-3.5 py-3 font-body text-[13px] leading-relaxed text-ink-soft outline-none focus:ring-2 focus:ring-terracotta/20"
+                className={cn(
+                  "min-h-[340px] w-full resize-none rounded-xl border-2 border-terracotta bg-paper px-3.5 py-3 font-body text-[13px] leading-relaxed text-ink-soft outline-none focus:ring-2 focus:ring-terracotta/20",
+                  !canEditRecording && "border-rule bg-paper-deep"
+                )}
                 placeholder="Generate a summary from the transcript."
                 value={summary}
+                readOnly={!canEditRecording}
                 onChange={(event) => {
                   setSummary(event.target.value);
                   setMessage(null);
@@ -327,7 +364,7 @@ export function TranscriptSummaryScreen({
                     className="min-h-10 shrink-0 px-3 py-2"
                     variant="ghost"
                     icon={<FileCheck2 className="h-4 w-4" />}
-                    disabled={generatingPdf}
+                    disabled={generatingPdf || !canEditRecording}
                     onClick={generatePdf}
                   >
                     {generatingPdf ? "Making" : "PDF"}
@@ -371,7 +408,7 @@ export function TranscriptSummaryScreen({
             className="flex-1"
             variant="ghost"
             icon={<Sparkles className="h-4 w-4" />}
-            disabled={generating}
+            disabled={generating || !canEditRecording}
             onClick={generatePrimary}
           >
             {generating ? "Generating" : "Generate"}
@@ -379,7 +416,7 @@ export function TranscriptSummaryScreen({
           <BharatButton
             className="flex-1"
             icon={<Save className="h-4 w-4" />}
-            disabled={!canSave || saving}
+            disabled={!canEditRecording || !canSave || saving}
             onClick={saveSummary}
           >
             {saving ? "Saving" : "Save"}

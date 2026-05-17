@@ -27,7 +27,7 @@ describe("PromptEditorPageClient", () => {
       signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => {
       return Response.json({
           doctor: activeDoctor,
           preferences: {
@@ -64,7 +64,7 @@ describe("PromptEditorPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const navigate = vi.fn();
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => {
       return Response.json({
         doctor: { ...activeDoctor, account_status: "pending_approval" },
         preferences: null

@@ -8,6 +8,7 @@ export interface RecordingDetailRecord {
   time: string;
   duration: string;
   doctorName: string;
+  canEdit: boolean;
   status: RecordingStatus;
   recordedAt: string;
   transcript: string | null;
@@ -22,6 +23,7 @@ export interface RecordingDetailApiRecord {
   label: string | null;
   duration_seconds: number | null;
   doctor_name: string;
+  can_edit?: boolean;
   status: RecordingStatus;
   recorded_at: string;
   transcript: string | null;
@@ -53,6 +55,7 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     time: "Today, 10:55",
     duration: "12:03",
     doctorName: "You",
+    canEdit: true,
     status: "transcribed",
     recordedAt: "2026-04-23T05:25:00.000Z",
     transcript:
@@ -68,6 +71,7 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     time: "Today, 09:30",
     duration: "6:47",
     doctorName: "You",
+    canEdit: true,
     status: "summary_ready",
     recordedAt: "2026-04-23T04:00:00.000Z",
     transcript:
@@ -83,6 +87,7 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     time: "Yest, 18:20",
     duration: "14:22",
     doctorName: "Dr. Rao",
+    canEdit: true,
     status: "pdf_saved",
     recordedAt: "2026-04-22T12:50:00.000Z",
     transcript: "Patient reports recurring headache and eye strain after screen use.",
@@ -100,6 +105,7 @@ export function mapApiRecordingToDetail(recording: RecordingDetailApiRecord, now
     time: formatRecordedAt(recording.recorded_at, now),
     duration: formatRecordingDuration(recording.duration_seconds),
     doctorName: recording.doctor_name,
+    canEdit: recording.can_edit ?? true,
     status: recording.status,
     recordedAt: recording.recorded_at,
     transcript: recording.transcript,

@@ -68,11 +68,11 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       return count ?? 0;
     },
 
-    async listRecentRecordings(doctorId: string, limit: number): Promise<RecordingListItem[]> {
+    async listRecentClinicRecordings(clinicId: string, limit: number): Promise<RecordingListItem[]> {
       const { data, error } = await supabase
         .from("recordings")
         .select("*, doctors!inner(name)")
-        .eq("doctor_id", doctorId)
+        .eq("clinic_id", clinicId)
         .order("recorded_at", { ascending: false })
         .limit(limit);
 

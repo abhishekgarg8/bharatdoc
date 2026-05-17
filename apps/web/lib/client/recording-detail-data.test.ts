@@ -11,6 +11,7 @@ describe("recording detail data", () => {
           label: "Follow-up",
           duration_seconds: 723,
           doctor_name: "Dr. Aparna Iyer",
+          can_edit: false,
           status: "summary_ready",
           recorded_at: "2026-04-23T05:25:00.000Z",
           transcript: "Patient reports fever.",
@@ -25,6 +26,7 @@ describe("recording detail data", () => {
       patientId: "P-10483",
       duration: "12:03",
       doctorName: "Dr. Aparna Iyer",
+      canEdit: false,
       status: "summary_ready",
       transcript: "Patient reports fever.",
       summary: "Chief Complaint: Fever"
@@ -40,6 +42,7 @@ describe("recording detail data", () => {
           label: "Follow-up",
           duration_seconds: 723,
           doctor_name: "Dr. Aparna Iyer",
+          can_edit: true,
           status: "pdf_saved",
           recorded_at: "2026-04-23T05:25:00.000Z",
           transcript: "Patient reports fever.",

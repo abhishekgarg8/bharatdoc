@@ -3,6 +3,7 @@ import type { Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createRecordingProcessingRepository,
+  createSupabaseAudioStorage,
   createTranscriptionAttemptRepository,
 } from "../repositories.js";
 
@@ -52,6 +53,21 @@ function supabaseForInsert(result: { error: Error | null }) {
     query,
     supabase: {
       from: vi.fn(() => query),
+    } as unknown as SupabaseClient,
+  };
+}
+
+function supabaseForStorage(result: { error: Error | null }) {
+  const bucket = {
+    upload: vi.fn(async () => result),
+  };
+
+  return {
+    bucket,
+    supabase: {
+      storage: {
+        from: vi.fn(() => bucket),
+      },
     } as unknown as SupabaseClient,
   };
 }
@@ -156,5 +172,38 @@ describe("createTranscriptionAttemptRepository", () => {
         errorStatus: 500,
       }),
     ).rejects.toThrow("insert failed");
+  });
+});
+
+describe("createSupabaseAudioStorage", () => {
+  it("stores iOS AAC/MP4 captures with m4a object names and content types", async () => {
+    const { supabase, bucket } = supabaseForStorage({ error: null });
+    const repository = createSupabaseAudioStorage(supabase);
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_776_000_000_000);
+
+    try {
+      await expect(
+        repository.uploadRecordingAudio({
+          audio: Buffer.from("audio"),
+          mimeType: "audio/aac",
+          clinicId: "clinic",
+          doctorId: "doctor",
+          recordingId: "recording",
+          filename: "recording.aac",
+        }),
+      ).resolves.toBe("clinic/doctor/recording-1776000000000.m4a");
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(supabase.storage.from).toHaveBeenCalledWith("audio");
+    expect(bucket.upload).toHaveBeenCalledWith(
+      "clinic/doctor/recording-1776000000000.m4a",
+      Buffer.from("audio"),
+      {
+        contentType: "audio/aac",
+        upsert: true,
+      },
+    );
   });
 });

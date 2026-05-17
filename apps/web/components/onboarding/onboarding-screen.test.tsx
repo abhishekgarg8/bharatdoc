@@ -65,15 +65,11 @@ describe("OnboardingScreen", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = input.toString();
 
-      if (url === "/api/hospitals") {
+      if (url === "/api/clinics/lookup?code=MED42X") {
         return Response.json({
-          hospitals: [
-            {
-              hospital_id: "hospital-id",
-              hospital_name: "Sunrise Hospital",
-              hospital_address: "24 Baner Road, Pune"
-            }
-          ]
+          clinic_id: "hospital-id",
+          clinic_name: "Sunrise Hospital",
+          clinic_address: "24 Baner Road, Pune"
         });
       }
 
@@ -95,6 +91,8 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
     await screen.findByText("Your hospital");
+    fireEvent.change(screen.getByLabelText("Clinic Code"), { target: { value: "med42x" } });
+    fireEvent.click(screen.getByRole("button", { name: /find hospital/i }));
     await waitFor(() => expect(screen.getAllByText("Sunrise Hospital").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
 
@@ -110,7 +108,12 @@ describe("OnboardingScreen", () => {
       })
     );
     const registerCall = fetcher.mock.calls.find(([input]) => input.toString() === "/api/auth/register");
-    expect(JSON.parse((registerCall?.[1] as RequestInit).body as string).profile).not.toHaveProperty("medical_reg_no");
+    const registerBody = JSON.parse((registerCall?.[1] as RequestInit).body as string);
+    expect(registerBody).toMatchObject({
+      mode: "join_clinic",
+      clinic_code: "MED42X"
+    });
+    expect(registerBody.profile).not.toHaveProperty("medical_reg_no");
   });
 
   it("supports deterministic demo onboarding without external auth or API calls", async () => {

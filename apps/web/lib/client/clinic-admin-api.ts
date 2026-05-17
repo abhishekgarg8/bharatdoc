@@ -26,7 +26,12 @@ export interface ActiveClinicDoctor {
   specialization: string;
   phone: string;
   role: "owner" | "doctor";
+  recordings_count: number;
   created_at: string;
+}
+
+export interface ReviewedClinicDoctor extends ActiveClinicDoctor {
+  account_status: "rejected";
 }
 
 export interface ClinicProfile {
@@ -41,6 +46,7 @@ export interface ClinicAdminSnapshot {
   clinic: ClinicProfile;
   activeDoctors: ActiveClinicDoctor[];
   pendingApprovals: PendingApproval[];
+  rejectedDoctors: ReviewedClinicDoctor[];
 }
 
 export interface SettingsBootstrapSnapshot {
@@ -48,6 +54,7 @@ export interface SettingsBootstrapSnapshot {
   clinic: ClinicProfile | null;
   activeDoctors: ActiveClinicDoctor[];
   pendingApprovals: PendingApproval[];
+  rejectedDoctors: ReviewedClinicDoctor[];
 }
 
 export interface ClinicProfileUpdate {
@@ -92,7 +99,7 @@ export async function fetchSettingsBootstrap(
     headers: authHeaders(idToken)
   });
 
-  return parseJson<SettingsBootstrapSnapshot>(response, "Unable to load settings.");
+  return parseJsonOrThrow<SettingsBootstrapSnapshot>(response, "Unable to load settings.");
 }
 
 export async function updateClinicProfile(
@@ -142,4 +149,30 @@ export async function rejectPendingDoctor(
   });
 
   await parseJsonOrThrow<{ ok: true }>(response, "Unable to reject doctor.");
+}
+
+export async function removeClinicDoctor(
+  idToken: string,
+  doctorId: string,
+  fetcher: typeof fetch = fetch
+): Promise<void> {
+  const response = await fetcher(`/api/clinic/doctors/${doctorId}/remove`, {
+    method: "POST",
+    headers: authHeaders(idToken)
+  });
+
+  await parseJsonOrThrow<{ ok: true }>(response, "Unable to remove doctor.");
+}
+
+export async function reapproveClinicDoctor(
+  idToken: string,
+  doctorId: string,
+  fetcher: typeof fetch = fetch
+): Promise<void> {
+  const response = await fetcher(`/api/clinic/doctors/${doctorId}/reapprove`, {
+    method: "POST",
+    headers: authHeaders(idToken)
+  });
+
+  await parseJsonOrThrow<{ ok: true }>(response, "Unable to re-approve doctor.");
 }

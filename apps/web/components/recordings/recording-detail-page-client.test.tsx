@@ -30,6 +30,7 @@ const apiRecording = {
   label: null,
   duration_seconds: 180,
   doctor_name: "Dr. Nisha Shah",
+  can_edit: true,
   status: "transcribed",
   recorded_at: "2026-04-23T06:12:00.000Z",
   transcript: "Patient reports fever.",
@@ -46,7 +47,7 @@ describe("RecordingDetailPageClient", () => {
       signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => {
       return Response.json({ doctor: activeDoctor, recording: apiRecording });
     }) as unknown as typeof fetch;
 
@@ -149,8 +150,8 @@ describe("RecordingDetailPageClient", () => {
         error: null
       }
     ]);
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      const url = input.toString();
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => {
+      const url = _input.toString();
 
       if (url === `/api/recordings/${apiRecording.id}`) {
         return Response.json({
@@ -210,7 +211,7 @@ describe("RecordingDetailPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const navigate = vi.fn();
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => {
       return Response.json({ doctor: { ...activeDoctor, account_status: "rejected" }, recording: apiRecording });
     }) as unknown as typeof fetch;
 
@@ -225,5 +226,37 @@ describe("RecordingDetailPageClient", () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes read-only same-clinic recordings through to the detail screen", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor: activeDoctor,
+        recording: {
+          ...apiRecording,
+          can_edit: false,
+          summary: "Existing summary",
+          status: "summary_ready"
+        }
+      })
+    ) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        authClient={authClient}
+        fetcher={fetcher}
+      />
+    );
+
+    await expect(screen.findByText("Read-only")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Summary" })).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
   });
 });

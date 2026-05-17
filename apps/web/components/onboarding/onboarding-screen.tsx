@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Building2, Check, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 import { normalizeEmail, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/onboarding/logo-mark";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { createSupabaseAuthClient, authErrorMessage, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
-import { destinationForRegistration, fetchHospitals, registerAccount, type HospitalOption } from "@/lib/client/onboarding-api";
+import { destinationForRegistration, lookupClinic, registerAccount, type ClinicLookupResponse } from "@/lib/client/onboarding-api";
 import { destinationForDoctorStatus, fetchCurrentDoctor } from "@/lib/client/session";
 
 type OnboardingStep = "credentials" | "profile" | "hospital";
@@ -48,6 +48,7 @@ const demoDefaults = {
     name: "Dr. Aparna Iyer",
     specialization: "General Physician"
   },
+  clinicCode: "MED42X",
   hospitalId: "demo-hospital",
   hospital: {
     name: "Sunrise Hospital",
@@ -55,13 +56,11 @@ const demoDefaults = {
   }
 };
 
-const demoHospitals: HospitalOption[] = [
-  {
-    hospital_id: demoDefaults.hospitalId,
-    hospital_name: demoDefaults.hospital.name,
-    hospital_address: demoDefaults.hospital.address
-  }
-];
+const demoClinicLookup: ClinicLookupResponse = {
+  clinic_id: demoDefaults.hospitalId,
+  clinic_name: demoDefaults.hospital.name,
+  clinic_address: demoDefaults.hospital.address
+};
 
 export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
   const queryDemoMode = useExplicitDemoMode();
@@ -83,50 +82,12 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   const [idToken, setIdToken] = useState<string | null>(null);
   const [profile, setProfile] = useState(effectiveDemoMode ? demoDefaults.profile : { name: "", specialization: "" });
   const [hospitalMode, setHospitalMode] = useState<HospitalMode>("join_hospital");
-  const [hospitals, setHospitals] = useState<HospitalOption[]>(effectiveDemoMode ? demoHospitals : []);
-  const [selectedHospitalId, setSelectedHospitalId] = useState(effectiveDemoMode ? demoDefaults.hospitalId : "");
-  const [hospitalLoadAttempted, setHospitalLoadAttempted] = useState(effectiveDemoMode);
+  const [clinicCode, setClinicCode] = useState(effectiveDemoMode ? demoDefaults.clinicCode : "");
+  const [clinicLookupResult, setClinicLookupResult] = useState<ClinicLookupResponse | null>(
+    effectiveDemoMode ? demoClinicLookup : null
+  );
+  const [isLookingUpClinic, setIsLookingUpClinic] = useState(false);
   const [hospital, setHospital] = useState(effectiveDemoMode ? demoDefaults.hospital : { name: "", address: "" });
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadHospitals() {
-      if (effectiveDemoMode || step !== "hospital" || hospitalMode !== "join_hospital" || hospitalLoadAttempted) {
-        return;
-      }
-
-      setIsBusy(true);
-      setError(null);
-
-      try {
-        const options = await fetchHospitals();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setHospitals(options);
-        setSelectedHospitalId((current) => current || options[0]?.hospital_id || "");
-        setHospitalLoadAttempted(true);
-      } catch {
-        if (isMounted) {
-          setError("Unable to load hospitals. Try again.");
-          setHospitalLoadAttempted(true);
-        }
-      } finally {
-        if (isMounted) {
-          setIsBusy(false);
-        }
-      }
-    }
-
-    void loadHospitals();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [effectiveDemoMode, hospitalLoadAttempted, hospitalMode, step]);
 
   async function handleCredentials() {
     setIsBusy(true);
@@ -215,6 +176,37 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
     setStep("hospital");
   }
 
+  async function handleClinicLookup(): Promise<ClinicLookupResponse | null> {
+    const normalizedCode = clinicCode.trim().toUpperCase();
+
+    setClinicCode(normalizedCode);
+    setClinicLookupResult(null);
+    setError(null);
+
+    if (normalizedCode.length !== 6) {
+      setError("Enter the 6-character Clinic Code shared by your hospital owner.");
+      return null;
+    }
+
+    if (effectiveDemoMode) {
+      setClinicLookupResult(demoClinicLookup);
+      return demoClinicLookup;
+    }
+
+    setIsLookingUpClinic(true);
+
+    try {
+      const result = await lookupClinic(normalizedCode);
+      setClinicLookupResult(result);
+      return result;
+    } catch (lookupError) {
+      setError(lookupError instanceof Error ? lookupError.message : "Hospital code was not found.");
+      return null;
+    } finally {
+      setIsLookingUpClinic(false);
+    }
+  }
+
   async function handleRegister() {
     if (!idToken) {
       setError("Create an account or sign in before registration.");
@@ -227,12 +219,12 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
     const input: RegistrationInput =
       hospitalMode === "join_hospital"
         ? {
-            mode: "join_hospital",
+            mode: "join_clinic",
             profile: {
               name: profile.name,
               specialization: profile.specialization
             },
-            hospital_id: selectedHospitalId
+            clinic_code: clinicCode.trim().toUpperCase()
           }
         : {
             mode: "create_hospital",
@@ -250,8 +242,12 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
       if (effectiveDemoMode) {
         navigate(hospitalMode === "join_hospital" ? "/pending-approval?demo=1" : "/dashboard?demo=1");
       } else {
-        if (hospitalMode === "join_hospital" && !selectedHospitalId) {
-          throw new Error("Select a hospital to join.");
+        if (hospitalMode === "join_hospital" && !clinicLookupResult) {
+          const lookupResult = await handleClinicLookup();
+
+          if (!lookupResult) {
+            return;
+          }
         }
 
         const result = await registerAccount(idToken, input);
@@ -382,34 +378,42 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               <div>
                 <label className="mb-3 block">
                   <span className="mb-1 block font-body text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
-                    Hospital
+                    Clinic Code
                   </span>
-                  <select
-                    className="w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-body text-sm font-semibold text-ink outline-none"
-                    value={selectedHospitalId}
-                    onChange={(event) => setSelectedHospitalId(event.target.value)}
-                    aria-label="Hospital"
-                    disabled={isBusy || hospitals.length === 0}
-                  >
-                    {hospitals.length === 0 ? <option value="">No hospitals available</option> : null}
-                    {hospitals.map((option) => (
-                      <option key={option.hospital_id} value={option.hospital_id}>
-                        {option.hospital_name}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    className="w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink outline-none"
+                    value={clinicCode}
+                    onChange={(event) => {
+                      setClinicCode(event.target.value.toUpperCase());
+                      setClinicLookupResult(null);
+                    }}
+                    maxLength={6}
+                    autoCapitalize="characters"
+                    aria-label="Clinic Code"
+                    placeholder="MED42X"
+                    disabled={isBusy || isLookingUpClinic}
+                  />
                 </label>
-                {hospitals.find((option) => option.hospital_id === selectedHospitalId) ? (
+                <BharatButton
+                  className="w-full"
+                  variant="ghost"
+                  onClick={() => void handleClinicLookup()}
+                  disabled={isBusy || isLookingUpClinic}
+                >
+                  {isLookingUpClinic ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Find hospital
+                </BharatButton>
+                {clinicLookupResult ? (
                   <div className="mt-3 rounded-lg border border-rule bg-paper-deep px-3 py-2">
                     <div className="flex items-center gap-1.5 font-body text-[10px] font-bold uppercase tracking-[0.12em] text-sage">
                       <Check className="h-3 w-3" />
                       Hospital selected
                     </div>
                     <div className="mt-1 font-display text-[22px] italic leading-none text-ink">
-                      {hospitals.find((option) => option.hospital_id === selectedHospitalId)?.hospital_name}
+                      {clinicLookupResult.clinic_name}
                     </div>
                     <div className="mt-1 font-body text-[11px] text-ink-muted">
-                      {hospitals.find((option) => option.hospital_id === selectedHospitalId)?.hospital_address ?? "Address not added"}
+                      {clinicLookupResult.clinic_address ?? "Address not added"}
                     </div>
                   </div>
                 ) : null}
@@ -434,7 +438,11 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               </div>
             )}
 
-            <BharatButton className="mt-5 w-full" onClick={handleRegister} disabled={isBusy}>
+            <BharatButton
+              className="mt-5 w-full"
+              onClick={handleRegister}
+              disabled={isBusy || isLookingUpClinic || (hospitalMode === "join_hospital" && !clinicLookupResult)}
+            >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {hospitalMode === "join_hospital" ? "Request to join" : "Create hospital & continue"}
             </BharatButton>

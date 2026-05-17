@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 import { AppError } from "@/lib/server/errors";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {

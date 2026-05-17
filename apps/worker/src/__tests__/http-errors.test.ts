@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createErrorHandler, HttpError } from "../http-errors.js";
+import {
+  createErrorHandler,
+  HttpError,
+  sanitizeErrorForTelemetry,
+} from "../http-errors.js";
 
 describe("worker HTTP error handling", () => {
   it("sanitizes internal HttpError messages in responses while logging telemetry", () => {
@@ -48,7 +52,11 @@ describe("worker HTTP error handling", () => {
     };
 
     handler(
-      new HttpError(413, "Audio file exceeds the Phase 1 size limit.", "AUDIO_TOO_LARGE"),
+      new HttpError(
+        413,
+        "Audio file exceeds the Phase 1 size limit.",
+        "AUDIO_TOO_LARGE",
+      ),
       { method: "POST", path: "/api/transcribe" } as never,
       response as never,
       vi.fn(),
@@ -60,6 +68,25 @@ describe("worker HTTP error handling", () => {
         code: "AUDIO_TOO_LARGE",
         message: "Audio file exceeds the Phase 1 size limit.",
       },
+    });
+  });
+
+  it("keeps bounded upstream provider metadata for diagnostics", () => {
+    const error = Object.assign(new Error("Invalid value for audio"), {
+      status: 400,
+      code: "invalid_value",
+      type: "invalid_request_error",
+      param: "file",
+    });
+
+    expect(sanitizeErrorForTelemetry(error)).toMatchObject({
+      error_code: "INTERNAL_ERROR",
+      error_message: "Internal server error.",
+      upstream_status: 400,
+      upstream_code: "invalid_value",
+      upstream_type: "invalid_request_error",
+      upstream_message: "Invalid value for audio",
+      upstream_param: "file",
     });
   });
 });

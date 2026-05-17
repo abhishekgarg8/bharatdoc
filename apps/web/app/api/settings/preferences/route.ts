@@ -7,6 +7,7 @@ import { createSupabaseSettingsRepository } from "@/lib/server/supabase-settings
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const timing = createServerTiming();

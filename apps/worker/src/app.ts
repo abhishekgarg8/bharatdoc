@@ -11,7 +11,7 @@ import { consoleStructuredLogger } from "./logger.js";
 import { generateRecordingPdf } from "./pdf-generation.js";
 import { summarizeRecording } from "./summary.js";
 import {
-  MAX_TRANSCRIPTION_AUDIO_BYTES,
+  MAX_TRANSCRIPTION_UPLOAD_BYTES,
   transcribeRecording,
   type TranscribeRecordingInput,
 } from "./transcription.js";
@@ -64,7 +64,7 @@ export function createApp(
   const audioUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: MAX_TRANSCRIPTION_AUDIO_BYTES,
+      fileSize: MAX_TRANSCRIPTION_UPLOAD_BYTES,
     },
   });
 

@@ -56,6 +56,7 @@ describe("SettingsScreen", () => {
     expect(screen.getByRole("link", { name: /language/i })).toHaveAttribute("href", "/settings/language");
     expect(screen.getByRole("link", { name: /summary prompt/i })).toHaveAttribute("href", "/settings/prompt");
     expect(screen.getByText("Delete account")).toBeInTheDocument();
+    expect(screen.getByText("Not available in this build")).toBeInTheDocument();
   });
 
   it("shows active doctor details when the owner expands the hospital team", async () => {
@@ -66,6 +67,73 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(screen.getByText("Current hospital members with active BharatDoc access.")).toBeInTheDocument());
     expect(screen.getByText("Dr. Leena Joshi")).toBeInTheDocument();
     expect(screen.getByText("owner")).toBeInTheDocument();
+    expect(screen.getByText(/7 recordings/)).toBeInTheDocument();
+  });
+
+  it("removes active doctors and keeps them in audit history", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /active doctors/i }));
+    await screen.findByText("Current hospital members with active BharatDoc access.");
+    fireEvent.click(screen.getAllByRole("button", { name: /remove from clinic/i })[1]!);
+
+    await waitFor(() => expect(screen.getByText(/removed from clinic/i)).toBeInTheDocument());
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/doctors/doctor-leena/remove", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /removed doctors/i }));
+    expect(screen.getByText("Dr. Leena Joshi")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /re-approve/i }).length).toBeGreaterThan(0);
+  });
+
+  it("re-approves removed doctors from owner audit history", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    render(<SettingsScreen demoMode pendingApprovals={[]} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /removed doctors/i }));
+    expect(await screen.findByText("Dr. Sameer Kulkarni")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /re-approve/i }));
+
+    await waitFor(() => expect(screen.getByText("Dr. Sameer Kulkarni re-approved.")).toBeInTheDocument());
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/doctors/doctor-removed/reapprove", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+    expect(screen.getByText("No removed doctors.")).toBeInTheDocument();
+  });
+
+  it("scrolls to owner review when pending approvals row is clicked", () => {
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /pending approvals/i }));
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
+  });
+
+  it("only marks the summary prompt as edited when a custom prompt is saved", () => {
+    render(
+      <SettingsScreen
+        doctor={ownerDoctor}
+        clinic={clinic}
+        activeDoctors={[]}
+        pendingApprovals={[]}
+      />
+    );
+
+    expect(screen.getByText("Default prompt")).toBeInTheDocument();
+    expect(screen.queryByText("Edited")).not.toBeInTheDocument();
   });
 
   it("approves a pending doctor through the API and removes the card", async () => {

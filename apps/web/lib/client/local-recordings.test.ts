@@ -142,7 +142,7 @@ describe("local recording repository", () => {
   });
 
   it("maps only stopped local recordings into offline dashboard records", () => {
-    const dashboardRecord = toLocalDashboardRecord(baseRecording, new Date("2026-04-23T09:00:00.000Z"));
+    const dashboardRecord = toLocalDashboardRecord(baseRecording, new Date("2026-04-23T06:30:00.000Z"));
 
     expect(dashboardRecord).toMatchObject({
       id: "local-recording",

@@ -45,7 +45,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Owner path creates clinic, owner doctor row, active account, and clinic code.
 - Doctor path looks up clinic code, creates pending doctor row, and creates join request.
 - Add unit/API tests for owner creation, doctor join, duplicate pending request, invalid clinic code, pending gate, and rejected gate.
-- [ ] Browser-test full owner onboarding and doctor pending approval with screenshots.
+- [x] Browser-test full owner onboarding and doctor pending approval with screenshots.
 
 ### 5. Owner admin and Settings
 
@@ -86,6 +86,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Slice B: recording finalization, transcription retry idempotency, owner-scoped summary edits, and stale PDF invalidation.
 - [x] Slice C: Unicode/multi-page PDF generation and atomic owner approval/rejection via Supabase RPC.
 - [x] Apply the owner approval/rejection RPC migration to the linked Supabase project.
+- [x] Apply the pending atomic onboarding RPC migration to the linked Supabase project.
 - [x] Verify the migration with remote migration history, live auth smoke, full live AI smoke, and browser screenshot review.
 - [x] P1-1: Upload transcription audio directly from the browser to Railway and gate worker CORS.
 - [x] P1-2: Align Vercel/Railway env docs with required web API route secrets.
@@ -105,7 +106,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Fix P1 gap: sanitize unknown web and worker server errors while preserving expected user-actionable errors.
 - [x] Fix P1 gap: redirect expired protected-page sessions through Supabase sign-out and onboarding recovery.
 - [x] Fix P1 gap: add clinic-code lookup throttling and miss telemetry for public lookup abuse guard.
-- [ ] Config follow-up: replace the local `.env` anon key with the anon key for Supabase project `jtezgoegatwbvdqeogiy` once the correct public anon key is available.
+- [ ] Config follow-up: replace the local `.env` anon key with the matching anon key for Supabase project `jtezgoegatwbvdqeogiy`; current validation uses a runtime override so `.env` remains untouched.
 
 ### 10. Production latency remediation
 
@@ -114,6 +115,20 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Collapse dashboard and search startup from `/api/me` plus `/api/recordings` into one `/api/dashboard` request.
 - [ ] Deploy and verify the direct Railway transcription path in production. Skipped in this pass because Railway deployment is being handled separately.
 - [x] Verify the latency remediation with focused tests, full web unit tests, lint, typecheck, production build, and browser screenshot smoke.
+- [x] Mark request-scoped API routes as dynamic so the production build does not attempt authenticated/static API prerendering.
+- [x] Add auth-session recovery for unreachable Supabase session checks so users are routed out of the loading screen instead of hanging.
+- [x] Fix verification blockers from the PRD completion audit: web lint unused callback args, dashboard E2E password selector, and strict test assertions.
+- [x] Fix PRD completion audit P2 gaps: readable auth validation errors, saved custom-prompt Settings badge, stale local/server dashboard merge precedence, and unsupported Settings row affordances.
+- [x] Fix clinic-scoped recording detail read-only ownership with a `can_edit` API/UI contract and verified server/client tests.
+- [x] Fix iOS audio capture MIME negotiation by adding MP4/AAC candidates and `.m4a` upload naming for AAC/MP4 audio.
+- [x] Fix recording screen clinic and reconnect context by showing authenticated hospital name plus Online/Offline state and keeping local audio for retry.
+- [x] Fix dashboard recent-record scope by loading clinic-scoped consultations instead of only the signed-in doctor's rows.
+- [x] Fix onboarding join consistency by replacing hospital-ID selection with Clinic Code lookup and `join_clinic` registration.
+- [x] Finish owner admin hardening with active doctor recording counts, remove-from-clinic, removed-doctor audit history, and re-approve flow.
+- [x] Add Railway worker large-audio splitting and transcript stitching above the per-call transcription size.
+- [x] Align the PRD auth source of truth to Supabase email/password while documenting legacy `firebase_uid` and `phone` column names.
+- [x] Add a repeatable real-account browser E2E runner with screenshots, email-confirmation resume support, fake microphone audio, and a dry-run gate before account creation.
+- [x] Add a runtime Supabase anon-key wrapper so real E2E commands can use the current linked-project anon key without editing `.env`.
 
 ## Testing Discipline
 
@@ -129,4 +144,4 @@ Testing is a first-class requirement: every implementation step lands with unit/
 
 - Phase 1 includes MVP plus recording/offline risk probes, not full Phase 2 hardening.
 - Browser and Computer Use checks are part of the build process, not optional post-launch QA.
-- Large-file splitting, full crash recovery, automatic queues, phone-call interruption handling, low-volume warning, analytics, localization, and push notifications remain Phase 2+.
+- Full crash recovery, automatic queues, phone-call interruption handling, low-volume warning, analytics, localization, and push notifications remain Phase 2+.

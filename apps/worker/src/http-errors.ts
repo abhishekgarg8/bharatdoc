@@ -56,6 +56,8 @@ export interface SanitizedError {
   upstream_status?: number;
   upstream_code?: string;
   upstream_type?: string;
+  upstream_message?: string;
+  upstream_param?: string;
 }
 
 function safeString(value: unknown): string | undefined {
@@ -66,7 +68,14 @@ function safeString(value: unknown): string | undefined {
 
 function upstreamMetadata(
   error: unknown,
-): Pick<SanitizedError, "upstream_status" | "upstream_code" | "upstream_type"> {
+): Pick<
+  SanitizedError,
+  | "upstream_status"
+  | "upstream_code"
+  | "upstream_type"
+  | "upstream_message"
+  | "upstream_param"
+> {
   if (!error || typeof error !== "object") {
     return {};
   }
@@ -75,10 +84,16 @@ function upstreamMetadata(
     status?: unknown;
     code?: unknown;
     type?: unknown;
+    message?: unknown;
+    param?: unknown;
   };
   const metadata: Pick<
     SanitizedError,
-    "upstream_status" | "upstream_code" | "upstream_type"
+    | "upstream_status"
+    | "upstream_code"
+    | "upstream_type"
+    | "upstream_message"
+    | "upstream_param"
   > = {};
 
   if (typeof candidate.status === "number") {
@@ -93,6 +108,16 @@ function upstreamMetadata(
   const upstreamType = safeString(candidate.type);
   if (upstreamType) {
     metadata.upstream_type = upstreamType;
+  }
+
+  const upstreamMessage = safeString(candidate.message);
+  if (upstreamMessage) {
+    metadata.upstream_message = upstreamMessage;
+  }
+
+  const upstreamParam = safeString(candidate.param);
+  if (upstreamParam) {
+    metadata.upstream_param = upstreamParam;
   }
 
   return metadata;
