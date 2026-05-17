@@ -6,7 +6,8 @@ This audit maps the requested end state to concrete repo evidence. A checkbox sh
 
 ## Objective Criteria
 
-- [ ] Implement the BharatDoc PRD end to end.
+- [x] Implement the BharatDoc PRD end to end.
+      Evidence: PRD implementation was verified locally, merged through PR #5, deployed to Vercel production commit `80e60dff630589c96b547f39342bacbe72e5aa67`, and production real-account E2E completed through dashboard, settings, recording, audio-file transcription, summary, PDF, and search on 2026-05-17.
 - [x] Support real account signup/login using the connected email path.
 - [x] Capture browser screenshots for the real signup and core app flows.
 - [x] Keep `.env` unchanged.
@@ -18,7 +19,7 @@ This audit maps the requested end state to concrete repo evidence. A checkbox sh
 - [x] Workspace scripts exist for build, lint, unit tests, E2E tests, live smoke, PWA smoke, and staging smoke.
       Evidence: `package.json`, `apps/web/package.json`, `apps/worker/package.json`.
 - [x] Repeatable real-account browser E2E runner exists and has a safe dry-run gate plus audio-file fallback for deterministic worker coverage.
-      Evidence: `scripts/real-account-browser-e2e.mjs`, `scripts/with-current-supabase-anon-key.mjs`, `docs/real-account-browser-e2e.md`, and `pnpm smoke:real-browser`; wrapped dry run against `https://bharatdoc-web.vercel.app` saved `output/playwright/real-account-2026-05-17/01-onboarding-entry.png` and stopped before credential entry/account creation on 2026-05-17; local real-account run on 2026-05-17 completed through `18-search-results.png`.
+      Evidence: `scripts/real-account-browser-e2e.mjs`, `scripts/with-current-supabase-anon-key.mjs`, `docs/real-account-browser-e2e.md`, and `pnpm smoke:real-browser`; wrapped dry run against `https://bharatdoc-web.vercel.app` saved `output/playwright/real-account-2026-05-17/01-onboarding-entry.png` and stopped before credential entry/account creation on 2026-05-17; local real-account run on 2026-05-17 completed through `18-search-results.png`; production run saved `output/playwright/production-real-account-2026-05-17/18-search-results.png`.
 - [x] Unit/API/component tests pass.
       Evidence: `pnpm test` passed shared 39 tests, worker 50 tests, and web 244 tests on 2026-05-17 after the real-browser runner/runbook changes.
 - [x] TypeScript typecheck passes.
@@ -115,9 +116,12 @@ This audit maps the requested end state to concrete repo evidence. A checkbox sh
 
 ## Production Deployment Gate
 
-- [ ] Commit, push, and merge the verified code to trigger Vercel auto-deploy.
-- [ ] Wait for the Vercel deployment and verify `https://bharatdoc-web.vercel.app/`.
-- [ ] Run production real-account E2E with a real Gmail alias and audio file after deployment.
+- [x] Commit, push, and merge the verified code to trigger Vercel auto-deploy.
+      Evidence: branch `codex/prd-real-e2e-prod` was pushed, PR #5 included `@codex please review`, Vercel preview passed, and the PR was squash-merged to `main` as `80e60dff630589c96b547f39342bacbe72e5aa67` on 2026-05-17.
+- [x] Wait for the Vercel deployment and verify `https://bharatdoc-web.vercel.app/`.
+      Evidence: after a five-minute wait, Vercel reported production deployment `dpl_3ZYKzoDd8L1a5jZsKjjNtsPGjBeR` as `READY` for commit `80e60dff630589c96b547f39342bacbe72e5aa67`, and `curl -I -L https://bharatdoc-web.vercel.app/` returned `HTTP/2 200`.
+- [x] Run production real-account E2E with a real Gmail alias and audio file after deployment.
+      Evidence: `REAL_E2E_BASE_URL=https://bharatdoc-web.vercel.app REAL_E2E_PHASE=resume ... pnpm with:current-supabase-anon pnpm smoke:real-browser` completed on 2026-05-17 using `abhishekgarg8+bharatdoc-codex-20260517@gmail.com`; screenshots saved under `output/playwright/production-real-account-2026-05-17/` through `13-recording-transcribed-audio-file.png`, `16-recording-detail-summary.png`, `17-recording-detail-pdf.png`, and `18-search-results.png`.
 
 ## Current Live Follow-ups
 

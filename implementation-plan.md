@@ -129,6 +129,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Align the PRD auth source of truth to Supabase email/password while documenting legacy `firebase_uid` and `phone` column names.
 - [x] Add a repeatable real-account browser E2E runner with screenshots, email-confirmation resume support, fake microphone audio, and a dry-run gate before account creation.
 - [x] Add a runtime Supabase anon-key wrapper so real E2E commands can use the current linked-project anon key without editing `.env`.
+- [x] Commit, push, merge, wait for Vercel production deployment, and verify the live app with real-account audio E2E screenshots at `https://bharatdoc-web.vercel.app/`.
 
 ## Testing Discipline
 
