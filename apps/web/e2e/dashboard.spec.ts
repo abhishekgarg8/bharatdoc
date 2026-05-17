@@ -92,7 +92,7 @@ test("onboarding smoke renders email password entry", async ({ page }) => {
 
   await expect(page.getByText("Welcome to BharatDoc")).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Password" })).toBeVisible();
   await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
 });
 

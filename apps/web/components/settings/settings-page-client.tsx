@@ -5,7 +5,8 @@ import {
   SettingsScreen,
   type SettingsActiveDoctor,
   type SettingsClinicProfile,
-  type SettingsDoctorProfile
+  type SettingsDoctorProfile,
+  type SettingsRejectedDoctor
 } from "@/components/settings/settings-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import { recoverExpiredSession } from "@/lib/client/api-error";
@@ -27,10 +28,12 @@ interface SettingsPageClientProps {
 
 function toSettingsDoctor(doctor: Doctor): SettingsDoctorProfile {
   return {
+    id: doctor.id,
     name: doctor.name,
     specialization: doctor.specialization,
     phone: doctor.phone,
-    role: doctor.role
+    role: doctor.role,
+    customPrompt: doctor.custom_prompt
   };
 }
 
@@ -55,7 +58,23 @@ function toSettingsActiveDoctors(
     specialization: doctor.specialization,
     phone: doctor.phone,
     role: doctor.role,
+    recordingsCount: doctor.recordings_count,
     createdAt: doctor.created_at
+  }));
+}
+
+function toSettingsRejectedDoctors(
+  rejectedDoctors: Awaited<ReturnType<typeof fetchSettingsBootstrap>>["rejectedDoctors"]
+): SettingsRejectedDoctor[] {
+  return rejectedDoctors.map((doctor) => ({
+    id: doctor.id,
+    name: doctor.name,
+    specialization: doctor.specialization,
+    phone: doctor.phone,
+    role: doctor.role,
+    recordingsCount: doctor.recordings_count,
+    createdAt: doctor.created_at,
+    accountStatus: doctor.account_status
   }));
 }
 
@@ -74,6 +93,7 @@ export function SettingsPageClient({
   const [doctor, setDoctor] = useState<SettingsDoctorProfile | null>(null);
   const [clinic, setClinic] = useState<SettingsClinicProfile | null>(null);
   const [activeDoctors, setActiveDoctors] = useState<SettingsActiveDoctor[]>([]);
+  const [rejectedDoctors, setRejectedDoctors] = useState<SettingsRejectedDoctor[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +149,7 @@ export function SettingsPageClient({
         setDoctor(toSettingsDoctor(snapshot.doctor));
         setClinic(snapshot.clinic ? toSettingsClinic(snapshot.clinic) : null);
         setActiveDoctors(toSettingsActiveDoctors(snapshot.activeDoctors));
+        setRejectedDoctors(toSettingsRejectedDoctors(snapshot.rejectedDoctors));
         setPendingApprovals(snapshot.pendingApprovals);
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
@@ -141,6 +162,7 @@ export function SettingsPageClient({
             setDoctor(null);
             setClinic(null);
             setActiveDoctors([]);
+            setRejectedDoctors([]);
             setPendingApprovals([]);
           } else {
             setError("Unable to load settings. Please sign in again.");
@@ -183,6 +205,7 @@ export function SettingsPageClient({
     fetcher,
     allowLocalDemoWrites: false,
     activeDoctors,
+    rejectedDoctors,
     pendingApprovals,
     ...(idToken ? { idToken } : {}),
     ...(doctor ? { doctor } : {}),

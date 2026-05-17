@@ -44,6 +44,7 @@ describe("SettingsPageClient", () => {
               specialization: "General Physician",
               phone: "+919876543210",
               role: "owner",
+              recordings_count: 3,
               created_at: "2026-04-23T09:00:00.000Z"
             },
             {
@@ -52,9 +53,11 @@ describe("SettingsPageClient", () => {
               specialization: "Pediatrician",
               phone: "+919834012340",
               role: "doctor",
+              recordings_count: 1,
               created_at: "2026-04-23T10:00:00.000Z"
             }
           ],
+          rejectedDoctors: [],
           pendingApprovals: []
         });
       }
@@ -110,6 +113,7 @@ describe("SettingsPageClient", () => {
             activeDoctorsCount: 1
           },
           activeDoctors: [],
+          rejectedDoctors: [],
           pendingApprovals: []
         });
       }
@@ -215,7 +219,11 @@ describe("SettingsPageClient", () => {
           custom_prompt: null,
           transcription_lang: "auto",
           created_at: "2026-04-23T09:00:00.000Z"
-        }
+        },
+        clinic: null,
+        activeDoctors: [],
+        rejectedDoctors: [],
+        pendingApprovals: []
       })
     ) as unknown as typeof fetch;
 

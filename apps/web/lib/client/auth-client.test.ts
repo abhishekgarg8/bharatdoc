@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PasswordCredentialsSchema } from "@bharatdoc/shared";
 import { authErrorMessage, createSupabaseAuthClient, getAuthRedirectUrl } from "@/lib/client/auth-client";
 
 const supabaseMocks = vi.hoisted(() => {
@@ -32,6 +33,7 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   supabaseMocks.createClient.mockClear();
   supabaseMocks.getSession.mockReset();
   supabaseMocks.signUp.mockReset();
@@ -131,6 +133,18 @@ describe("Supabase auth client", () => {
     await expect(createSupabaseAuthClient().getCurrentIdToken()).resolves.toBe("session-token");
   });
 
+  it("treats a hung Supabase session lookup as unauthenticated", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.getSession.mockImplementation(() => new Promise(() => undefined));
+
+    const token = createSupabaseAuthClient().getCurrentIdToken();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await expect(token).resolves.toBeNull();
+  });
+
   it("treats missing Supabase browser config as an unauthenticated session", async () => {
     await expect(createSupabaseAuthClient().getCurrentIdToken()).resolves.toBeNull();
     expect(supabaseMocks.createClient).not.toHaveBeenCalled();
@@ -138,6 +152,25 @@ describe("Supabase auth client", () => {
 
   it("falls back to readable auth errors", () => {
     expect(authErrorMessage(new Error("Invalid login credentials"))).toBe("Invalid login credentials");
+    expect(authErrorMessage(new TypeError("Failed to fetch"))).toBe(
+      "Unable to reach authentication service. Check your connection and try again."
+    );
     expect(authErrorMessage("nope")).toBe("Authentication failed. Please try again.");
+  });
+
+  it("maps Zod credential validation failures to readable auth errors", () => {
+    const invalidEmail = PasswordCredentialsSchema.safeParse({
+      email: "",
+      password: "bharatdoc123"
+    });
+    const shortPassword = PasswordCredentialsSchema.safeParse({
+      email: "doctor@example.com",
+      password: "short"
+    });
+
+    expect(invalidEmail.success).toBe(false);
+    expect(shortPassword.success).toBe(false);
+    expect(authErrorMessage(invalidEmail.success ? null : invalidEmail.error)).toBe("Please enter a valid email.");
+    expect(authErrorMessage(shortPassword.success ? null : shortPassword.error)).toBe("Use at least 8 characters.");
   });
 });

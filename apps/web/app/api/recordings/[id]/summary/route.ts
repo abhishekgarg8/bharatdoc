@@ -8,6 +8,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 import { proxySummaryRequest } from "@/lib/server/worker-summary-proxy";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 interface RouteContext {
   params: {

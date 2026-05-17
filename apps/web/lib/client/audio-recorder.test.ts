@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoAudioRecorder, createDemoWavBlob } from "@/lib/client/audio-recorder";
+import { createDemoAudioRecorder, createDemoWavBlob, selectSupportedAudioMimeType } from "@/lib/client/audio-recorder";
 
 async function headerText(blob: Blob, start: number, end: number): Promise<string> {
   const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
@@ -13,6 +13,12 @@ async function headerText(blob: Blob, start: number, end: number): Promise<strin
 }
 
 describe("demo audio recorder", () => {
+  it("prefers browser-supported mobile audio MIME types before WAV fallback", () => {
+    expect(selectSupportedAudioMimeType((mimeType) => mimeType === "audio/mp4")).toBe("audio/mp4");
+    expect(selectSupportedAudioMimeType((mimeType) => mimeType === "audio/aac")).toBe("audio/aac");
+    expect(selectSupportedAudioMimeType(() => false)).toBe("audio/wav");
+  });
+
   it("creates a valid WAV container instead of mislabeled text bytes", async () => {
     const blob = createDemoWavBlob(1);
 

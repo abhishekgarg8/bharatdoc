@@ -23,6 +23,7 @@ export interface TranscribeRecordingResponse {
 }
 
 export const MAX_TRANSCRIPTION_AUDIO_BYTES = MAX_AUDIO_BYTES_PHASE_1;
+export const MAX_TRANSCRIPTION_UPLOAD_BYTES = MAX_TRANSCRIPTION_AUDIO_BYTES * 8;
 
 function requireClinicId(clinicId: string | null): string {
   if (!clinicId) {
@@ -47,8 +48,8 @@ function requireAudio(audio: TranscriptionFileInput | undefined): TranscriptionF
     throw new HttpError(400, "Audio file is required.", "AUDIO_REQUIRED");
   }
 
-  if (audio.size > MAX_TRANSCRIPTION_AUDIO_BYTES || audio.buffer.byteLength > MAX_TRANSCRIPTION_AUDIO_BYTES) {
-    throw new HttpError(413, "Audio file exceeds the Phase 1 size limit.", "AUDIO_TOO_LARGE");
+  if (audio.size > MAX_TRANSCRIPTION_UPLOAD_BYTES || audio.buffer.byteLength > MAX_TRANSCRIPTION_UPLOAD_BYTES) {
+    throw new HttpError(413, "Audio file exceeds the worker upload size limit.", "AUDIO_TOO_LARGE");
   }
 
   if (!audio.mimetype.startsWith("audio/")) {
@@ -56,6 +57,36 @@ function requireAudio(audio: TranscriptionFileInput | undefined): TranscriptionF
   }
 
   return audio;
+}
+
+function filenameForPart(filename: string, partIndex: number, partCount: number): string {
+  if (partCount === 1) {
+    return filename;
+  }
+
+  const match = /^(.*?)(\.[^.]*)?$/.exec(filename);
+  const basename = match?.[1] || "recording";
+  const extension = match?.[2] || "";
+
+  return `${basename}.part-${String(partIndex + 1).padStart(2, "0")}-of-${String(partCount).padStart(2, "0")}${extension}`;
+}
+
+function audioParts(audio: TranscriptionFileInput): Array<{ buffer: Buffer; filename: string }> {
+  if (audio.buffer.byteLength <= MAX_TRANSCRIPTION_AUDIO_BYTES) {
+    return [{ buffer: audio.buffer, filename: audio.originalname }];
+  }
+
+  const partCount = Math.ceil(audio.buffer.byteLength / MAX_TRANSCRIPTION_AUDIO_BYTES);
+
+  return Array.from({ length: partCount }, (_, index) => {
+    const start = index * MAX_TRANSCRIPTION_AUDIO_BYTES;
+    const end = Math.min(start + MAX_TRANSCRIPTION_AUDIO_BYTES, audio.buffer.byteLength);
+
+    return {
+      buffer: audio.buffer.subarray(start, end),
+      filename: filenameForPart(audio.originalname, index, partCount)
+    };
+  });
 }
 
 function requireTranscribableRecording(recording: Recording | null): Recording {
@@ -126,14 +157,25 @@ export async function transcribeRecording(
     });
 
     stage = "transcribe_audio";
-    const transcript = (
-      await deps.transcriptionClient.transcribe({
-        audio: audio.buffer,
-        mimeType: audio.mimetype,
-        filename: audio.originalname,
-        language: auth.doctor.transcription_lang
-      })
-    ).trim();
+    const parts = audioParts(audio);
+    const transcriptParts: string[] = [];
+
+    for (const part of parts) {
+      const transcriptPart = (
+        await deps.transcriptionClient.transcribe({
+          audio: part.buffer,
+          mimeType: audio.mimetype,
+          filename: part.filename,
+          language: auth.doctor.transcription_lang
+        })
+      ).trim();
+
+      if (transcriptPart) {
+        transcriptParts.push(transcriptPart);
+      }
+    }
+
+    const transcript = transcriptParts.join("\n\n").trim();
 
     if (!transcript) {
       throw new HttpError(502, "Transcription provider returned an empty response.", "TRANSCRIPT_EMPTY");

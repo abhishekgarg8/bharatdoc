@@ -7,7 +7,8 @@ import type {
   ClinicProfileUpdate,
   ClinicAdminRepository,
   JoinRequestForReview,
-  PendingApproval
+  PendingApproval,
+  ReviewedClinicDoctor
 } from "@/lib/server/clinic-admin";
 
 interface PendingApprovalRow {
@@ -32,6 +33,13 @@ interface PendingApprovalRow {
 
 function firstDoctor(row: PendingApprovalRow): PendingApproval["doctor"] {
   return Array.isArray(row.doctors) ? row.doctors[0]! : row.doctors;
+}
+
+function withZeroRecordingCount<T extends object>(doctor: T): T & { recordings_count: number } {
+  return {
+    ...doctor,
+    recordings_count: 0
+  };
 }
 
 function throwReviewError(error: { code?: string; message?: string }): never {
@@ -84,7 +92,22 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
         throw error;
       }
 
-      return (data ?? []) as ActiveClinicDoctor[];
+      return ((data ?? []) as Omit<ActiveClinicDoctor, "recordings_count">[]).map(withZeroRecordingCount);
+    },
+
+    async listRejectedDoctors(clinicId: string): Promise<ReviewedClinicDoctor[]> {
+      const { data, error } = await supabase
+        .from("doctors")
+        .select("id, name, specialization, phone, role, account_status, created_at")
+        .eq("clinic_id", clinicId)
+        .eq("account_status", "rejected")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as Omit<ReviewedClinicDoctor, "recordings_count">[]).map(withZeroRecordingCount);
     },
 
     async listPendingApprovals(clinicId: string): Promise<PendingApproval[]> {
@@ -104,6 +127,27 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
         requested_at: row.requested_at,
         doctor: firstDoctor(row)
       }));
+    },
+
+    async countRecordingsByDoctorIds(clinicId: string, doctorIds: string[]): Promise<Record<string, number>> {
+      if (doctorIds.length === 0) {
+        return {};
+      }
+
+      const { data, error } = await supabase
+        .from("recordings")
+        .select("doctor_id")
+        .eq("clinic_id", clinicId)
+        .in("doctor_id", doctorIds);
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as { doctor_id: string }[]).reduce<Record<string, number>>((counts, row) => {
+        counts[row.doctor_id] = (counts[row.doctor_id] ?? 0) + 1;
+        return counts;
+      }, {});
     },
 
     async findJoinRequestForClinic(requestId: string, clinicId: string): Promise<JoinRequestForReview | null> {
@@ -146,6 +190,24 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
 
       if (error) {
         throwReviewError(error);
+      }
+    },
+
+    async updateDoctorAccountStatus(doctorId: string, clinicId: string, status: "active" | "rejected"): Promise<void> {
+      const { data, error } = await supabase
+        .from("doctors")
+        .update({ account_status: status })
+        .eq("id", doctorId)
+        .eq("clinic_id", clinicId)
+        .select("id")
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new AppError(404, "Doctor was not found in this hospital.", "DOCTOR_NOT_FOUND");
       }
     },
 

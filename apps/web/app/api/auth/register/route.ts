@@ -6,6 +6,7 @@ import { createSupabaseOnboardingRepository } from "@/lib/server/supabase-onboar
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {

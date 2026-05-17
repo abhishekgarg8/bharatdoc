@@ -186,7 +186,15 @@ export function createTranscriptionAttemptRepository(supabase: SupabaseClient): 
 export function createSupabaseAudioStorage(supabase: SupabaseClient): AudioStorage {
   return {
     async uploadRecordingAudio(input): Promise<string> {
-      const extension = input.mimeType.includes("mp4") ? "m4a" : input.mimeType.includes("wav") ? "wav" : "webm";
+      const normalizedMimeType = input.mimeType.toLowerCase();
+      const extension =
+        normalizedMimeType.includes("mp4") ||
+        normalizedMimeType.includes("m4a") ||
+        normalizedMimeType.includes("aac")
+          ? "m4a"
+          : normalizedMimeType.includes("wav") || normalizedMimeType.includes("wave")
+            ? "wav"
+            : "webm";
       const path = [
         input.clinicId,
         input.doctorId,

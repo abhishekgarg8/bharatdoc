@@ -5,8 +5,9 @@ import { RecordingScreen } from "@/components/recordings/recording-screen";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
+import { fetchDashboardSnapshot } from "@/lib/client/dashboard-data";
 import { useExplicitDemoMode, useExplicitMockRecorder } from "@/lib/client/demo-mode";
-import { destinationForInactiveDoctor, fetchCurrentDoctor } from "@/lib/client/session";
+import { destinationForInactiveDoctor } from "@/lib/client/session";
 
 interface NewRecordingPageClientProps {
   authClient?: AuthClient;
@@ -31,6 +32,7 @@ export function NewRecordingPageClient({
   const shouldUseDemoRecorder = useDemoRecorder ?? (allowDemoFallback && queryMockRecorder);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
+  const [clinicName, setClinicName] = useState(allowDemoFallback ? "Sunrise Hospital" : "Hospital");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,19 +54,21 @@ export function NewRecordingPageClient({
 
       try {
         if (token) {
-          const me = await fetchCurrentDoctor(token, fetcher);
+          const snapshot = await fetchDashboardSnapshot(token, fetcher);
 
           if (!isMounted) {
             return;
           }
 
-          const inactiveDestination = destinationForInactiveDoctor(me.doctor);
+          const inactiveDestination = destinationForInactiveDoctor(snapshot.doctor);
 
           if (inactiveDestination) {
             didRedirect = true;
             navigate(inactiveDestination);
             return;
           }
+
+          setClinicName(snapshot.clinic?.name ?? "Hospital");
         }
 
         setIdToken(token ?? undefined);
@@ -101,6 +105,7 @@ export function NewRecordingPageClient({
 
   const recordingProps = {
     fetcher,
+    clinicName,
     useDemoRecorder: shouldUseDemoRecorder,
     ...(idToken ? { idToken } : {})
   };

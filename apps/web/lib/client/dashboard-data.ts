@@ -188,7 +188,7 @@ export function mergeDashboardRecords(
   const seen = new Set<string>();
   const merged: DashboardRecord[] = [];
 
-  for (const record of [...localRecords, ...serverRecords]) {
+  for (const record of [...serverRecords, ...localRecords]) {
     if (seen.has(record.id)) {
       continue;
     }

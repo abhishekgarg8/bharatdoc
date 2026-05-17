@@ -1,7 +1,7 @@
 # BharatDoc — Product Requirements Document
 
 ## 1. Executive Summary
-BharatDoc is a mobile-first Progressive Web App (PWA) designed for small clinics in India. It enables doctors to record patient consultations, transcribe them using OpenAI GPT-4o-mini Transcription, generate AI-powered clinical summaries via GPT-4o-mini, and save those summaries as PDF records tied to a patient ID. The app is built for low-connectivity environments with offline-first local recording, manual transcription triggers, and a phone + OTP authentication flow.
+BharatDoc is a mobile-first Progressive Web App (PWA) designed for small clinics in India. It enables doctors to record patient consultations, transcribe them using OpenAI GPT-4o-mini Transcription, generate AI-powered clinical summaries via GPT-4o-mini, and save those summaries as PDF records tied to a patient ID. The app is built for low-connectivity environments with offline-first local recording, manual transcription triggers, and a Supabase email/password authentication flow.
 
 **Target Users:** ~10 doctors across one or more clinics  
 **Primary Device:** Android smartphones (iOS supported)  
@@ -19,7 +19,7 @@ Doctors in Indian clinics spend significant time on post-consultation documentat
 - Transcribe audio via OpenAI GPT-4o-mini Transcription API (manually triggered)
 - Generate editable clinical summaries via GPT-4o-mini using doctor-configured prompts
 - Export and store the summary as a PDF linked to a patient ID
-- Provide secure, individual doctor logins via phone number + OTP
+- Provide secure, individual doctor logins via Supabase email/password authentication
 - Group doctors under a clinic with an owner-controlled approval flow
 - Allow clinic-scoped patient record search across all doctors
 
@@ -54,8 +54,8 @@ Doctors in Indian clinics spend significant time on post-consultation documentat
 
 ## 5. Authentication & Onboarding
 
-### Provider: Firebase Authentication
-Firebase Authentication handles phone number + OTP login. Free tier, native OTP SMS delivery, proven at scale, integrates cleanly with Next.js.
+### Provider: Supabase Authentication
+Supabase Authentication handles email/password signup, login, password reset, confirmation email delivery, and JWT verification for both the Next.js app and Railway worker.
 
 ### Account States
 
@@ -71,9 +71,9 @@ Every doctor account has an `account_status` that gates their access:
 
 ### Sign-Up Flow
 
-#### Step 1 — Phone + OTP (all users)
-- Enter mobile number → receive OTP → verify
-- Firebase session created
+#### Step 1 — Email + password (all users)
+- Enter email and password → create account or log in
+- Supabase session created
 
 #### Step 2 — Personal Profile (all users)
 All fields on a single screen:
@@ -321,7 +321,7 @@ Accessible only to doctors with `role = 'owner'`. A dedicated tab in Settings �
 |-------|--------|-----------|
 | **Frontend** | Next.js 14 (App Router) | SSR + PWA support; API routes for lightweight calls |
 | **Frontend Hosting** | Vercel Free Tier | Free; 10s timeout acceptable — heavy work offloaded to Railway |
-| **Auth** | Firebase Authentication | Free OTP phone login; no monthly fee |
+| **Auth** | Supabase Authentication | Email/password signup, login, password reset, confirmation email, and JWT verification |
 | **Database** | Supabase (managed Postgres) | Managed Postgres + Storage in one dashboard; generous free tier |
 | **File Storage** | Supabase Storage | Included in Supabase; signed URLs; free for MVP. Migrate to Cloudflare R2 when egress costs grow |
 | **Backend Worker** | Railway.app (Node.js + Express) | Persistent server; no function timeout; free ~500hrs/mo on Hobby plan |
@@ -429,13 +429,13 @@ Accessible only to doctors with `role = 'owner'`. A dedicated tab in Settings �
 | Column | Type | Constraints | Notes |
 |--------|------|-------------|-------|
 | id | UUID | PK | Auto-generated |
-| firebase_uid | TEXT | UNIQUE, NOT NULL | From Firebase Auth; used to identify session |
+| firebase_uid | TEXT | UNIQUE, NOT NULL | Legacy column name storing the Supabase Auth user ID; used to identify session |
 | clinic_id | UUID | FK → clinics | Set at sign-up; NULL briefly before clinic assignment |
 | role | TEXT | NOT NULL | `'owner'` or `'doctor'` |
 | account_status | TEXT | NOT NULL | `'pending_approval'` / `'active'` / `'rejected'` |
 | name | TEXT | NOT NULL | Shown on PDFs |
 | specialization | TEXT | NOT NULL | e.g., "General Physician"; shown on PDFs |
-| phone | TEXT | NOT NULL | Firebase-verified phone number |
+| phone | TEXT | NOT NULL | Legacy column name storing the Supabase-verified contact value, currently email |
 | profile_photo_path | TEXT | | Optional; Supabase Storage path |
 | custom_prompt | TEXT | | NULL → system default prompt used |
 | transcription_lang | TEXT | NOT NULL | Default `'auto'` |
@@ -514,7 +514,7 @@ CREATE UNIQUE INDEX idx_one_pending_request
 OWNER ONBOARDING
 ──────────────────────────────────────────────────────────
 1. POST /api/auth/register
-   Body: { firebase_uid, phone, name, specialization,
+   Body: { auth_uid, email, name, specialization,
            profile_photo_path?,
            clinic_name, clinic_address?, clinic_logo_path? }
 2. Server:
@@ -529,7 +529,7 @@ DOCTOR SIGN-UP (via Clinic Code)
 1. GET /api/clinics/lookup?code=MED42X
    Response: { clinic_id, clinic_name } or 404
 2. POST /api/auth/register
-   Body: { firebase_uid, phone, name, specialization,
+   Body: { auth_uid, email, name, specialization,
            profile_photo_path?,
            clinic_id, role='doctor' }
 3. Server:
@@ -562,7 +562,7 @@ OWNER REJECTS
 
 ### 7.7 Access Control Rules (Server-Side Enforcement)
 
-All rules enforced on the Railway worker and Vercel API routes by verifying the Firebase JWT and checking `doctor.account_status` and `doctor.role` on every request.
+All rules are enforced on the Railway worker and Vercel API routes by verifying the Supabase Auth JWT and checking `doctor.account_status` and `doctor.role` on every request.
 
 | Action | Allowed Roles | Extra Condition |
 |--------|--------------|-----------------|
@@ -709,7 +709,7 @@ Assumptions: 50 consultations/day across all doctors, avg 10-min recording.
 | Service | Usage | Cost |
 |---------|-------|------|
 | Vercel Free | Frontend hosting | $0 |
-| Firebase Auth | OTP SMS (~1,500/mo) | $0 (free tier: 10K/mo) |
+| Supabase Auth | Email/password authentication and confirmation email | Included with Supabase project limits |
 | Supabase Free | DB + Storage | $0 |
 | Railway Hobby | ~200hrs compute/mo | $0–$5 |
 | OpenAI GPT-4o-mini Transcription | ~1,500 summaries equivalent audio tokens | ~$30 |

@@ -7,6 +7,7 @@ import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-record
 import { createSupabaseServerClient } from "@/lib/server/supabase";
 
 export const preferredRegion = "bom1";
+export const dynamic = "force-dynamic";
 
 interface RouteContext {
   params: {

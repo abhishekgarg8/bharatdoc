@@ -49,7 +49,7 @@ describe("dashboard data helpers", () => {
   });
 
   it("maps API recordings into display records", () => {
-    const record = mapApiRecordingToDashboardRecord(apiRecord, new Date("2026-04-23T09:00:00.000Z"));
+    const record = mapApiRecordingToDashboardRecord(apiRecord, new Date("2026-04-23T06:30:00.000Z"));
 
     expect(record).toMatchObject({
       id: apiRecord.id,
@@ -66,7 +66,7 @@ describe("dashboard data helpers", () => {
     expect(record.time).toContain("Today");
   });
 
-  it("merges local offline records before synced duplicates", () => {
+  it("prefers server records over synced local duplicates", () => {
     const synced: DashboardRecord[] = [
       {
         id: "same-record",
@@ -103,7 +103,8 @@ describe("dashboard data helpers", () => {
     const merged = mergeDashboardRecords(synced, local);
 
     expect(merged).toHaveLength(2);
-    expect(merged[0]).toMatchObject({ id: "same-record", offline: true, status: "recorded" });
+    expect(merged[0]).toMatchObject({ id: "same-record", status: "transcribed" });
+    expect(merged[0]!.offline).toBeUndefined();
     expect(merged[1]).toMatchObject({ id: "server-only" });
   });
 

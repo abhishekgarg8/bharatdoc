@@ -29,11 +29,44 @@ describe("NewRecordingPageClient", () => {
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async () =>
-      Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" } })
+      Response.json({
+        doctor: { ...activeDoctor, account_status: "pending_approval" },
+        clinic: null,
+        pending_approvals_count: 0,
+        records: []
+      })
     ) as unknown as typeof fetch;
 
     render(<NewRecordingPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+  });
+
+  it("passes the authenticated clinic context into the recorder", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor: activeDoctor,
+        clinic: {
+          id: activeDoctor.clinic_id,
+          name: "Sunrise Hospital",
+          code: "MED42X",
+          address: "Pune"
+        },
+        pending_approvals_count: 0,
+        records: []
+      })
+    ) as unknown as typeof fetch;
+
+    render(<NewRecordingPageClient authClient={authClient} fetcher={fetcher} useDemoRecorder />);
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent("Sunrise Hospital · Online");
+    });
   });
 });

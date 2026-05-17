@@ -23,7 +23,12 @@ export interface ActiveClinicDoctor {
   specialization: string;
   phone: string;
   role: "owner" | "doctor";
+  recordings_count: number;
   created_at: string;
+}
+
+export interface ReviewedClinicDoctor extends ActiveClinicDoctor {
+  account_status: "rejected";
 }
 
 export interface ClinicProfile {
@@ -38,6 +43,7 @@ export interface ClinicAdminSnapshot {
   clinic: ClinicProfile;
   activeDoctors: ActiveClinicDoctor[];
   pendingApprovals: PendingApproval[];
+  rejectedDoctors: ReviewedClinicDoctor[];
 }
 
 export interface SettingsBootstrap {
@@ -45,6 +51,7 @@ export interface SettingsBootstrap {
   clinic: ClinicProfile | null;
   activeDoctors: ActiveClinicDoctor[];
   pendingApprovals: PendingApproval[];
+  rejectedDoctors: ReviewedClinicDoctor[];
 }
 
 export interface ClinicProfileUpdate {
@@ -63,10 +70,13 @@ export interface ClinicAdminRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   findClinicById(clinicId: string): Promise<Clinic | null>;
   listActiveDoctors(clinicId: string): Promise<ActiveClinicDoctor[]>;
+  listRejectedDoctors(clinicId: string): Promise<ReviewedClinicDoctor[]>;
   listPendingApprovals(clinicId: string): Promise<PendingApproval[]>;
+  countRecordingsByDoctorIds(clinicId: string, doctorIds: string[]): Promise<Record<string, number>>;
   findJoinRequestForClinic(requestId: string, clinicId: string): Promise<JoinRequestForReview | null>;
   approveJoinRequest(requestId: string, doctorId: string, ownerId: string): Promise<void>;
   rejectJoinRequest(requestId: string, doctorId: string, ownerId: string, reason: string | null): Promise<void>;
+  updateDoctorAccountStatus(doctorId: string, clinicId: string, status: "active" | "rejected"): Promise<void>;
   updateClinicProfile(clinicId: string, input: ClinicProfileUpdate): Promise<Clinic>;
 }
 
@@ -127,20 +137,46 @@ async function requireOwnerClinic(user: VerifiedUser, repository: ClinicAdminRep
   return clinic;
 }
 
+async function withRecordingCounts<T extends { id: string; recordings_count: number }>(
+  clinicId: string,
+  doctors: T[],
+  repository: ClinicAdminRepository
+): Promise<T[]> {
+  if (doctors.length === 0) {
+    return doctors;
+  }
+
+  const counts = await repository.countRecordingsByDoctorIds(
+    clinicId,
+    doctors.map((doctor) => doctor.id)
+  );
+
+  return doctors.map((doctor) => ({
+    ...doctor,
+    recordings_count: counts[doctor.id] ?? 0
+  }));
+}
+
 export async function getClinicAdminSnapshotForOwner(
   user: VerifiedUser,
   repository: ClinicAdminRepository
 ): Promise<ClinicAdminSnapshot> {
   const clinic = await requireOwnerClinic(user, repository);
-  const [activeDoctors, pendingApprovals] = await Promise.all([
+  const [activeDoctors, rejectedDoctors, pendingApprovals] = await Promise.all([
     repository.listActiveDoctors(clinic.id),
+    repository.listRejectedDoctors(clinic.id),
     repository.listPendingApprovals(clinic.id)
+  ]);
+  const [activeDoctorsWithCounts, rejectedDoctorsWithCounts] = await Promise.all([
+    withRecordingCounts(clinic.id, activeDoctors, repository),
+    withRecordingCounts(clinic.id, rejectedDoctors, repository)
   ]);
 
   return {
-    clinic: toClinicProfile(clinic, activeDoctors.length),
-    activeDoctors,
-    pendingApprovals
+    clinic: toClinicProfile(clinic, activeDoctorsWithCounts.length),
+    activeDoctors: activeDoctorsWithCounts,
+    pendingApprovals,
+    rejectedDoctors: rejectedDoctorsWithCounts
   };
 }
 
@@ -159,7 +195,8 @@ export async function getSettingsBootstrapForUser(
       doctor,
       clinic: null,
       activeDoctors: [],
-      pendingApprovals: []
+      pendingApprovals: [],
+      rejectedDoctors: []
     };
   }
 
@@ -173,16 +210,22 @@ export async function getSettingsBootstrapForUser(
     throw new AppError(404, "Hospital profile was not found.", "CLINIC_NOT_FOUND");
   }
 
-  const [activeDoctors, pendingApprovals] = await Promise.all([
+  const [activeDoctors, rejectedDoctors, pendingApprovals] = await Promise.all([
     repository.listActiveDoctors(clinic.id),
+    repository.listRejectedDoctors(clinic.id),
     repository.listPendingApprovals(clinic.id)
+  ]);
+  const [activeDoctorsWithCounts, rejectedDoctorsWithCounts] = await Promise.all([
+    withRecordingCounts(clinic.id, activeDoctors, repository),
+    withRecordingCounts(clinic.id, rejectedDoctors, repository)
   ]);
 
   return {
     doctor,
-    clinic: toClinicProfile(clinic, activeDoctors.length),
-    activeDoctors,
-    pendingApprovals
+    clinic: toClinicProfile(clinic, activeDoctorsWithCounts.length),
+    activeDoctors: activeDoctorsWithCounts,
+    pendingApprovals,
+    rejectedDoctors: rejectedDoctorsWithCounts
   };
 }
 
@@ -256,4 +299,34 @@ export async function updateClinicProfileForOwner(
   const activeDoctors = await repository.listActiveDoctors(clinic.id);
 
   return toClinicProfile(updatedClinic, activeDoctors.length);
+}
+
+export async function removeDoctorFromClinicForOwner(
+  user: VerifiedUser,
+  doctorId: string,
+  repository: ClinicAdminRepository
+): Promise<{ ok: true }> {
+  const owner = await requireOwnerContext(user, repository);
+
+  if (doctorId === owner.id) {
+    throw new AppError(400, "Owners cannot remove themselves from the hospital.", "SELF_REMOVAL_FORBIDDEN");
+  }
+
+  await repository.updateDoctorAccountStatus(doctorId, owner.clinic_id!, "rejected");
+  return { ok: true };
+}
+
+export async function reapproveDoctorForOwner(
+  user: VerifiedUser,
+  doctorId: string,
+  repository: ClinicAdminRepository
+): Promise<{ ok: true }> {
+  const owner = await requireOwnerContext(user, repository);
+
+  if (doctorId === owner.id) {
+    throw new AppError(400, "Owner account is already active.", "OWNER_REAPPROVE_INVALID");
+  }
+
+  await repository.updateDoctorAccountStatus(doctorId, owner.clinic_id!, "active");
+  return { ok: true };
 }

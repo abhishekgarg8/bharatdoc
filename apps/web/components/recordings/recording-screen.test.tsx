@@ -41,6 +41,44 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
 describe("RecordingScreen", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
+  });
+
+  it("shows clinic context and current online state", () => {
+    render(<RecordingScreen clinicName="Sunrise Hospital" useDemoRecorder />);
+
+    expect(screen.getByText("Sunrise Hospital · Online")).toBeInTheDocument();
+    expect(screen.getByText("Audio stays on this device until transcription.")).toBeInTheDocument();
+  });
+
+  it("keeps recording available offline and waits for reconnect before authenticated transcription", async () => {
+    Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+
+    render(
+      <RecordingScreen
+        idToken="id-token"
+        clinicName="Sunrise Hospital"
+        localRepository={repository}
+        recorderFactory={async () => recorder}
+      />
+    );
+
+    expect(screen.getByText("Sunrise Hospital · Offline")).toBeInTheDocument();
+    expect(screen.getByText("Reconnect to transcribe; audio remains saved locally.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: "P-10482" } });
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+    await screen.findByText("Recording saved on this device.");
+
+    expect(screen.getByRole("button", { name: /transcribe/i })).toBeDisabled();
+    expect((await repository.list())[0]).toMatchObject({
+      patientId: "P-10482",
+      captureState: "stopped",
+      syncState: "local"
+    });
   });
 
   it("records, stores chunks locally, and produces a demo transcript", async () => {

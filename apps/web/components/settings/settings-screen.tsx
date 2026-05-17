@@ -2,12 +2,14 @@
 
 import { Check, ChevronRight, Clipboard, ClipboardList, Edit3, Languages, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import {
   approvePendingDoctor,
+  reapproveClinicDoctor,
   rejectPendingDoctor,
+  removeClinicDoctor,
   updateClinicProfile,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
@@ -15,10 +17,12 @@ import { DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
 import { cn } from "@/lib/utils";
 
 export interface SettingsDoctorProfile {
+  id?: string;
   name: string;
   specialization: string;
   phone: string;
   role: "owner" | "doctor";
+  customPrompt?: string | null;
 }
 
 export interface SettingsClinicProfile {
@@ -35,13 +39,19 @@ export interface SettingsActiveDoctor {
   specialization: string;
   phone: string;
   role: "owner" | "doctor";
+  recordingsCount: number;
   createdAt: string;
+}
+
+export interface SettingsRejectedDoctor extends SettingsActiveDoctor {
+  accountStatus: "rejected";
 }
 
 interface SettingsScreenProps {
   doctor?: SettingsDoctorProfile;
   clinic?: SettingsClinicProfile;
   activeDoctors?: SettingsActiveDoctor[];
+  rejectedDoctors?: SettingsRejectedDoctor[];
   pendingApprovals?: PendingApproval[];
   idToken?: string;
   fetcher?: typeof fetch;
@@ -51,10 +61,12 @@ interface SettingsScreenProps {
 }
 
 const defaultDoctor: SettingsDoctorProfile = {
+  id: "owner-aparna",
   name: "Dr. Aparna Iyer",
   specialization: "General Physician",
   phone: "+91 98765 43210",
-  role: "owner"
+  role: "owner",
+  customPrompt: "Summarize {{transcript}} into a concise clinical note."
 };
 
 const defaultClinic: SettingsClinicProfile = {
@@ -72,6 +84,7 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     specialization: "General Physician",
     phone: "+91 98765 43210",
     role: "owner",
+    recordingsCount: 12,
     createdAt: "2026-04-23T06:40:00.000Z"
   },
   {
@@ -80,6 +93,7 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     specialization: "Pediatrician",
     phone: "+91 98340 12340",
     role: "doctor",
+    recordingsCount: 4,
     createdAt: "2026-04-23T07:10:00.000Z"
   },
   {
@@ -88,7 +102,21 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     specialization: "General Physician",
     phone: "+91 98111 22334",
     role: "doctor",
+    recordingsCount: 7,
     createdAt: "2026-04-22T11:10:00.000Z"
+  }
+];
+
+const defaultRejectedDoctors: SettingsRejectedDoctor[] = [
+  {
+    id: "doctor-removed",
+    name: "Dr. Sameer Kulkarni",
+    specialization: "General Physician",
+    phone: "+91 98000 11122",
+    role: "doctor",
+    recordingsCount: 2,
+    createdAt: "2026-04-20T11:10:00.000Z",
+    accountStatus: "rejected"
   }
 ];
 
@@ -144,6 +172,7 @@ export function SettingsScreen({
   doctor,
   clinic,
   activeDoctors,
+  rejectedDoctors,
   pendingApprovals,
   idToken,
   fetcher = fetch,
@@ -154,6 +183,7 @@ export function SettingsScreen({
   const resolvedDoctor = doctor ?? (demoMode ? defaultDoctor : null);
   const resolvedClinic = clinic ?? (demoMode ? defaultClinic : null);
   const resolvedActiveDoctors = activeDoctors ?? (demoMode ? defaultActiveDoctors : []);
+  const resolvedRejectedDoctors = rejectedDoctors ?? (demoMode ? defaultRejectedDoctors : []);
   const resolvedPendingApprovals = pendingApprovals ?? (demoMode ? defaultPendingApprovals : []);
   const clinicForState = resolvedClinic ?? {
     id: "",
@@ -164,10 +194,11 @@ export function SettingsScreen({
   };
   const [pending, setPending] = useState(resolvedPendingApprovals);
   const [clinicState, setClinicState] = useState(clinicForState);
-  const [activeDoctorsState] = useState(resolvedActiveDoctors);
+  const [activeDoctorsState, setActiveDoctorsState] = useState(resolvedActiveDoctors);
+  const [rejectedDoctorsState, setRejectedDoctorsState] = useState(resolvedRejectedDoctors);
   const [workingRequestId, setWorkingRequestId] = useState<string | null>(null);
   const [savingClinic, setSavingClinic] = useState(false);
-  const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "clinic-profile" | null>(null);
+  const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "rejected-doctors" | "clinic-profile" | null>(null);
   const [clinicForm, setClinicForm] = useState({
     name: clinicForState.name,
     address: clinicForState.address ?? ""
@@ -175,9 +206,13 @@ export function SettingsScreen({
   const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const ownerReviewRef = useRef<HTMLElement | null>(null);
   const isOwner = resolvedDoctor?.role === "owner";
   const canManageClinic = Boolean(isOwner && resolvedClinic);
-  const promptEdited = useMemo(() => DEFAULT_SUMMARY_PROMPT.length > 0, []);
+  const promptEdited = useMemo(() => {
+    const customPrompt = resolvedDoctor?.customPrompt?.trim();
+    return Boolean(customPrompt && customPrompt !== DEFAULT_SUMMARY_PROMPT.trim());
+  }, [resolvedDoctor?.customPrompt]);
 
   if (!resolvedDoctor) {
     return (
@@ -264,10 +299,78 @@ export function SettingsScreen({
     }
   }
 
-  function togglePanel(panel: "active-doctors" | "clinic-profile") {
+  async function removeDoctor(member: SettingsActiveDoctor) {
+    setWorkingRequestId(member.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
+      }
+
+      if (idToken) {
+        await removeClinicDoctor(idToken, member.id, fetcher);
+      }
+
+      setActiveDoctorsState((current) => current.filter((item) => item.id !== member.id));
+      setRejectedDoctorsState((current) => [
+        { ...member, accountStatus: "rejected" },
+        ...current.filter((item) => item.id !== member.id)
+      ]);
+      setMessage(`${member.name} removed from clinic.`);
+    } catch {
+      setError(`Unable to remove ${member.name}.`);
+    } finally {
+      setWorkingRequestId(null);
+    }
+  }
+
+  async function reapproveDoctor(member: SettingsRejectedDoctor) {
+    setWorkingRequestId(member.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
+      }
+
+      if (idToken) {
+        await reapproveClinicDoctor(idToken, member.id, fetcher);
+      }
+
+      const activeMember: SettingsActiveDoctor = {
+        id: member.id,
+        name: member.name,
+        specialization: member.specialization,
+        phone: member.phone,
+        role: member.role,
+        recordingsCount: member.recordingsCount,
+        createdAt: member.createdAt
+      };
+      setRejectedDoctorsState((current) => current.filter((item) => item.id !== member.id));
+      setActiveDoctorsState((current) => [...current, activeMember]);
+      setMessage(`${member.name} re-approved.`);
+    } catch {
+      setError(`Unable to re-approve ${member.name}.`);
+    } finally {
+      setWorkingRequestId(null);
+    }
+  }
+
+  function togglePanel(panel: "active-doctors" | "rejected-doctors" | "clinic-profile") {
     setMessage(null);
     setError(null);
     setExpandedPanel((current) => (current === panel ? null : panel));
+  }
+
+  function scrollToPendingApprovals() {
+    setMessage(null);
+    setError(null);
+    if (typeof ownerReviewRef.current?.scrollIntoView === "function") {
+      ownerReviewRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
   }
 
   async function copyHospitalCode() {
@@ -332,6 +435,7 @@ export function SettingsScreen({
                 badge={pending.length}
                 accent={pending.length > 0}
                 icon={<ShieldCheck className="h-4 w-4" />}
+                onClick={scrollToPendingApprovals}
               />
               <SettingsRow
                 title="Active doctors"
@@ -339,6 +443,13 @@ export function SettingsScreen({
                 icon={<UserRound className="h-4 w-4" />}
                 onClick={() => togglePanel("active-doctors")}
                 expanded={expandedPanel === "active-doctors"}
+              />
+              <SettingsRow
+                title="Removed doctors"
+                subtitle={`${rejectedDoctorsState.length} in audit history`}
+                icon={<UserRound className="h-4 w-4" />}
+                onClick={() => togglePanel("rejected-doctors")}
+                expanded={expandedPanel === "rejected-doctors"}
               />
               <SettingsRow
                 title="Hospital profile"
@@ -389,11 +500,70 @@ export function SettingsScreen({
                       </div>
                       <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
                       <p className="mt-1 font-mono text-[11px] text-ink-faint">{member.phone}</p>
-                      <p className="mt-1 font-body text-[11px] text-ink-soft">Joined {requestedLabel(member.createdAt)}</p>
+                      <p className="mt-1 font-body text-[11px] text-ink-soft">
+                        Joined {requestedLabel(member.createdAt)} · {member.recordingsCount} recordings
+                      </p>
+                      {member.role !== "owner" ? (
+                        <button
+                          className="mt-2 font-body text-[11px] font-bold text-stamp underline-offset-2 hover:underline disabled:opacity-60"
+                          type="button"
+                          disabled={workingRequestId === member.id}
+                          onClick={() => void removeDoctor(member)}
+                        >
+                          Remove from Clinic
+                        </button>
+                      ) : null}
                     </div>
                   </article>
                 ))}
               </div>
+            </section>
+          ) : null}
+
+          {canManageClinic && expandedPanel === "rejected-doctors" ? (
+            <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-3 shadow-[0_1px_0_#E5DAC5]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-body text-sm font-bold text-ink">Removed doctors</h2>
+                  <p className="mt-0.5 font-body text-[11.5px] text-ink-muted">
+                    Rejected or removed doctors kept for owner audit.
+                  </p>
+                </div>
+                <span className="rounded-full bg-paper-deep px-2 py-1 font-body text-[11px] font-bold text-ink-soft">
+                  {rejectedDoctorsState.length}
+                </span>
+              </div>
+              {rejectedDoctorsState.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-rule bg-paper-deep px-3 py-5 text-center font-body text-xs text-ink-muted">
+                  No removed doctors.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {rejectedDoctorsState.map((member) => (
+                    <article key={member.id} className="flex items-start gap-3 rounded-[12px] border border-rule bg-paper-deep px-3 py-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-paper font-display text-lg text-ink-soft">
+                        {initialForName(member.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-body text-sm font-bold text-ink">{member.name}</h3>
+                        <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
+                        <p className="mt-1 font-mono text-[11px] text-ink-faint">{member.phone}</p>
+                        <p className="mt-1 font-body text-[11px] text-ink-soft">
+                          {member.recordingsCount} recordings · removed
+                        </p>
+                        <button
+                          className="mt-2 font-body text-[11px] font-bold text-sage underline-offset-2 hover:underline disabled:opacity-60"
+                          type="button"
+                          disabled={workingRequestId === member.id}
+                          onClick={() => void reapproveDoctor(member)}
+                        >
+                          Re-approve
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
           ) : null}
 
@@ -466,16 +636,18 @@ export function SettingsScreen({
               subtitle={promptEdited ? "Custom prompt ready" : "Default prompt"}
               href="/settings/prompt"
               right={
-                <span className="rounded bg-saffron/15 px-1.5 py-1 font-body text-[10px] font-bold uppercase tracking-[0.1em] text-ochre">
-                  Edited
-                </span>
+                promptEdited ? (
+                  <span className="rounded bg-saffron/15 px-1.5 py-1 font-body text-[10px] font-bold uppercase tracking-[0.1em] text-ochre">
+                    Edited
+                  </span>
+                ) : null
               }
               icon={<Sparkles className="h-4 w-4" />}
             />
           </SettingsGroup>
 
           {canManageClinic ? (
-            <section className="mb-5">
+            <section ref={ownerReviewRef} className="mb-5">
               <div className="mb-2 ml-1 font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
                 Owner review
               </div>
@@ -507,14 +679,14 @@ export function SettingsScreen({
           ) : null}
 
           <SettingsGroup title="About">
-            <SettingsRow title="Help & support" />
-            <SettingsRow title="Terms and privacy" />
+            <SettingsRow title="Help & support" subtitle="Not configured yet" />
+            <SettingsRow title="Terms and privacy" subtitle="Not configured yet" />
             <SettingsRow title="Version" subtitle="v0.9.1 · MVP" />
           </SettingsGroup>
 
           <SettingsGroup title="Account">
             <SettingsRow title={signingOut ? "Signing out..." : "Sign out"} danger onClick={handleSignOut} disabled={signingOut} />
-            <SettingsRow title="Delete account" subtitle="Permanently erase records" danger />
+            <SettingsRow title="Delete account" subtitle="Not available in this build" danger />
           </SettingsGroup>
         </div>
 
@@ -560,8 +732,10 @@ function SettingsRow({
 }) {
   const className = cn(
     "flex w-full items-center gap-3 border-b border-rule px-4 py-3.5 text-left last:border-b-0",
-    accent ? "bg-terracotta/5" : "bg-transparent"
+    accent ? "bg-terracotta/5" : "bg-transparent",
+    href || onClick ? "transition active:scale-[0.99]" : "cursor-default"
   );
+  const isInteractive = Boolean((href || onClick) && !disabled);
   const content = (
     <>
       {icon ? <span className={cn("shrink-0", danger ? "text-stamp" : "text-ink-muted")}>{icon}</span> : null}
@@ -575,7 +749,7 @@ function SettingsRow({
         </span>
       ) : null}
       {right}
-      {!danger ? (
+      {!danger && isInteractive ? (
         <ChevronRight className={cn("h-4 w-4 shrink-0 text-ink-faint transition", expanded ? "rotate-90" : "")} />
       ) : null}
     </>
@@ -589,11 +763,15 @@ function SettingsRow({
     );
   }
 
-  return (
-    <button className={className} type="button" onClick={onClick} disabled={disabled}>
-      {content}
-    </button>
-  );
+  if (onClick || disabled) {
+    return (
+      <button className={className} type="button" onClick={onClick} disabled={disabled || !onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function PendingDoctorCard({

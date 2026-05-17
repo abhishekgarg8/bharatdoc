@@ -20,7 +20,7 @@ function workerTranscriptionUrl(): string {
 export function audioFilenameExtension(mimeType: string): "m4a" | "ogg" | "wav" | "webm" {
   const normalizedMimeType = mimeType.toLowerCase();
 
-  if (normalizedMimeType.includes("mp4") || normalizedMimeType.includes("m4a")) {
+  if (normalizedMimeType.includes("mp4") || normalizedMimeType.includes("m4a") || normalizedMimeType.includes("aac")) {
     return "m4a";
   }
 

@@ -3,7 +3,9 @@ import {
   approvePendingDoctor,
   fetchClinicAdminSnapshot,
   fetchPendingApprovals,
+  reapproveClinicDoctor,
   rejectPendingDoctor,
+  removeClinicDoctor,
   updateClinicProfile
 } from "@/lib/client/clinic-admin-api";
 
@@ -74,7 +76,20 @@ describe("clinic admin API client", () => {
           specialization: "General Physician",
           phone: "+91 98765 43210",
           role: "owner" as const,
+          recordings_count: 3,
           created_at: "2026-04-23T09:00:00.000Z"
+        }
+      ],
+      rejectedDoctors: [
+        {
+          id: "doctor-removed",
+          name: "Dr. Sameer",
+          specialization: "General Physician",
+          phone: "+91 98000 11122",
+          role: "doctor" as const,
+          account_status: "rejected" as const,
+          recordings_count: 1,
+          created_at: "2026-04-22T09:00:00.000Z"
         }
       ],
       pendingApprovals: [
@@ -119,6 +134,26 @@ describe("clinic admin API client", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ name: "Sunrise Family Clinic", address: null })
+    });
+  });
+
+  it("removes and re-approves clinic doctors through owner endpoints", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    await expect(removeClinicDoctor("id-token", "doctor-1", fetcher)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/doctors/doctor-1/remove", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+
+    await expect(reapproveClinicDoctor("id-token", "doctor-1", fetcher)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/doctors/doctor-1/reapprove", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token"
+      }
     });
   });
 });

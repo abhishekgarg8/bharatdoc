@@ -57,6 +57,7 @@ describe("transcription api client", () => {
     expect(audioFilenameExtension("audio/wav")).toBe("wav");
     expect(audioFilenameExtension("audio/x-wav")).toBe("wav");
     expect(audioFilenameExtension("audio/mp4")).toBe("m4a");
+    expect(audioFilenameExtension("audio/aac")).toBe("m4a");
     expect(audioFilenameExtension("audio/ogg")).toBe("ogg");
   });
 

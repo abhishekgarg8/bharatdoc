@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Doctor, Recording } from "@bharatdoc/shared";
-import { transcribeRecording } from "../transcription.js";
+import {
+  MAX_TRANSCRIPTION_AUDIO_BYTES,
+  MAX_TRANSCRIPTION_UPLOAD_BYTES,
+  transcribeRecording,
+} from "../transcription.js";
 import type {
   AudioStorage,
   RecordingProcessingRepository,
@@ -125,7 +129,7 @@ describe("transcribeRecording", () => {
     });
   });
 
-  it("rejects missing recording ids, audio, oversized audio, and non-audio uploads", async () => {
+  it("rejects missing recording ids, audio, too-large uploads, and non-audio uploads", async () => {
     await expect(
       transcribeRecording(
         { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
@@ -149,7 +153,7 @@ describe("transcribeRecording", () => {
           recordingId: recording.id,
           audio: {
             ...fileInput(1),
-            size: 26 * 1024 * 1024,
+            size: MAX_TRANSCRIPTION_UPLOAD_BYTES + 1,
           },
         },
         depsFor(),
@@ -169,6 +173,44 @@ describe("transcribeRecording", () => {
         depsFor(),
       ),
     ).rejects.toMatchObject({ code: "AUDIO_TYPE_INVALID" });
+  });
+
+  it("splits large audio into transcription parts and stitches the transcript", async () => {
+    const deps = depsFor(recording, "unused");
+    vi.mocked(deps.transcriptionClient.transcribe)
+      .mockResolvedValueOnce("Part one.")
+      .mockResolvedValueOnce("Part two.");
+    const audio = fileInput(MAX_TRANSCRIPTION_AUDIO_BYTES + 10);
+
+    await expect(
+      transcribeRecording(
+        { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
+        { recordingId: recording.id, audio },
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      transcript: "Part one.\n\nPart two.",
+      status: "transcribed",
+    });
+
+    expect(deps.transcriptionClient.transcribe).toHaveBeenCalledTimes(2);
+    expect(deps.transcriptionClient.transcribe).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        filename: "recording.part-01-of-02.webm",
+      }),
+    );
+    expect(deps.transcriptionClient.transcribe).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        filename: "recording.part-02-of-02.webm",
+      }),
+    );
+    expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcript: "Part one.\n\nPart two.",
+      }),
+    );
   });
 
   it("rejects missing clinics and missing recordings", async () => {

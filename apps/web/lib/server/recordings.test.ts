@@ -57,7 +57,7 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
     findDoctorByAuthUid: vi.fn(async () => doctor),
     findClinicById: vi.fn(async () => clinic),
     countPendingJoinRequests: vi.fn(async () => 0),
-    listRecentRecordings: vi.fn(async () => [recording]),
+    listRecentClinicRecordings: vi.fn(async () => [recording]),
     searchPatientRecordings: vi.fn(async () => [recording]),
     createRecording: vi.fn(async (input) => ({
       ...recording,
@@ -102,7 +102,7 @@ describe("recordings service", () => {
         pdf_signed_url: null
       }
     ]);
-    expect(repository.listRecentRecordings).toHaveBeenCalledWith(activeDoctor.id, 10);
+    expect(repository.listRecentClinicRecordings).toHaveBeenCalledWith(activeDoctor.clinic_id, 10);
   });
 
   it("blocks inactive doctor accounts", async () => {
@@ -115,6 +115,13 @@ describe("recordings service", () => {
 
   it("returns doctor context and records in one dashboard snapshot", async () => {
     const repository = createRepository();
+    vi.mocked(repository.listRecentClinicRecordings).mockResolvedValueOnce([
+      {
+        ...recording,
+        doctor_id: "99999999-9999-4999-8999-999999999999",
+        doctor_name: "Dr. Sameer"
+      }
+    ]);
 
     await expect(
       getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
@@ -131,13 +138,13 @@ describe("recordings service", () => {
           id: recording.id,
           patient_id: "P-10482",
           clinic_name: "Sunrise Hospital",
-          doctor_name: "Dr. Aparna Iyer"
+          doctor_name: "Dr. Sameer"
         }
       ]
     });
     expect(repository.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
     expect(repository.countPendingJoinRequests).not.toHaveBeenCalled();
-    expect(repository.listRecentRecordings).toHaveBeenCalledWith(activeDoctor.id, 10);
+    expect(repository.listRecentClinicRecordings).toHaveBeenCalledWith(activeDoctor.clinic_id, 10);
   });
 
   it("returns real pending approval counts for owner dashboard snapshots", async () => {
@@ -163,7 +170,7 @@ describe("recordings service", () => {
       pending_approvals_count: 0,
       records: []
     });
-    expect(repository.listRecentRecordings).not.toHaveBeenCalled();
+    expect(repository.listRecentClinicRecordings).not.toHaveBeenCalled();
   });
 
   it("searches patient recordings inside the active doctor's clinic", async () => {
@@ -228,6 +235,7 @@ describe("recordings service", () => {
       label: null,
       duration_seconds: 494,
       doctor_name: "Dr. Aparna Iyer",
+      can_edit: true,
       status: "transcribed",
       recorded_at: "2026-04-23T06:12:00.000Z",
       transcript: "Patient reports fever for two days.",
@@ -253,6 +261,22 @@ describe("recordings service", () => {
       pdf_signed_url: "https://signed.example.com/recording.pdf"
     });
     expect(repository.createPdfSignedUrl).toHaveBeenCalledWith("clinic/doctor/recording.pdf");
+  });
+
+  it("marks same-clinic recordings read-only when another doctor owns them", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findRecordingForClinic).mockResolvedValueOnce({
+      ...recording,
+      doctor_id: "99999999-9999-4999-8999-999999999999",
+      doctor_name: "Dr. Sameer"
+    });
+
+    await expect(
+      getRecordingDetailForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
+    ).resolves.toMatchObject({
+      doctor_name: "Dr. Sameer",
+      can_edit: false
+    });
   });
 
   it("saves edited summaries and advances transcribed recordings to summary ready", async () => {

@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 interface RecordingScreenProps {
   idToken?: string;
+  clinicName?: string;
   fetcher?: typeof fetch;
   localRepository?: LocalRecordingRepository;
   recorderFactory?: AudioRecorderFactory;
@@ -49,6 +50,7 @@ function objectUrlFor(blob: Blob): string | null {
 
 export function RecordingScreen({
   idToken,
+  clinicName = "Hospital",
   fetcher = fetch,
   localRepository,
   recorderFactory,
@@ -72,6 +74,7 @@ export function RecordingScreen({
   const [label, setLabel] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
@@ -79,6 +82,21 @@ export function RecordingScreen({
   useEffect(() => {
     patientIdRef.current = patientId;
   }, [patientId]);
+
+  useEffect(() => {
+    function syncOnlineState() {
+      setIsOnline(navigator.onLine);
+    }
+
+    window.addEventListener("online", syncOnlineState);
+    window.addEventListener("offline", syncOnlineState);
+    syncOnlineState();
+
+    return () => {
+      window.removeEventListener("online", syncOnlineState);
+      window.removeEventListener("offline", syncOnlineState);
+    };
+  }, []);
 
   useEffect(() => {
     labelRef.current = label;
@@ -294,6 +312,12 @@ export function RecordingScreen({
   async function transcribeNow() {
     let workingRecording = recording;
 
+    if (idToken && !isOnline) {
+      setError("Reconnect to transcribe. Audio stays saved on this device.");
+      setMessage(null);
+      return;
+    }
+
     if (workingRecording && (phase === "stopped" || phase === "failed")) {
       workingRecording = await persistEditableMetadata(workingRecording);
     }
@@ -386,7 +410,7 @@ export function RecordingScreen({
   const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped";
   const transcript = recording?.transcript;
   const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
-  const canTranscribe = Boolean(normalizePatientId(patientId));
+  const canTranscribe = Boolean(normalizePatientId(patientId)) && (!idToken || isOnline);
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
@@ -406,7 +430,12 @@ export function RecordingScreen({
             <h1 className="mt-1 font-display text-[30px] italic leading-none tracking-normal text-ink">
               Recording
             </h1>
-            <p className="mt-2 font-body text-xs text-ink-muted">Audio stays on this device until transcription.</p>
+            <p className="mt-2 font-body text-xs text-ink-muted">
+              {clinicName} · {isOnline ? "Online" : "Offline"}
+            </p>
+            <p className="mt-1 font-body text-xs text-ink-muted">
+              {isOnline ? "Audio stays on this device until transcription." : "Reconnect to transcribe; audio remains saved locally."}
+            </p>
           </div>
         </header>
 

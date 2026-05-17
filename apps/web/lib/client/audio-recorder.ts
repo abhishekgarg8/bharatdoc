@@ -45,6 +45,20 @@ interface RecordRtcConstructor {
 const CHUNK_INTERVAL_MS = 30_000;
 const DEMO_AUDIO_DURATION_SECONDS = 12;
 const DEMO_AUDIO_SAMPLE_RATE = 16_000;
+const RECORDING_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/aac",
+  "audio/wav"
+];
+
+export function selectSupportedAudioMimeType(
+  isTypeSupported: (mimeType: string) => boolean = (mimeType) =>
+    typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(mimeType)
+): string {
+  return RECORDING_MIME_CANDIDATES.find((mimeType) => isTypeSupported(mimeType)) ?? "audio/wav";
+}
 
 function writeAscii(view: DataView, offset: number, value: string): void {
   for (let index = 0; index < value.length; index += 1) {
@@ -123,7 +137,7 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const module = await import("recordrtc");
   const RecordRTC = module.default as RecordRtcConstructor;
-  const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/wav";
+  const mimeType = selectSupportedAudioMimeType();
   const listeners = new Set<(chunk: RecordedAudioChunk) => void | Promise<void>>();
   const clock = createElapsedClock();
   const recorder = new RecordRTC(stream, {

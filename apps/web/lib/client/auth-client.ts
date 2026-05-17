@@ -2,6 +2,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail, PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
+import { ZodError } from "zod";
 
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
@@ -14,6 +15,7 @@ export interface AuthClient {
 let browserClient: SupabaseClient | null = null;
 
 const defaultSiteUrl = "https://bharatdoc-web.vercel.app/";
+const sessionLookupTimeoutMs = 5000;
 
 export function getAuthRedirectUrl(): string {
   const configuredUrl =
@@ -53,11 +55,44 @@ function getSupabaseBrowserClient(): SupabaseClient {
 }
 
 export function authErrorMessage(error: unknown): string {
+  if (error instanceof ZodError) {
+    const fieldNames = new Set(error.issues.flatMap((issue) => issue.path.map(String)));
+
+    if (fieldNames.has("email")) {
+      return "Please enter a valid email.";
+    }
+
+    if (fieldNames.has("password")) {
+      return "Use at least 8 characters.";
+    }
+
+    return "Check your login details and try again.";
+  }
+
   if (error instanceof Error) {
+    if (/fetch|network|load failed/i.test(error.message)) {
+      return "Unable to reach authentication service. Check your connection and try again.";
+    }
+
     return error.message;
   }
 
   return "Authentication failed. Please try again.";
+}
+
+async function getSessionWithTimeout(supabase: SupabaseClient) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), sessionLookupTimeoutMs);
+  });
+
+  try {
+    return await Promise.race([supabase.auth.getSession(), timeout]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export function createSupabaseAuthClient(): AuthClient {
@@ -133,7 +168,13 @@ export function createSupabaseAuthClient(): AuthClient {
         return null;
       }
 
-      const { data, error } = await supabase.auth.getSession();
+      const result = await getSessionWithTimeout(supabase);
+
+      if (!result) {
+        return null;
+      }
+
+      const { data, error } = result;
 
       if (error) {
         return null;
