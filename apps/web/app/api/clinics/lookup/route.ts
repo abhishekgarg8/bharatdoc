@@ -24,6 +24,6 @@ export async function GET(request: Request) {
       recordClinicLookupMiss(request);
     }
 
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

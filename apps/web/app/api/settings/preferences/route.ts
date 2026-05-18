@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     return jsonWithServerTiming(bootstrap, timing);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }
 
@@ -32,6 +32,6 @@ export async function PATCH(request: Request) {
 
     return Response.json({ preferences });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

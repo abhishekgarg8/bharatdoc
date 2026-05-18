@@ -27,6 +27,6 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     return jsonWithServerTiming(bootstrap, timing);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

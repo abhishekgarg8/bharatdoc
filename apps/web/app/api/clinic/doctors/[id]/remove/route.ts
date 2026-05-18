@@ -16,6 +16,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     return Response.json(result);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

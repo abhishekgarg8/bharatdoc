@@ -46,11 +46,16 @@ const recording: Recording = {
 function depsFor(recordingResult: Recording | null = recording, clinicResult: Clinic | null = clinic) {
   const recordings: RecordingProcessingRepository = {
     findRecordingForDoctor: vi.fn(async () => recordingResult),
+    findLatestRecordingAudioPath: vi.fn(async () => recordingResult?.audio_storage_path ?? null),
     markRecordingTranscribed: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       audio_storage_path: input.audioStoragePath,
       transcript: input.transcript,
       status: "transcribed" as const
+    })),
+    markRecordingAudioUploaded: vi.fn(async (input) => ({
+      ...(recordingResult ?? recording),
+      audio_storage_path: input.audioStoragePath
     })),
     markRecordingSummarized: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),

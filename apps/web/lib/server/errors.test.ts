@@ -37,20 +37,34 @@ describe("server error mapping", () => {
     expect(body.error.message).not.toContain("service role");
     expect(body.error.request_id).toEqual(expect.any(String));
     expect(console.error).toHaveBeenCalledWith(
-      "api.internal_error",
+      "api.request.failed",
       expect.objectContaining({
         request_id: body.error.request_id,
-        error_message: "Supabase service role secret leaked"
+        error_message: "Internal server error.",
+        internal_error_message: "Supabase service role secret leaked"
       })
     );
   });
 
   it("keeps expected app error responses user-readable", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = errorResponse(new AppError(404, "Hospital was not found.", "CLINIC_NOT_FOUND"));
     const body = await response.json();
 
     expect(response.status).toBe(404);
-    expect(body).toEqual({
+    expect(body.error).toMatchObject({
+      code: "CLINIC_NOT_FOUND",
+      message: "Hospital was not found."
+    });
+    expect(body.error.request_id).toEqual(expect.any(String));
+    expect(console.warn).toHaveBeenCalledWith(
+      "api.request.rejected",
+      expect.objectContaining({
+        request_id: body.error.request_id,
+        error_code: "CLINIC_NOT_FOUND"
+      })
+    );
+    expect(body).toMatchObject({
       error: {
         code: "CLINIC_NOT_FOUND",
         message: "Hospital was not found."

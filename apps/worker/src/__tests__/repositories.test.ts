@@ -60,6 +60,10 @@ function supabaseForInsert(result: { error: Error | null }) {
 function supabaseForStorage(result: { error: Error | null }) {
   const bucket = {
     upload: vi.fn(async () => result),
+    download: vi.fn(async () => ({
+      data: new Blob([Buffer.from("stored audio")], { type: "audio/wav" }),
+      error: null,
+    })),
   };
 
   return {
@@ -151,6 +155,13 @@ describe("createTranscriptionAttemptRepository", () => {
       error_message: "Internal server error.",
       error_status: 500,
       audio_storage_path: "clinic/doctor/new.webm",
+      audio_size_bytes: null,
+      audio_mime_type: null,
+      upstream_status: null,
+      upstream_code: null,
+      upstream_type: null,
+      upstream_message: null,
+      upstream_param: null,
     });
   });
 
@@ -205,5 +216,20 @@ describe("createSupabaseAudioStorage", () => {
         upsert: true,
       },
     );
+  });
+
+  it("downloads stored audio for server-side transcription retries", async () => {
+    const { supabase, bucket } = supabaseForStorage({ error: null });
+    const repository = createSupabaseAudioStorage(supabase);
+
+    await expect(repository.downloadRecordingAudio("clinic/doctor/recording.wav")).resolves.toEqual({
+      audio: Buffer.from("stored audio"),
+      mimeType: "audio/wav",
+      filename: "recording.wav",
+      size: Buffer.byteLength("stored audio"),
+    });
+
+    expect(supabase.storage.from).toHaveBeenCalledWith("audio");
+    expect(bucket.download).toHaveBeenCalledWith("clinic/doctor/recording.wav");
   });
 });

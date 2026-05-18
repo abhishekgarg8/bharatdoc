@@ -203,6 +203,67 @@ describe("RecordingDetailPageClient", () => {
     });
   });
 
+  it("falls back to server-stored audio when local IndexedDB audio is unavailable", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const repository = createMemoryLocalRecordingRepository([]);
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const url = _input.toString();
+
+      if (url === `/api/recordings/${apiRecording.id}`) {
+        return Response.json({
+          doctor: activeDoctor,
+          recording: {
+            ...apiRecording,
+            status: "recorded",
+            transcript: null
+          }
+        });
+      }
+
+      if (url === "https://worker.example.com/api/transcribe") {
+        expect(init?.headers).toEqual({
+          Authorization: "Bearer id-token",
+          "Content-Type": "application/json"
+        });
+        expect(init?.body).toBe(
+          JSON.stringify({
+            recording_id: apiRecording.id,
+            source: "stored_audio"
+          })
+        );
+
+        return Response.json({
+          recording_id: apiRecording.id,
+          transcript: "Generated transcript from stored audio.",
+          audio_storage_path: "hospital/doctor/recording.wav",
+          status: "transcribed"
+        });
+      }
+
+      return Response.json({ accepted: 1 }, { status: 202 });
+    }) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId={apiRecording.id}
+        authClient={authClient}
+        fetcher={fetcher}
+        localRepository={repository}
+      />
+    );
+
+    await screen.findByText("Transcript is not available yet.");
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+
+    await expect(screen.findByText("Generated transcript from stored audio.")).resolves.toBeInTheDocument();
+  });
+
   it("redirects rejected users away from recording details", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),

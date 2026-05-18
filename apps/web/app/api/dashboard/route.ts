@@ -21,6 +21,6 @@ export async function GET(request: Request) {
 
     return jsonWithServerTiming(snapshot, timing);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

@@ -96,26 +96,32 @@ function upstreamMetadata(
     | "upstream_param"
   > = {};
 
+  const upstreamCode = safeString(candidate.code);
+  const upstreamType = safeString(candidate.type);
+  const upstreamParam = safeString(candidate.param);
+  const hasUpstreamMetadata =
+    typeof candidate.status === "number" ||
+    Boolean(upstreamCode) ||
+    Boolean(upstreamType) ||
+    Boolean(upstreamParam);
+
   if (typeof candidate.status === "number") {
     metadata.upstream_status = candidate.status;
   }
 
-  const upstreamCode = safeString(candidate.code);
   if (upstreamCode) {
     metadata.upstream_code = upstreamCode;
   }
 
-  const upstreamType = safeString(candidate.type);
   if (upstreamType) {
     metadata.upstream_type = upstreamType;
   }
 
   const upstreamMessage = safeString(candidate.message);
-  if (upstreamMessage) {
+  if (upstreamMessage && hasUpstreamMetadata) {
     metadata.upstream_message = upstreamMessage;
   }
 
-  const upstreamParam = safeString(candidate.param);
   if (upstreamParam) {
     metadata.upstream_param = upstreamParam;
   }

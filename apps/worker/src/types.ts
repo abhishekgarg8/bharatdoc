@@ -6,6 +6,7 @@ export type TranscriptionAttemptStage =
   | "load_recording"
   | "validate_recording"
   | "upload_audio"
+  | "download_audio"
   | "transcribe_audio"
   | "save_transcript";
 
@@ -28,10 +29,16 @@ export interface ClinicRepository {
 
 export interface RecordingProcessingRepository {
   findRecordingForDoctor(recordingId: string, doctorId: string): Promise<Recording | null>;
+  findLatestRecordingAudioPath(recordingId: string, doctorId: string): Promise<string | null>;
   markRecordingTranscribed(input: {
     recordingId: string;
     doctorId: string;
     transcript: string;
+    audioStoragePath: string;
+  }): Promise<Recording>;
+  markRecordingAudioUploaded(input: {
+    recordingId: string;
+    doctorId: string;
     audioStoragePath: string;
   }): Promise<Recording>;
   markRecordingSummarized(input: {
@@ -57,6 +64,13 @@ export interface TranscriptionAttemptRepository {
     errorMessage: string;
     errorStatus: number;
     audioStoragePath?: string | null;
+    audioSizeBytes?: number | null;
+    audioMimeType?: string | null;
+    upstreamStatus?: number | null;
+    upstreamCode?: string | null;
+    upstreamType?: string | null;
+    upstreamMessage?: string | null;
+    upstreamParam?: string | null;
   }): Promise<void>;
 }
 
@@ -105,6 +119,12 @@ export interface AudioStorage {
     recordingId: string;
     filename: string;
   }): Promise<string>;
+  downloadRecordingAudio(path: string): Promise<{
+    audio: Buffer;
+    mimeType: string;
+    filename: string;
+    size: number;
+  }>;
 }
 
 export interface WorkerDependencies {

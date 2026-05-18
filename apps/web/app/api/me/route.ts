@@ -20,6 +20,6 @@ export async function GET(request: Request) {
 
     return Response.json({ doctor });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

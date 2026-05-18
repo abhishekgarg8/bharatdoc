@@ -89,6 +89,39 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
       return data;
     },
 
+    async findLatestRecordingAudioPath(recordingId: string, doctorId: string): Promise<string | null> {
+      const { data: recording, error: recordingError } = await supabase
+        .from("recordings")
+        .select("audio_storage_path")
+        .eq("id", recordingId)
+        .eq("doctor_id", doctorId)
+        .maybeSingle<{ audio_storage_path: string | null }>();
+
+      if (recordingError) {
+        throw recordingError;
+      }
+
+      if (recording?.audio_storage_path) {
+        return recording.audio_storage_path;
+      }
+
+      const { data: attempt, error: attemptError } = await supabase
+        .from("transcription_attempts")
+        .select("audio_storage_path")
+        .eq("recording_id", recordingId)
+        .eq("doctor_id", doctorId)
+        .not("audio_storage_path", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ audio_storage_path: string | null }>();
+
+      if (attemptError) {
+        throw attemptError;
+      }
+
+      return attempt?.audio_storage_path ?? null;
+    },
+
     async markRecordingTranscribed(input): Promise<Recording> {
       const { data, error } = await supabase
         .from("recordings")
@@ -98,6 +131,33 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
           summary: null,
           pdf_storage_path: null,
           status: "transcribed"
+        })
+        .eq("id", input.recordingId)
+        .eq("doctor_id", input.doctorId)
+        .eq("status", "recorded")
+        .select("*")
+        .maybeSingle<Recording>();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new HttpError(
+          409,
+          "Recording has already been transcribed or finalized.",
+          "RECORDING_NOT_TRANSCRIBABLE"
+        );
+      }
+
+      return data;
+    },
+
+    async markRecordingAudioUploaded(input): Promise<Recording> {
+      const { data, error } = await supabase
+        .from("recordings")
+        .update({
+          audio_storage_path: input.audioStoragePath
         })
         .eq("id", input.recordingId)
         .eq("doctor_id", input.doctorId)
@@ -173,7 +233,14 @@ export function createTranscriptionAttemptRepository(supabase: SupabaseClient): 
         error_code: input.errorCode,
         error_message: input.errorMessage,
         error_status: input.errorStatus,
-        audio_storage_path: input.audioStoragePath ?? null
+        audio_storage_path: input.audioStoragePath ?? null,
+        audio_size_bytes: input.audioSizeBytes ?? null,
+        audio_mime_type: input.audioMimeType ?? null,
+        upstream_status: input.upstreamStatus ?? null,
+        upstream_code: input.upstreamCode ?? null,
+        upstream_type: input.upstreamType ?? null,
+        upstream_message: input.upstreamMessage ?? null,
+        upstream_param: input.upstreamParam ?? null
       });
 
       if (error) {
@@ -210,6 +277,33 @@ export function createSupabaseAudioStorage(supabase: SupabaseClient): AudioStora
       }
 
       return path;
+    },
+
+    async downloadRecordingAudio(path: string): Promise<{ audio: Buffer; mimeType: string; filename: string; size: number }> {
+      const { data, error } = await supabase.storage.from("audio").download(path);
+
+      if (error) {
+        throw error;
+      }
+
+      const arrayBuffer = await data.arrayBuffer();
+      const audio = Buffer.from(arrayBuffer);
+      const filename = path.split("/").filter(Boolean).at(-1) ?? "recording";
+      const normalizedPath = path.toLowerCase();
+      const mimeType =
+        data.type ||
+        (normalizedPath.endsWith(".wav") || normalizedPath.endsWith(".wave")
+          ? "audio/wav"
+          : normalizedPath.endsWith(".m4a") || normalizedPath.endsWith(".mp4") || normalizedPath.endsWith(".aac")
+            ? "audio/mp4"
+            : "audio/webm");
+
+      return {
+        audio,
+        mimeType,
+        filename,
+        size: audio.byteLength
+      };
     }
   };
 }

@@ -131,6 +131,15 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Add a runtime Supabase anon-key wrapper so real E2E commands can use the current linked-project anon key without editing `.env`.
 - [x] Commit, push, merge, wait for Vercel production deployment, and verify the live app with real-account audio E2E screenshots at `https://bharatdoc-web.vercel.app/`.
 
+### 11. Production diagnostic logging and transcription recovery
+
+- [x] Investigate the production failure for patient `301748995` in clinic `Testing 1+2` and confirm the worker received audio but OpenAI rejected the transcription attempts.
+- [x] Add persistent server-side diagnostic storage plus richer transcription attempt metadata for request IDs, stages, uploaded audio paths, audio size/MIME, and upstream provider errors.
+- [x] Add device-local diagnostic logs for recording capture, metadata sync, transcription start/success/failure, and recording-detail retries, with authenticated flush to `/api/device-logs`.
+- [x] Add server-stored audio retry so recording detail transcription can recover when IndexedDB audio is unavailable on the current device.
+- [x] Apply and verify the linked Supabase production migration for `diagnostic_logs` and transcription-attempt metadata without changing `.env`.
+- [x] Verify the diagnostic logging and retry changes with focused worker, web, and migration-contract tests.
+
 ## Testing Discipline
 
 - No implementation step is considered complete without matching tests in the same pass.

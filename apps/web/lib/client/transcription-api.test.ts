@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { audioFilenameExtension, transcribeRecordingAudio } from "@/lib/client/transcription-api";
+import {
+  audioFilenameExtension,
+  transcribeRecordingAudio,
+  transcribeStoredRecordingAudio
+} from "@/lib/client/transcription-api";
 
 describe("transcription api client", () => {
   afterEach(() => {
@@ -50,6 +54,37 @@ describe("transcription api client", () => {
         fetcher
       )
     ).rejects.toThrow("Unable to transcribe recording.");
+  });
+
+  it("can ask the worker to retry from server-stored audio", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        transcript: "Patient reports fever.",
+        audio_storage_path: "clinic/doctor/recording.wav",
+        status: "transcribed"
+      })
+    ) as unknown as typeof fetch;
+
+    await expect(
+      transcribeStoredRecordingAudio("id-token", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", fetcher)
+    ).resolves.toMatchObject({
+      transcript: "Patient reports fever.",
+      status: "transcribed"
+    });
+
+    expect(fetcher).toHaveBeenCalledWith("https://worker.example.com/api/transcribe", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        source: "stored_audio"
+      })
+    });
   });
 
   it("uses upload filenames that match supported audio MIME types", () => {

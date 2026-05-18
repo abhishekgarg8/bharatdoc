@@ -39,6 +39,13 @@ const atomicOnboardingRpcMigration = readFileSync(
   ),
   "utf8",
 );
+const diagnosticLoggingMigration = readFileSync(
+  resolve(
+    dirname,
+    "../../../supabase/migrations/202605170001_diagnostic_logging.sql",
+  ),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -155,5 +162,27 @@ describe("initial Supabase migration contract", () => {
     expect(atomicOnboardingRpcMigration).toContain(
       "grant execute on function public.create_doctor_join_request(text, text, text, text, text, uuid) to service_role",
     );
+  });
+
+  it("adds private diagnostic logs and richer transcription attempt metadata", () => {
+    expect(diagnosticLoggingMigration).toContain(
+      "create table if not exists public.diagnostic_logs",
+    );
+    expect(diagnosticLoggingMigration).toContain(
+      "constraint diagnostic_logs_source_check check (source in ('device', 'web', 'worker'))",
+    );
+    expect(diagnosticLoggingMigration).toContain(
+      "idx_diagnostic_logs_recording_date",
+    );
+    expect(diagnosticLoggingMigration).toContain(
+      "alter table public.diagnostic_logs enable row level security",
+    );
+    expect(diagnosticLoggingMigration).toContain(
+      "add column if not exists upstream_message text",
+    );
+    expect(diagnosticLoggingMigration).toContain(
+      "add column if not exists audio_size_bytes integer",
+    );
+    expect(diagnosticLoggingMigration).toContain("'download_audio'");
   });
 });

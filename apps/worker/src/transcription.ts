@@ -59,6 +59,20 @@ function requireAudio(audio: TranscriptionFileInput | undefined): TranscriptionF
   return audio;
 }
 
+function requireDownloadedAudio(input: {
+  audio: Buffer;
+  mimeType: string;
+  filename: string;
+  size: number;
+}): TranscriptionFileInput {
+  return requireAudio({
+    buffer: input.audio,
+    mimetype: input.mimeType,
+    originalname: input.filename,
+    size: input.size,
+  });
+}
+
 function filenameForPart(filename: string, partIndex: number, partCount: number): string {
   if (partCount === 1) {
     return filename;
@@ -121,13 +135,13 @@ export async function transcribeRecording(
   let stage: TranscriptionAttemptStage = "validate_input";
   let recordingId: string | null = input.recordingId?.trim() || null;
   let audioStoragePath: string | null = null;
+  let audioSizeBytes: number | null = null;
+  let audioMimeType: string | null = null;
 
   try {
     const clinicId = requireClinicId(auth.doctor.clinic_id);
     const requiredRecordingId = requireRecordingId(input.recordingId);
     recordingId = requiredRecordingId;
-    const audio = requireAudio(input.audio);
-
     stage = "load_recording";
     const recording = requireTranscribableRecording(
       await deps.recordings.findRecordingForDoctor(requiredRecordingId, auth.doctor.id)
@@ -136,25 +150,65 @@ export async function transcribeRecording(
     stage = "validate_recording";
     requireTranscriptionPatientId(recording);
 
-    stage = "upload_audio";
-    audioStoragePath = await deps.audioStorage.uploadRecordingAudio({
-      audio: audio.buffer,
-      mimeType: audio.mimetype,
-      clinicId,
-      doctorId: auth.doctor.id,
-      recordingId: recording.id,
-      filename: audio.originalname
-    });
-    deps.logger?.info("transcription.audio_uploaded", {
-      request_id: input.requestId,
-      recording_id: recording.id,
-      doctor_id: auth.doctor.id,
-      clinic_id: clinicId,
-      stage,
-      audio_size_bytes: audio.size,
-      audio_mime_type: audio.mimetype,
-      audio_storage_path: audioStoragePath
-    });
+    let audio: TranscriptionFileInput;
+
+    if (input.audio) {
+      audio = requireAudio(input.audio);
+      audioSizeBytes = audio.size;
+      audioMimeType = audio.mimetype;
+
+      stage = "upload_audio";
+      audioStoragePath = await deps.audioStorage.uploadRecordingAudio({
+        audio: audio.buffer,
+        mimeType: audio.mimetype,
+        clinicId,
+        doctorId: auth.doctor.id,
+        recordingId: recording.id,
+        filename: audio.originalname
+      });
+      deps.logger?.info("transcription.audio_uploaded", {
+        request_id: input.requestId,
+        recording_id: recording.id,
+        doctor_id: auth.doctor.id,
+        clinic_id: clinicId,
+        stage,
+        audio_size_bytes: audio.size,
+        audio_mime_type: audio.mimetype,
+        audio_storage_path: audioStoragePath
+      });
+      await deps.recordings.markRecordingAudioUploaded({
+        recordingId: recording.id,
+        doctorId: auth.doctor.id,
+        audioStoragePath
+      });
+    } else {
+      stage = "download_audio";
+      audioStoragePath = await deps.recordings.findLatestRecordingAudioPath(recording.id, auth.doctor.id);
+
+      if (!audioStoragePath) {
+        throw new HttpError(
+          400,
+          "Original audio is not available on this device or on the server. Record again to transcribe.",
+          "AUDIO_REQUIRED"
+        );
+      }
+
+      const downloadedAudio = await deps.audioStorage.downloadRecordingAudio(audioStoragePath);
+      audio = requireDownloadedAudio(downloadedAudio);
+      audioSizeBytes = audio.size;
+      audioMimeType = audio.mimetype;
+
+      deps.logger?.info("transcription.audio_downloaded", {
+        request_id: input.requestId,
+        recording_id: recording.id,
+        doctor_id: auth.doctor.id,
+        clinic_id: clinicId,
+        stage,
+        audio_size_bytes: audio.size,
+        audio_mime_type: audio.mimetype,
+        audio_storage_path: audioStoragePath
+      });
+    }
 
     stage = "transcribe_audio";
     const parts = audioParts(audio);
@@ -219,7 +273,14 @@ export async function transcribeRecording(
           errorCode: sanitizedError.error_code,
           errorMessage: sanitizedError.error_message,
           errorStatus: sanitizedError.error_status,
-          audioStoragePath
+          audioStoragePath,
+          audioSizeBytes,
+          audioMimeType,
+          upstreamStatus: sanitizedError.upstream_status ?? null,
+          upstreamCode: sanitizedError.upstream_code ?? null,
+          upstreamType: sanitizedError.upstream_type ?? null,
+          upstreamMessage: sanitizedError.upstream_message ?? null,
+          upstreamParam: sanitizedError.upstream_param ?? null
         });
       } catch (attemptError) {
         deps.logger?.error("transcription.attempt_persist_failed", {

@@ -10,6 +10,7 @@ import {
   demoPdfSignedUrl,
   type RecordingDetailRecord
 } from "@/lib/client/recording-detail-data";
+import { appendDeviceLog, flushDeviceLogs } from "@/lib/client/device-logs";
 import {
   generateRecordingPdf,
   saveRecordingSummary,
@@ -74,6 +75,26 @@ export function TranscriptSummaryScreen({
     return false;
   }
 
+  function logDeviceEvent(level: "info" | "warn" | "error", event: string, message?: string, metadata = {}) {
+    appendDeviceLog({
+      level,
+      event,
+      message: message ?? null,
+      recordingId: recording.id,
+      patientId: recording.patientId,
+      metadata: {
+        status,
+        can_edit: canEditRecording,
+        has_transcript: hasTranscript,
+        ...metadata
+      }
+    });
+
+    if (idToken) {
+      void flushDeviceLogs({ idToken, fetcher }).catch(() => undefined);
+    }
+  }
+
   async function generateTranscript() {
     if (!guardEditable()) {
       return;
@@ -88,14 +109,31 @@ export function TranscriptSummaryScreen({
         throw new Error("Audio is not available.");
       }
 
+      logDeviceEvent("info", "recording.detail_transcription_started");
       const result = await onGenerateTranscript(recording.id);
 
       setTranscript(result.transcript);
       setStatus(result.status);
       setActiveTab("transcript");
       setMessage("Transcript ready.");
-    } catch {
-      setError("Original audio is not available on this device. Open this recording on the device that captured it and try again.");
+      logDeviceEvent("info", "recording.detail_transcription_succeeded", undefined, {
+        transcript_chars: result.transcript.length,
+        audio_storage_path: result.audio_storage_path
+      });
+    } catch (caught) {
+      const errorMessage =
+        caught instanceof Error && caught.message.trim()
+          ? caught.message
+          : "Unable to transcribe recording. The failed attempt has been logged for support.";
+      setError(errorMessage);
+      logDeviceEvent(
+        "error",
+        "recording.detail_transcription_failed",
+        errorMessage,
+        {
+          local_audio_available: false
+        }
+      );
     } finally {
       setGenerating(false);
     }

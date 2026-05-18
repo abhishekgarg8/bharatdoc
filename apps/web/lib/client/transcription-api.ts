@@ -56,3 +56,23 @@ export async function transcribeRecordingAudio(
 
   return parseJsonOrThrow<WorkerTranscriptionResponse>(response, "Unable to transcribe recording.");
 }
+
+export async function transcribeStoredRecordingAudio(
+  idToken: string,
+  recordingId: string,
+  fetcher: typeof fetch = fetch
+): Promise<WorkerTranscriptionResponse> {
+  const response = await fetcher(workerTranscriptionUrl(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      recording_id: recordingId,
+      source: "stored_audio"
+    })
+  });
+
+  return parseJsonOrThrow<WorkerTranscriptionResponse>(response, "Unable to transcribe recording.");
+}

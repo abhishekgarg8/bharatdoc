@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
     return Response.json({ records });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }
 
@@ -34,6 +34,6 @@ export async function POST(request: Request) {
 
     return Response.json({ record }, { status: 201 });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

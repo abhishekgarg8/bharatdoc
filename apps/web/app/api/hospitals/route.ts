@@ -6,13 +6,13 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 export const preferredRegion = "bom1";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const repository = createSupabaseOnboardingRepository(createSupabaseServerClient());
     const hospitals = await listHospitalsForOnboarding(repository);
 
     return Response.json({ hospitals });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

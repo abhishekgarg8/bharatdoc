@@ -66,11 +66,16 @@ function depsFor(
     },
     recordings: {
       findRecordingForDoctor: vi.fn(async () => recordingResult),
+      findLatestRecordingAudioPath: vi.fn(async () => recordingResult?.audio_storage_path ?? null),
       markRecordingTranscribed: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
         audio_storage_path: input.audioStoragePath,
         transcript: input.transcript,
         status: "transcribed" as const,
+      })),
+      markRecordingAudioUploaded: vi.fn(async (input) => ({
+        ...(recordingResult ?? recording),
+        audio_storage_path: input.audioStoragePath,
       })),
       markRecordingSummarized: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
@@ -94,6 +99,12 @@ function depsFor(
     },
     audioStorage: {
       uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm"),
+      downloadRecordingAudio: vi.fn(async () => ({
+        audio: Buffer.from("stored audio"),
+        mimeType: "audio/webm",
+        filename: "recording.webm",
+        size: Buffer.byteLength("stored audio"),
+      })),
     },
     pdfRenderer: {
       render: vi.fn(async () => Buffer.from("%PDF-1.4\n")),
@@ -234,7 +245,17 @@ describe("worker app", () => {
         expect(body.error.code).toBe("RECORDING_ID_REQUIRED");
       });
 
-    await request(createApp(depsFor(activeDoctor)))
+    await request(
+      createApp(
+        depsFor(activeDoctor, {
+          ...recording,
+          status: "recorded",
+          transcript: null,
+          summary: null,
+          audio_storage_path: null,
+        }),
+      ),
+    )
       .post("/api/transcribe")
       .set("Authorization", "Bearer valid-token")
       .field("recording_id", recording.id)
@@ -296,6 +317,39 @@ describe("worker app", () => {
     });
   });
 
+  it("transcribes from stored server audio when the browser no longer has local audio", async () => {
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+      audio_storage_path: "clinic/doctor/stored.wav",
+    });
+
+    await request(createApp(deps))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id, source: "stored_audio" })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({
+          recording_id: recording.id,
+          transcript: "Patient reports fever for two days.",
+          audio_storage_path: "clinic/doctor/stored.wav",
+          status: "transcribed",
+        });
+      });
+
+    expect(deps.recordings.findLatestRecordingAudioPath).toHaveBeenCalledWith(
+      recording.id,
+      activeDoctor.id,
+    );
+    expect(deps.audioStorage.downloadRecordingAudio).toHaveBeenCalledWith(
+      "clinic/doctor/stored.wav",
+    );
+    expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+  });
+
   it("logs and persists failed transcription requests with the request id", async () => {
     const logger = {
       info: vi.fn(),
@@ -344,6 +398,13 @@ describe("worker app", () => {
         errorMessage: "Internal server error.",
         errorStatus: 500,
         audioStoragePath: "clinic/doctor/recording.webm",
+        audioSizeBytes: 5,
+        audioMimeType: "audio/webm",
+        upstreamStatus: null,
+        upstreamCode: null,
+        upstreamType: null,
+        upstreamMessage: null,
+        upstreamParam: null,
       },
     );
     expect(logger.info).toHaveBeenCalledWith(

@@ -18,6 +18,7 @@ import {
   type LocalRecording,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
+import { appendDeviceLog, flushDeviceLogs, type DeviceLogInput } from "@/lib/client/device-logs";
 import { transcribeRecordingAudio } from "@/lib/client/transcription-api";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +79,18 @@ export function RecordingScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
+
+  function logDeviceEvent(input: DeviceLogInput) {
+    appendDeviceLog({
+      ...input,
+      recordingId: input.recordingId ?? recording?.serverRecordingId ?? recording?.id ?? null,
+      patientId: input.patientId ?? recording?.patientId ?? patientId ?? null
+    });
+
+    if (idToken) {
+      void flushDeviceLogs({ idToken, fetcher }).catch(() => undefined);
+    }
+  }
 
   useEffect(() => {
     patientIdRef.current = patientId;
@@ -220,9 +233,27 @@ export function RecordingScreen({
       setRecording(activeDraft);
       setPhase("recording");
       setMessage("Recording started.");
+      logDeviceEvent({
+        level: "info",
+        event: "recording.capture_started",
+        recordingId: activeDraft.id,
+        metadata: {
+          clinic_name: clinicName,
+          online: isOnline
+        }
+      });
     } catch {
       setPhase("failed");
       setError("Unable to start microphone recording.");
+      logDeviceEvent({
+        level: "error",
+        event: "recording.capture_start_failed",
+        message: "Unable to start microphone recording.",
+        metadata: {
+          clinic_name: clinicName,
+          online: isOnline
+        }
+      });
     }
   }
 
@@ -293,9 +324,29 @@ export function RecordingScreen({
       setElapsedSeconds(durationSeconds);
       setPhase("stopped");
       setMessage(successMessage);
+      logDeviceEvent({
+        level: "info",
+        event: "recording.capture_stopped",
+        recordingId: finalized.id,
+        patientId: finalized.patientId,
+        metadata: {
+          duration_seconds: durationSeconds,
+          audio_mime_type: recordedAudio.mimeType,
+          audio_size_bytes: recordedAudio.blob.size,
+          online: isOnline
+        }
+      });
     } catch (caught) {
       setPhase("failed");
       setError(caught instanceof Error ? caught.message : "Unable to save local recording.");
+      logDeviceEvent({
+        level: "error",
+        event: "recording.capture_stop_failed",
+        message: caught instanceof Error ? caught.message : "Unable to save local recording.",
+        metadata: {
+          online: isOnline
+        }
+      });
     }
   }
 
@@ -361,12 +412,33 @@ export function RecordingScreen({
             },
             fetcher
           );
-          const synced = await repository.markSynced(workingRecording.id, serverRecord.id);
-          setRecording(synced);
-          workingRecording = synced;
-          serverRecordingId = serverRecord.id;
-        }
+        const synced = await repository.markSynced(workingRecording.id, serverRecord.id);
+        setRecording(synced);
+        workingRecording = synced;
+        serverRecordingId = serverRecord.id;
+        logDeviceEvent({
+          level: "info",
+          event: "recording.metadata_synced",
+          recordingId: serverRecordingId,
+          patientId: workingRecording.patientId,
+          metadata: {
+            local_recording_id: localRecordingId,
+            duration_seconds: workingRecording.durationSeconds
+          }
+        });
+      }
 
+        logDeviceEvent({
+          level: "info",
+          event: "recording.transcription_started",
+          recordingId: serverRecordingId,
+          patientId: workingRecording.patientId,
+          metadata: {
+            local_recording_id: localRecordingId,
+            audio_mime_type: audioMimeType,
+            audio_size_bytes: audioBlob.size
+          }
+        });
         const result = await transcribeRecordingAudio(
           idToken,
           serverRecordingId,
@@ -376,6 +448,16 @@ export function RecordingScreen({
         );
         const updated = await repository.markTranscribed(workingRecording.id, result.transcript);
         setRecording(updated);
+        logDeviceEvent({
+          level: "info",
+          event: "recording.transcription_succeeded",
+          recordingId: serverRecordingId,
+          patientId: updated.patientId,
+          metadata: {
+            transcript_chars: result.transcript.length,
+            audio_storage_path: result.audio_storage_path
+          }
+        });
         navigate(`/recordings/${serverRecordingId}`);
       } else {
         const updated = await repository.markTranscribed(workingRecording.id, DEMO_TRANSCRIPT);
@@ -391,6 +473,19 @@ export function RecordingScreen({
       }
       setPhase("failed");
       setError("Unable to transcribe recording.");
+      logDeviceEvent({
+        level: "error",
+        event: "recording.transcription_failed",
+        message: "Unable to transcribe recording.",
+        recordingId: workingRecording?.serverRecordingId ?? workingRecording?.id ?? null,
+        patientId: workingRecording?.patientId ?? patientId,
+        metadata: {
+          local_recording_id: localRecordingId,
+          audio_mime_type: audioMimeType,
+          audio_size_bytes: audioBlob.size,
+          online: isOnline
+        }
+      });
     }
   }
 

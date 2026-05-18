@@ -12,7 +12,11 @@ import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-cli
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
 import { fetchRecordingDetailBootstrap } from "@/lib/client/summary-api";
-import { transcribeRecordingAudio, type WorkerTranscriptionResponse } from "@/lib/client/transcription-api";
+import {
+  transcribeRecordingAudio,
+  transcribeStoredRecordingAudio,
+  type WorkerTranscriptionResponse
+} from "@/lib/client/transcription-api";
 import {
   createIndexedDbLocalRecordingRepository,
   localRecordingAudioBlob,
@@ -134,7 +138,7 @@ export function RecordingDetailPageClient({
     const audioMimeType = localRecording?.audioMimeType ?? null;
 
     if (!localRecording || !audioBlob || !audioMimeType) {
-      throw new Error("Local audio is not available.");
+      return transcribeStoredRecordingAudio(idToken, recordingIdToTranscribe, fetcher);
     }
 
     await repository.markTranscribing(localRecording.id);

@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     return Response.json(result);
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }
 
@@ -41,6 +41,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
     return Response.json({ recording });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

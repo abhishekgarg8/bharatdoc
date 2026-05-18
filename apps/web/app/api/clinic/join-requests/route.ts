@@ -16,6 +16,6 @@ export async function GET(request: Request) {
 
     return Response.json({ pending });
   } catch (error) {
-    return errorResponse(error);
+    return errorResponse(error, request);
   }
 }

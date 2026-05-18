@@ -58,11 +58,16 @@ function depsFor(
 ) {
   const recordings: RecordingProcessingRepository = {
     findRecordingForDoctor: vi.fn(async () => recordingResult),
+    findLatestRecordingAudioPath: vi.fn(async () => recordingResult?.audio_storage_path ?? null),
     markRecordingTranscribed: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       audio_storage_path: input.audioStoragePath,
       transcript: input.transcript,
       status: "transcribed" as const,
+    })),
+    markRecordingAudioUploaded: vi.fn(async (input) => ({
+      ...(recordingResult ?? recording),
+      audio_storage_path: input.audioStoragePath,
     })),
     markRecordingSummarized: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
@@ -78,6 +83,12 @@ function depsFor(
   };
   const audioStorage: AudioStorage = {
     uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recording.webm"),
+    downloadRecordingAudio: vi.fn(async () => ({
+      audio: Buffer.from("stored audio"),
+      mimeType: "audio/webm",
+      filename: "recording.webm",
+      size: Buffer.byteLength("stored audio"),
+    })),
   };
   const transcriptionClient: TranscriptionClient = {
     transcribe: vi.fn(async () => transcript),
@@ -126,6 +137,41 @@ describe("transcribeRecording", () => {
       doctorId: activeDoctor.id,
       transcript: "Patient reports fever.",
       audioStoragePath: "clinic/doctor/recording.webm",
+    });
+  });
+
+  it("can retry transcription from the latest server-stored audio when local audio is unavailable", async () => {
+    const deps = depsFor({
+      ...recording,
+      audio_storage_path: "clinic/doctor/stored.wav",
+    });
+
+    await expect(
+      transcribeRecording(
+        { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
+        { recordingId: recording.id },
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      recording_id: recording.id,
+      transcript: "Patient reports fever.",
+      audio_storage_path: "clinic/doctor/stored.wav",
+      status: "transcribed",
+    });
+
+    expect(deps.audioStorage.uploadRecordingAudio).not.toHaveBeenCalled();
+    expect(deps.recordings.findLatestRecordingAudioPath).toHaveBeenCalledWith(
+      recording.id,
+      activeDoctor.id,
+    );
+    expect(deps.audioStorage.downloadRecordingAudio).toHaveBeenCalledWith(
+      "clinic/doctor/stored.wav",
+    );
+    expect(deps.transcriptionClient.transcribe).toHaveBeenCalledWith({
+      audio: Buffer.from("stored audio"),
+      mimeType: "audio/webm",
+      filename: "recording.webm",
+      language: "hien",
     });
   });
 
@@ -343,6 +389,13 @@ describe("transcribeRecording", () => {
       errorMessage: "Internal server error.",
       errorStatus: 500,
       audioStoragePath: "clinic/doctor/recording.webm",
+      audioSizeBytes: 5,
+      audioMimeType: "audio/webm",
+      upstreamStatus: null,
+      upstreamCode: null,
+      upstreamType: null,
+      upstreamMessage: null,
+      upstreamParam: null,
     });
     expect(deps.recordings.markRecordingTranscribed).not.toHaveBeenCalled();
   });
