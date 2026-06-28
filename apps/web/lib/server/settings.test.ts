@@ -52,7 +52,7 @@ describe("doctor settings preferences", () => {
         { transcription_lang: "hien" },
         repository
       )
-    ).resolves.toMatchObject({ transcription_lang: "hien" });
+    ).resolves.toMatchObject({ preferences: { transcription_lang: "hien" } });
     expect(repository.updateDoctorPreferences).toHaveBeenCalledWith(activeDoctor.id, {
       transcription_lang: "hien"
     });
@@ -67,7 +67,7 @@ describe("doctor settings preferences", () => {
         { custom_prompt: "  Summarize {{transcript}}  " },
         repository
       )
-    ).resolves.toMatchObject({ custom_prompt: "Summarize {{transcript}}" });
+    ).resolves.toMatchObject({ preferences: { custom_prompt: "Summarize {{transcript}}" } });
     expect(repository.updateDoctorPreferences).toHaveBeenCalledWith(activeDoctor.id, {
       custom_prompt: "Summarize {{transcript}}"
     });
@@ -82,7 +82,32 @@ describe("doctor settings preferences", () => {
         { custom_prompt: null },
         repository
       )
-    ).resolves.toMatchObject({ custom_prompt: null });
+    ).resolves.toMatchObject({ preferences: { custom_prompt: null } });
+  });
+
+  it("trims and updates the active doctor's profile", async () => {
+    const repository = createRepository();
+
+    await expect(
+      updateDoctorPreferencesForUser(
+        { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+        { name: "  Dr. Nisha Shah  ", specialization: "  Pediatrics  " },
+        repository
+      )
+    ).resolves.toMatchObject({
+      doctor: {
+        name: "Dr. Nisha Shah",
+        specialization: "Pediatrics"
+      },
+      preferences: {
+        custom_prompt: "Summarize {{transcript}}",
+        transcription_lang: "auto"
+      }
+    });
+    expect(repository.updateDoctorPreferences).toHaveBeenCalledWith(activeDoctor.id, {
+      name: "Dr. Nisha Shah",
+      specialization: "Pediatrics"
+    });
   });
 
   it("rejects prompts without the transcript placeholder", async () => {

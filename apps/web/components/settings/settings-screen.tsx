@@ -13,6 +13,7 @@ import {
   updateClinicProfile,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
+import { updateDoctorProfile } from "@/lib/client/settings-api";
 import { DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
 import { cn } from "@/lib/utils";
 
@@ -182,6 +183,11 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const resolvedDoctor = doctor ?? (demoMode ? defaultDoctor : null);
   const resolvedClinic = clinic ?? (demoMode ? defaultClinic : null);
+  const [doctorOverride, setDoctorOverride] = useState<Partial<SettingsDoctorProfile> | null>(null);
+  const displayedDoctor = useMemo(
+    () => (resolvedDoctor ? { ...resolvedDoctor, ...doctorOverride } : null),
+    [doctorOverride, resolvedDoctor]
+  );
   const resolvedActiveDoctors = activeDoctors ?? (demoMode ? defaultActiveDoctors : []);
   const resolvedRejectedDoctors = rejectedDoctors ?? (demoMode ? defaultRejectedDoctors : []);
   const resolvedPendingApprovals = pendingApprovals ?? (demoMode ? defaultPendingApprovals : []);
@@ -197,6 +203,14 @@ export function SettingsScreen({
   const [activeDoctorsState, setActiveDoctorsState] = useState(resolvedActiveDoctors);
   const [rejectedDoctorsState, setRejectedDoctorsState] = useState(resolvedRejectedDoctors);
   const [workingRequestId, setWorkingRequestId] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: resolvedDoctor?.name ?? "",
+    specialization: resolvedDoctor?.specialization ?? ""
+  });
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [savingClinic, setSavingClinic] = useState(false);
   const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "rejected-doctors" | "clinic-profile" | null>(null);
   const [clinicForm, setClinicForm] = useState({
@@ -207,14 +221,14 @@ export function SettingsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ownerReviewRef = useRef<HTMLElement | null>(null);
-  const isOwner = resolvedDoctor?.role === "owner";
+  const isOwner = displayedDoctor?.role === "owner";
   const canManageClinic = Boolean(isOwner && resolvedClinic);
   const promptEdited = useMemo(() => {
-    const customPrompt = resolvedDoctor?.customPrompt?.trim();
+    const customPrompt = displayedDoctor?.customPrompt?.trim();
     return Boolean(customPrompt && customPrompt !== DEFAULT_SUMMARY_PROMPT.trim());
-  }, [resolvedDoctor?.customPrompt]);
+  }, [displayedDoctor?.customPrompt]);
 
-  if (!resolvedDoctor) {
+  if (!displayedDoctor) {
     return (
       <main className="relative mx-auto flex h-dvh w-full max-w-[430px] items-center justify-center bg-paper px-6 text-center text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
         <section className="rounded-[14px] border border-rule bg-paper-deep px-5 py-6">
@@ -223,6 +237,93 @@ export function SettingsScreen({
         </section>
       </main>
     );
+  }
+
+  function openProfileEditor() {
+    if (!displayedDoctor) {
+      return;
+    }
+
+    setProfileForm({
+      name: displayedDoctor.name,
+      specialization: displayedDoctor.specialization
+    });
+    setProfileMessage(null);
+    setProfileError(null);
+    setEditingProfile(true);
+  }
+
+  async function saveDoctorProfile() {
+    if (!displayedDoctor) {
+      return;
+    }
+
+    setProfileError(null);
+    setProfileMessage(null);
+
+    const normalizedName = profileForm.name.trim();
+    const normalizedSpecialization = profileForm.specialization.trim();
+
+    if (!normalizedName) {
+      setProfileError("Doctor name is required.");
+      return;
+    }
+
+    if (!normalizedSpecialization) {
+      setProfileError("Specialization is required.");
+      return;
+    }
+
+    setSavingProfile(true);
+
+    try {
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
+      }
+
+      const updatedDoctor = idToken
+        ? await updateDoctorProfile(
+            idToken,
+            {
+              name: normalizedName,
+              specialization: normalizedSpecialization
+            },
+            fetcher
+          )
+        : {
+            ...displayedDoctor,
+            name: normalizedName,
+            specialization: normalizedSpecialization
+          };
+
+      setDoctorOverride({
+        name: updatedDoctor.name,
+        specialization: updatedDoctor.specialization
+      });
+      if (updatedDoctor.id) {
+        setActiveDoctorsState((current) =>
+          current.map((member) =>
+            member.id === updatedDoctor.id
+              ? {
+                  ...member,
+                  name: updatedDoctor.name,
+                  specialization: updatedDoctor.specialization
+                }
+              : member
+          )
+        );
+      }
+      setProfileForm({
+        name: updatedDoctor.name,
+        specialization: updatedDoctor.specialization
+      });
+      setProfileMessage("Profile saved.");
+      setEditingProfile(false);
+    } catch {
+      setProfileError("Unable to save profile.");
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   async function reviewDoctor(request: PendingApproval, action: "approve" | "reject") {
@@ -373,7 +474,7 @@ export function SettingsScreen({
     }
   }
 
-  async function copyHospitalCode() {
+  async function copyDoctorJoinCode() {
     if (!clinicState.code) {
       return;
     }
@@ -383,9 +484,9 @@ export function SettingsScreen({
 
     try {
       await navigator.clipboard.writeText(clinicState.code);
-      setMessage("Hospital code copied.");
+      setMessage("Doctor join code copied.");
     } catch {
-      setError("Unable to copy hospital code.");
+      setError("Unable to copy doctor join code.");
     }
   }
 
@@ -415,17 +516,84 @@ export function SettingsScreen({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
-          <section className="mb-4 flex items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]">
+          <button
+            className="mb-4 flex w-full items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 text-left shadow-[0_1px_0_#E5DAC5] transition active:scale-[0.99]"
+            type="button"
+            aria-label="Edit doctor profile"
+            onClick={openProfileEditor}
+          >
             <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-terracotta font-display text-[26px] text-white">
-              {initialForName(resolvedDoctor.name)}
+              {initialForName(displayedDoctor.name)}
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-body text-[15px] font-bold leading-tight text-ink">{resolvedDoctor.name}</h2>
-              <p className="mt-0.5 font-body text-xs text-ink-muted">{resolvedDoctor.specialization}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{resolvedDoctor.phone}</p>
+              <h2 className="font-body text-[15px] font-bold leading-tight text-ink">{displayedDoctor.name}</h2>
+              <p className="mt-0.5 font-body text-xs text-ink-muted">{displayedDoctor.specialization}</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{displayedDoctor.phone}</p>
             </div>
             <Edit3 className="h-[18px] w-[18px] shrink-0 text-ink-soft" />
-          </section>
+          </button>
+
+          {editingProfile ? (
+            <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-4 shadow-[0_1px_0_#E5DAC5]">
+              <div className="mb-4">
+                <h2 className="font-body text-sm font-bold text-ink">Doctor profile</h2>
+                <p className="mt-1 font-body text-[11.5px] leading-relaxed text-ink-muted">
+                  Update the name and specialization shown on records and PDFs.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                <label className="block">
+                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                    Doctor name
+                  </span>
+                  <input
+                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                    value={profileForm.name}
+                    onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))}
+                    aria-label="Doctor name"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                    Specialization
+                  </span>
+                  <input
+                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                    value={profileForm.specialization}
+                    onChange={(event) => setProfileForm((current) => ({ ...current, specialization: event.target.value }))}
+                    aria-label="Specialization"
+                  />
+                </label>
+              </div>
+
+              {profileError ? <p className="mt-3 font-body text-xs font-semibold text-stamp">{profileError}</p> : null}
+
+              <div className="mt-4 flex gap-2">
+                <BharatButton className="flex-1" disabled={savingProfile} onClick={saveDoctorProfile}>
+                  Save profile
+                </BharatButton>
+                <BharatButton
+                  className="flex-1"
+                  variant="ghost"
+                  onClick={() => {
+                    setProfileForm({
+                      name: displayedDoctor.name,
+                      specialization: displayedDoctor.specialization
+                    });
+                    setEditingProfile(false);
+                    setProfileError(null);
+                  }}
+                >
+                  Cancel
+                </BharatButton>
+              </div>
+            </section>
+          ) : null}
+
+          {profileMessage ? <p className="mb-4 ml-1 font-body text-xs font-semibold text-sage">{profileMessage}</p> : null}
+          {!editingProfile && profileError ? <p className="mb-4 ml-1 font-body text-xs font-semibold text-stamp">{profileError}</p> : null}
 
           {canManageClinic ? (
             <SettingsGroup title="Hospital admin">
@@ -459,10 +627,15 @@ export function SettingsScreen({
                 expanded={expandedPanel === "clinic-profile"}
               />
               <SettingsRow
-                title="Hospital code"
-                subtitle={<span className="font-mono">{clinicState.code}</span>}
+                title="Doctor join code"
+                subtitle={
+                  <span>
+                    <span className="font-mono">{clinicState.code}</span>
+                    <span className="font-body"> · Share with doctors to join</span>
+                  </span>
+                }
                 icon={<Clipboard className="h-4 w-4" />}
-                onClick={copyHospitalCode}
+                onClick={copyDoctorJoinCode}
               />
             </SettingsGroup>
           ) : null}
@@ -686,7 +859,6 @@ export function SettingsScreen({
 
           <SettingsGroup title="Account">
             <SettingsRow title={signingOut ? "Signing out..." : "Sign out"} danger onClick={handleSignOut} disabled={signingOut} />
-            <SettingsRow title="Delete account" subtitle="Not available in this build" danger />
           </SettingsGroup>
         </div>
 

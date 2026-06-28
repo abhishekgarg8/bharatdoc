@@ -19,9 +19,16 @@ export interface DoctorPreferencesBootstrap {
   preferences: DoctorPreferences | null;
 }
 
+export interface DoctorSettingsUpdateResult {
+  doctor: Doctor;
+  preferences: DoctorPreferences;
+}
+
 export interface DoctorPreferencesUpdate {
   custom_prompt?: string | null;
   transcription_lang?: TranscriptionLanguage;
+  name?: string;
+  specialization?: string;
 }
 
 export interface DoctorPreferencesRepository {
@@ -32,7 +39,9 @@ export interface DoctorPreferencesRepository {
 const DoctorPreferencesUpdateSchema = z
   .object({
     custom_prompt: z.string().nullable().optional(),
-    transcription_lang: TranscriptionLanguageSchema.optional()
+    transcription_lang: TranscriptionLanguageSchema.optional(),
+    name: z.string().trim().min(1).optional(),
+    specialization: z.string().trim().min(1).optional()
   })
   .strict();
 
@@ -106,7 +115,7 @@ export async function updateDoctorPreferencesForUser(
   user: VerifiedUser,
   input: unknown,
   repository: DoctorPreferencesRepository
-): Promise<DoctorPreferences> {
+): Promise<DoctorSettingsUpdateResult> {
   const doctor = await requireActiveDoctorForSettings(user, repository);
   const parsed = DoctorPreferencesUpdateSchema.parse(input);
   const update: DoctorPreferencesUpdate = {};
@@ -123,10 +132,21 @@ export async function updateDoctorPreferencesForUser(
     update.transcription_lang = parsed.transcription_lang;
   }
 
+  if (parsed.name !== undefined) {
+    update.name = parsed.name;
+  }
+
+  if (parsed.specialization !== undefined) {
+    update.specialization = parsed.specialization;
+  }
+
   if (Object.keys(update).length === 0) {
     throw new AppError(400, "No preferences were provided.", "EMPTY_PREFERENCES_UPDATE");
   }
 
   const updatedDoctor = await repository.updateDoctorPreferences(doctor.id, update);
-  return toPreferences(updatedDoctor);
+  return {
+    doctor: updatedDoctor,
+    preferences: toPreferences(updatedDoctor)
+  };
 }

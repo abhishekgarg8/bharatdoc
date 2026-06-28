@@ -28,9 +28,9 @@ export async function PATCH(request: Request) {
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const body = await request.json();
     const repository = createSupabaseSettingsRepository(createSupabaseServerClient());
-    const preferences = await updateDoctorPreferencesForUser(user, body, repository);
+    const settings = await updateDoctorPreferencesForUser(user, body, repository);
 
-    return Response.json({ preferences });
+    return Response.json(settings);
   } catch (error) {
     return errorResponse(error, request);
   }

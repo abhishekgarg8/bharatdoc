@@ -119,6 +119,8 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Add auth-session recovery for unreachable Supabase session checks so users are routed out of the loading screen instead of hanging.
 - [x] Fix verification blockers from the PRD completion audit: web lint unused callback args, dashboard E2E password selector, and strict test assertions.
 - [x] Fix PRD completion audit P2 gaps: readable auth validation errors, saved custom-prompt Settings badge, stale local/server dashboard merge precedence, and unsupported Settings row affordances.
+- [x] Remove unavailable delete-account Settings row and clarify the doctor join code with unit, browser E2E, and screenshot verification.
+- [x] Make the Settings profile edit affordance functional with authenticated profile updates, focused tests, browser E2E, and screenshot verification.
 - [x] Fix clinic-scoped recording detail read-only ownership with a `can_edit` API/UI contract and verified server/client tests.
 - [x] Fix iOS audio capture MIME negotiation by adding MP4/AAC candidates and `.m4a` upload naming for AAC/MP4 audio.
 - [x] Fix recording screen clinic and reconnect context by showing authenticated hospital name plus Online/Offline state and keeping local audio for retry.

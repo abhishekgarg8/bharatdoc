@@ -109,6 +109,9 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Hospital admin")).toBeVisible();
+  await expect(page.getByRole("button", { name: /doctor join code/i })).toBeVisible();
+  await expect(page.getByText("Share with doctors to join")).toBeVisible();
+  await expect(page.getByText("Delete account")).toHaveCount(0);
   await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
   await expect(page.getByRole("button", { name: /approve/i })).toBeVisible();
 });
@@ -143,6 +146,19 @@ test("settings owner can edit the hospital profile locally", async ({ page }) =>
   await page.getByRole("button", { name: /save hospital/i }).click();
   await expect(page.getByText("Hospital profile saved.")).toBeVisible();
   await expect(page.getByText("Sunrise Family Hospital")).toBeVisible();
+});
+
+test("settings profile edit opens and saves locally", async ({ page }) => {
+  await page.goto("/settings?demo=1");
+
+  await page.getByRole("button", { name: "Edit doctor profile" }).click();
+  await expect(page.getByRole("heading", { name: "Doctor profile" })).toBeVisible();
+  await page.getByLabel("Doctor name").fill("Dr. Nisha Shah");
+  await page.getByLabel("Specialization").fill("Pediatrics");
+  await page.getByRole("button", { name: /save profile/i }).click();
+  await expect(page.getByText("Profile saved.")).toBeVisible();
+  await expect(page.getByText("Dr. Nisha Shah")).toBeVisible();
+  await expect(page.getByText("Pediatrics")).toBeVisible();
 });
 
 test("settings prompt editor validates and previews prompts", async ({ page }) => {
