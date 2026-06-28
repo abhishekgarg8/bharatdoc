@@ -24,7 +24,7 @@ describe("SettingsPageClient", () => {
             account_status: "active",
             name: "Dr. Aparna Iyer",
             specialization: "General Physician",
-            phone: "+919876543210",
+            phone: "aparna@example.com",
             profile_photo_path: null,
             custom_prompt: null,
             transcription_lang: "auto",
@@ -42,7 +42,7 @@ describe("SettingsPageClient", () => {
               id: "doctor-1",
               name: "Dr. Aparna Iyer",
               specialization: "General Physician",
-              phone: "+919876543210",
+              phone: "aparna@example.com",
               role: "owner",
               recordings_count: 3,
               created_at: "2026-04-23T09:00:00.000Z"
@@ -51,7 +51,7 @@ describe("SettingsPageClient", () => {
               id: "doctor-2",
               name: "Dr. Meera Shah",
               specialization: "Pediatrician",
-              phone: "+919834012340",
+              phone: "meera@example.com",
               role: "doctor",
               recordings_count: 1,
               created_at: "2026-04-23T10:00:00.000Z"
@@ -68,6 +68,7 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} fetcher={fetcher} />);
 
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
+    expect(screen.getByText("aparna@example.com")).toBeInTheDocument();
     expect(screen.getByText("Hospital admin")).toBeInTheDocument();
     expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
     expect(screen.getByText("No doctors waiting")).toBeInTheDocument();
@@ -99,7 +100,7 @@ describe("SettingsPageClient", () => {
             account_status: "active",
             name: "Dr. Aparna Iyer",
             specialization: "General Physician",
-            phone: "+919876543210",
+            phone: "aparna@example.com",
             profile_photo_path: null,
             custom_prompt: null,
             transcription_lang: "auto",
@@ -214,7 +215,7 @@ describe("SettingsPageClient", () => {
           account_status: "rejected",
           name: "Dr. Aparna Iyer",
           specialization: "General Physician",
-          phone: "+919876543210",
+          phone: "aparna@example.com",
           profile_photo_path: null,
           custom_prompt: null,
           transcription_lang: "auto",

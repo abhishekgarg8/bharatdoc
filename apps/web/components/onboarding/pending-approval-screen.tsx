@@ -41,17 +41,25 @@ export function PendingApprovalScreen({
   onSignOut
 }: PendingApprovalScreenProps) {
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   async function handleSignOut() {
-    if (!onSignOut || signingOut) {
+    if (signingOut) {
       return;
     }
 
+    if (!onSignOut) {
+      setSignOutError("Sign out is unavailable. Close the app and try again.");
+      return;
+    }
+
+    setSignOutError(null);
     setSigningOut(true);
 
     try {
       await onSignOut();
     } catch {
+      setSignOutError("Unable to sign out. Please try again.");
       setSigningOut(false);
     }
   }
@@ -74,6 +82,11 @@ export function PendingApprovalScreen({
       </div>
 
       <div className="mt-auto w-full pt-10">
+        {signOutError ? (
+          <p className="mb-3 rounded-xl border border-rule bg-paper-deep px-3.5 py-3 font-body text-sm font-semibold text-stamp" role="alert">
+            {signOutError}
+          </p>
+        ) : null}
         <BharatButton variant="ghost" className="w-full" onClick={handleSignOut} disabled={signingOut}>
           {signingOut ? "Signing out..." : "Sign out"}
         </BharatButton>

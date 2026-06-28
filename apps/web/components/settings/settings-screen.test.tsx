@@ -11,7 +11,7 @@ const pendingApprovals: PendingApproval[] = [
       id: "doctor-1",
       name: "Dr. Meera Shah",
       specialization: "Pediatrician",
-      phone: "+91 98340 12340",
+      phone: "meera@example.com",
       created_at: "2026-04-23T07:10:00.000Z"
     }
   }
@@ -20,14 +20,14 @@ const pendingApprovals: PendingApproval[] = [
 const ownerDoctor = {
   name: "Dr. Aparna Iyer",
   specialization: "General Physician",
-  phone: "+91 98765 43210",
+  contact: "aparna@example.com",
   role: "owner" as const
 };
 
 const doctorProfile = {
   name: "Dr. Nisha Shah",
   specialization: "General Physician",
-  phone: "+91 98765 43211",
+  contact: "nisha@example.com",
   role: "doctor" as const
 };
 
@@ -40,6 +40,7 @@ const clinic = {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -50,6 +51,7 @@ describe("SettingsScreen", () => {
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit doctor profile" })).toBeInTheDocument();
+    expect(screen.getByText("aparna@example.com")).toBeInTheDocument();
     expect(screen.getByText("Hospital admin")).toBeInTheDocument();
     expect(screen.getByText("1 doctor waiting")).toBeInTheDocument();
     expect(screen.getByText("Doctor join code")).toBeInTheDocument();
@@ -72,6 +74,7 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Current hospital members with active BharatDoc access.")).toBeInTheDocument());
     expect(screen.getByText("Dr. Leena Joshi")).toBeInTheDocument();
+    expect(screen.getByText("leena@example.com")).toBeInTheDocument();
     expect(screen.getByText("owner")).toBeInTheDocument();
     expect(screen.getByText(/7 recordings/)).toBeInTheDocument();
   });
@@ -83,9 +86,9 @@ describe("SettingsScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /active doctors/i }));
     await screen.findByText("Current hospital members with active BharatDoc access.");
-    fireEvent.click(screen.getAllByRole("button", { name: /remove from clinic/i })[1]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /remove from hospital/i })[1]!);
 
-    await waitFor(() => expect(screen.getByText(/removed from clinic/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/removed from hospital/i)).toBeInTheDocument());
     expect(fetcher).toHaveBeenCalledWith("/api/clinic/doctors/doctor-leena/remove", {
       method: "POST",
       headers: {
@@ -120,12 +123,40 @@ describe("SettingsScreen", () => {
   it("scrolls to owner review when pending approvals row is clicked", () => {
     const scrollIntoView = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const originalScrollTop = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "scrollTop");
+    const scrollTopValues: number[] = [];
+    Object.defineProperty(window.HTMLElement.prototype, "scrollTop", {
+      configurable: true,
+      get() {
+        return 12;
+      },
+      set(value) {
+        scrollTopValues.push(value);
+      }
+    });
+    vi.spyOn(window.HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (typeof this.className === "string" && this.className.includes("overflow-y-auto")) {
+        return { top: 20 } as DOMRect;
+      }
+
+      if (this.textContent?.includes("Owner review")) {
+        return { top: 420 } as DOMRect;
+      }
+
+      return { top: 20 } as DOMRect;
+    });
 
     render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} />);
 
     fireEvent.click(screen.getByRole("button", { name: /pending approvals/i }));
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollTopValues).toContain(412);
+    if (originalScrollTop) {
+      Object.defineProperty(window.HTMLElement.prototype, "scrollTop", originalScrollTop);
+    } else {
+      Reflect.deleteProperty(window.HTMLElement.prototype, "scrollTop");
+    }
   });
 
   it("only marks the summary prompt as edited when a custom prompt is saved", () => {
@@ -151,7 +182,7 @@ describe("SettingsScreen", () => {
       account_status: "active" as const,
       name: "Dr. Nisha Shah",
       specialization: "Pediatrics",
-      phone: "+91 98765 43210",
+      phone: "nisha@example.com",
       profile_photo_path: null,
       custom_prompt: null,
       transcription_lang: "auto" as const,
@@ -179,6 +210,53 @@ describe("SettingsScreen", () => {
       body: JSON.stringify({
         name: "Dr. Nisha Shah",
         specialization: "Pediatrics"
+      })
+    });
+  });
+
+  it("uses a curated specialization dropdown with Other fallback in the profile editor", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        doctor: {
+          id: "owner-aparna",
+          firebase_uid: "firebase-owner",
+          clinic_id: "demo-clinic",
+          role: "owner",
+          account_status: "active",
+          name: "Dr. Aparna Iyer",
+          specialization: "Sports Medicine",
+          phone: "aparna@example.com",
+          profile_photo_path: null,
+          custom_prompt: null,
+          transcription_lang: "auto",
+          created_at: "2026-04-23T09:00:00.000Z"
+        }
+      })
+    ) as unknown as typeof fetch;
+
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit doctor profile" }));
+    const specialization = await screen.findByLabelText("Specialization");
+    expect(specialization.tagName).toBe("SELECT");
+    expect(screen.getByRole("option", { name: "General Physician" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Urology" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Other" })).toBeInTheDocument();
+
+    fireEvent.change(specialization, { target: { value: "Other" } });
+    fireEvent.change(screen.getByLabelText("Other specialization"), { target: { value: "Sports Medicine" } });
+    fireEvent.click(screen.getByRole("button", { name: /save profile/i }));
+
+    await waitFor(() => expect(screen.getByText("Profile saved.")).toBeInTheDocument());
+    expect(fetcher).toHaveBeenCalledWith("/api/settings/preferences", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Dr. Aparna Iyer",
+        specialization: "Sports Medicine"
       })
     });
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Check, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
+import { Building2, Check, ChevronLeft, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 import { normalizeEmail, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { LogoMark } from "@/components/onboarding/logo-mark";
@@ -160,6 +160,18 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
     setAuthMode(nextMode);
     setError(null);
     setResetMessage(null);
+  }
+
+  function handleBackToCredentials() {
+    setError(null);
+    setResetMessage(null);
+    setStep("credentials");
+  }
+
+  function handleBackToProfile() {
+    setError(null);
+    setResetMessage(null);
+    setStep("profile");
   }
 
   async function handleForgotPassword() {
@@ -332,7 +344,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
           </p>
         </div>
 
-        <StepIndicator step={step} />
+        {authMode === "login" && step === "credentials" ? null : <StepIndicator step={step} />}
         {error ? (
           <div className="mt-4 rounded-lg border border-stamp/20 bg-stamp/10 px-3 py-2 font-body text-xs text-stamp" role="alert">
             {error}
@@ -406,6 +418,15 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {authMode === "signup" ? "Create account" : "Log in"}
             </BharatButton>
+            {authMode === "signup" ? (
+              <p className="mt-3 text-center font-body text-[11px] leading-5 text-ink-muted">
+                By creating an account, you agree to the{" "}
+                <a className="font-bold text-terracotta underline-offset-2 hover:underline" href="/terms-privacy">
+                  Terms and Privacy Policy
+                </a>
+                .
+              </p>
+            ) : null}
           </Panel>
         ) : null}
 
@@ -426,6 +447,10 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
             ) : null}
             <BharatButton className="mt-3 w-full" onClick={handleProfileContinue}>
               Continue
+            </BharatButton>
+            <BharatButton className="mt-3 w-full" variant="ghost" onClick={handleBackToCredentials} disabled={isBusy}>
+              <ChevronLeft className="h-4 w-4" />
+              Back to credentials
             </BharatButton>
           </Panel>
         ) : null}
@@ -513,6 +538,10 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {hospitalMode === "join_hospital" ? "Request to join" : "Create hospital & continue"}
             </BharatButton>
+            <BharatButton className="mt-3 w-full" variant="ghost" onClick={handleBackToProfile} disabled={isBusy || isLookingUpClinic}>
+              <ChevronLeft className="h-4 w-4" />
+              Back to profile
+            </BharatButton>
           </Panel>
         ) : null}
       </section>
@@ -524,7 +553,7 @@ function StepIndicator({ step }: { step: OnboardingStep }) {
   const current = ["credentials", "profile", "hospital"].indexOf(step) + 1;
 
   return (
-    <div className="mt-8 flex items-center gap-2">
+    <div className="mt-8 flex items-center gap-2" aria-label="Onboarding progress">
       {[1, 2, 3].map((item) => (
         <div key={item} className={item <= current ? "h-1.5 flex-1 rounded-full bg-terracotta" : "h-1.5 flex-1 rounded-full bg-rule"} />
       ))}

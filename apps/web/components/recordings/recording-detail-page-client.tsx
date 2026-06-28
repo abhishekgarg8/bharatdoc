@@ -32,6 +32,63 @@ interface RecordingDetailPageClientProps {
   onNavigate?: (href: string) => void;
 }
 
+interface RecordingBackNavigation {
+  href: string;
+  label: string;
+  useHistoryBack: boolean;
+}
+
+function safeSameOriginPath(value: string | null): string | null {
+  if (!value || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function currentRecordingBackNavigation(): RecordingBackNavigation {
+  if (typeof window === "undefined") {
+    return { href: "/dashboard", label: "Back to dashboard", useHistoryBack: false };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const explicitReturnTo = safeSameOriginPath(params.get("returnTo") ?? params.get("backHref"));
+
+  if (explicitReturnTo) {
+    return {
+      href: explicitReturnTo,
+      label: explicitReturnTo.startsWith("/search") ? "Back to search results" : "Go back",
+      useHistoryBack: false
+    };
+  }
+
+  const referrerPath = safeSameOriginPath(document.referrer);
+  const cameFromSearch = referrerPath?.startsWith("/search") || params.get("from") === "search";
+
+  if (cameFromSearch) {
+    const patientQuery = params.get("patient_id") ?? params.get("patientId") ?? params.get("q");
+    const href = patientQuery ? `/search?patient_id=${encodeURIComponent(patientQuery)}` : "/search";
+
+    return {
+      href,
+      label: "Back to search results",
+      useHistoryBack: Boolean(referrerPath?.startsWith("/search") && window.history.length > 1)
+    };
+  }
+
+  return { href: "/dashboard", label: "Back to dashboard", useHistoryBack: false };
+}
+
 export function RecordingDetailPageClient({
   recordingId,
   authClient,
@@ -46,6 +103,7 @@ export function RecordingDetailPageClient({
     [localRepository]
   );
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
+  const backNavigation = useMemo(() => currentRecordingBackNavigation(), []);
   const queryDemoMode = useExplicitDemoMode();
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
@@ -150,8 +208,11 @@ export function RecordingDetailPageClient({
 
   const detailProps = {
     recording,
+    backHref: backNavigation.href,
+    backLabel: backNavigation.label,
     fetcher,
     onGenerateTranscript: generateTranscriptFromLocalAudio,
+    ...(backNavigation.useHistoryBack ? { onBack: () => window.history.back() } : {}),
     ...(idToken ? { idToken } : {})
   };
 

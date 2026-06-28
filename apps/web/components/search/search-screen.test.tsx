@@ -29,6 +29,8 @@ describe("SearchScreen", () => {
     render(<SearchScreen initialRecords={records} />);
 
     expect(screen.getByRole("heading", { name: "Search" })).toBeInTheDocument();
+    expect(screen.getByText("Find consultations by exact Patient ID or by entering the beginning of an ID.")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("P-104… or P-10482")).toBeInTheDocument();
     expect(screen.getByText("Recent hospital records")).toBeInTheDocument();
     expect(screen.getByText("P-10481")).toBeInTheDocument();
     expect(screen.getByText("P-10470")).toBeInTheDocument();
@@ -45,8 +47,28 @@ describe("SearchScreen", () => {
     await waitFor(() => {
       expect(screen.getByText("Results for P-10470")).toBeInTheDocument();
     });
+    expect(screen.getByText("1 consultation · exact or partial Patient ID match")).toBeInTheDocument();
     expect(screen.getByText("P-10470")).toBeInTheDocument();
     expect(screen.queryByText("P-10481")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute(
+      "href",
+      "/recordings/p-10470?returnTo=%2Fsearch%3Fpatient_id%3DP-10470"
+    );
+  });
+
+  it("filters demo records by partial patient id", async () => {
+    render(<SearchScreen initialRecords={records} />);
+
+    fireEvent.change(screen.getByLabelText("Patient ID"), {
+      target: { value: "P-1048" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Results for P-1048")).toBeInTheDocument();
+    });
+    expect(screen.getByText("P-10481")).toBeInTheDocument();
+    expect(screen.queryByText("P-10470")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when no record matches", async () => {
@@ -60,6 +82,7 @@ describe("SearchScreen", () => {
     await waitFor(() => {
       expect(screen.getByText("No consultations found")).toBeInTheDocument();
     });
+    expect(screen.getByText("Check the Patient ID, or enter only the first few characters such as P-104.")).toBeInTheDocument();
   });
 
   it("uses the hospital-scoped API when an id token is provided", async () => {
@@ -97,6 +120,10 @@ describe("SearchScreen", () => {
       });
     });
     expect(screen.getByText("P-10470")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute(
+      "href",
+      "/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa?returnTo=%2Fsearch%3Fpatient_id%3DP-10470"
+    );
     expect(screen.getByText(/Follow-up/)).toBeInTheDocument();
     expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute("href", "https://signed.example.com/p-10470.pdf");

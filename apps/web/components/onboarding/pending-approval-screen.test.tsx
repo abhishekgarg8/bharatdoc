@@ -29,4 +29,27 @@ describe("PendingApprovalScreen", () => {
 
     await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1));
   });
+
+  it("shows a clear error when sign-out is unavailable", () => {
+    render(<PendingApprovalScreen hospitalName="Bharat QA Hospital" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Sign out is unavailable. Close the app and try again.");
+  });
+
+  it("shows a retryable error when sign-out fails", async () => {
+    const onSignOut = vi.fn(async () => {
+      throw new Error("session failure");
+    });
+
+    render(<PendingApprovalScreen hospitalName="Bharat QA Hospital" onSignOut={onSignOut} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Unable to sign out. Please try again.");
+    });
+    expect(screen.getByRole("button", { name: /sign out/i })).not.toBeDisabled();
+  });
 });
