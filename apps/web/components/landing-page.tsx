@@ -51,26 +51,28 @@ export function LandingPage() {
         />
         <div className="relative z-10 mx-auto flex min-h-[calc(100svh-165px)] max-w-6xl items-start px-4 py-14 sm:px-6 sm:py-16 lg:items-center lg:py-20">
           <div className="w-full max-w-[590px] pt-5 sm:pt-8 lg:pt-0">
-            {/* Tag pill */}
-            <div className="mb-7 inline-flex max-w-full items-center gap-2 rounded-full border border-rule bg-paper/80 px-4 py-1.5 shadow-[0_4px_18px_rgba(28,23,18,0.08)] backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-terracotta" />
-              <span className="truncate font-mono text-[11px] text-ink-muted sm:text-xs">
-                AI-assisted documentation for Indian clinics
-              </span>
-            </div>
-
             {/* Headline */}
             <h1
-              className="mb-6 max-w-[11ch] font-display italic leading-[1.02] text-ink"
+              className="mb-7 max-w-[9ch] font-display italic leading-[1.02] text-ink sm:max-w-[12ch]"
               style={{ fontSize: "clamp(48px, 7vw, 84px)" }}
             >
-              Turn consultations into clinical notes.
+              AI Scribe for Indian clinics
             </h1>
 
             {/* Body */}
-            <p className="mb-9 max-w-[470px] text-base leading-relaxed text-ink-soft sm:text-lg">
-              Record a consultation, review the AI-drafted summary, and save a PDF record tied to a Patient ID. Built for small clinics and patchy connectivity.
-            </p>
+            <ol className="mb-9 grid max-w-[430px] gap-2 text-base leading-relaxed text-ink-soft sm:text-lg">
+              {[
+                "Record",
+                "Transcribe",
+                "Review the AI-drafted summary",
+                "Save that as a PDF automatically with the Patient ID"
+              ].map((step, index) => (
+                <li key={step} className="flex items-baseline gap-3">
+                  <span className="font-mono text-xs text-terracotta">{index + 1}.</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
 
             {/* CTAs */}
             <div className="flex flex-wrap items-center gap-4">

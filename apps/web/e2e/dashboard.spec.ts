@@ -63,13 +63,13 @@ test("local recording flow records, transcribes, and returns to dashboard", asyn
 test("root landing page renders and links to onboarding", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Turn consultations into clinical notes." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI Scribe for Indian clinics" })).toBeVisible();
   await expect(
     page.getByRole("img", {
       name: "Indian doctor reviewing a consultation with a patient while a phone records on the desk"
     })
   ).toBeVisible();
-  await expect(page.getByText("Built for small clinics and patchy connectivity.")).toBeVisible();
+  await expect(page.getByText("Save that as a PDF automatically with the Patient ID")).toBeVisible();
   await page.getByRole("link", { name: "Get started" }).first().click();
   await expect(page).toHaveURL(/\/onboarding$/);
 });
