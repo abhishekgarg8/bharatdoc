@@ -76,6 +76,19 @@ test("demo onboarding join flow reaches pending approval", async ({ page }) => {
   await expect(page).toHaveURL(/\/pending-approval\?demo=1$/);
 });
 
+test("onboarding specialization dropdown supports other text", async ({ page }) => {
+  await page.goto("/onboarding?demo=1");
+
+  await page.getByRole("button", { name: /create account/i }).click();
+  await expect(page.getByText("Profile details")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Specialization" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Specialization" }).selectOption("Other");
+  await expect(page.getByLabel("Other specialization")).toBeVisible();
+  await page.getByLabel("Other specialization").fill("Sports Medicine");
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await expect(page.getByText("Your hospital")).toBeVisible();
+});
+
 test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await page.goto("/onboarding?demo=1");
 

@@ -126,6 +126,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Fix recording screen clinic and reconnect context by showing authenticated hospital name plus Online/Offline state and keeping local audio for retry.
 - [x] Fix dashboard recent-record scope by loading clinic-scoped consultations instead of only the signed-in doctor's rows.
 - [x] Fix onboarding join consistency by replacing hospital-ID selection with Clinic Code lookup and `join_clinic` registration.
+- [x] Replace onboarding specialization free-text entry with a major-specialty dropdown plus Other free-form path, with unit, browser E2E, and screenshot verification.
 - [x] Finish owner admin hardening with active doctor recording counts, remove-from-clinic, removed-doctor audit history, and re-approve flow.
 - [x] Add Railway worker large-audio splitting and transcript stitching above the per-call transcription size.
 - [x] Align the PRD auth source of truth to Supabase email/password while documenting legacy `firebase_uid` and `phone` column names.
