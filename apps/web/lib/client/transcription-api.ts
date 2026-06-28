@@ -42,9 +42,10 @@ export async function transcribeRecordingAudio(
   mimeType: string,
   fetcher: typeof fetch = fetch
 ): Promise<WorkerTranscriptionResponse> {
+  const uploadMimeType = audio.type || mimeType;
   const body = new FormData();
   body.set("recording_id", recordingId);
-  body.set("audio", audio, `recording.${audioFilenameExtension(mimeType)}`);
+  body.set("audio", audio, `recording.${audioFilenameExtension(uploadMimeType)}`);
 
   const response = await fetcher(workerTranscriptionUrl(), {
     method: "POST",

@@ -41,6 +41,33 @@ describe("transcription api client", () => {
     );
   });
 
+  it("uses the actual audio blob MIME type for the upload filename", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        transcript: "Patient reports fever.",
+        audio_storage_path: "clinic/doctor/recording.wav",
+        status: "transcribed"
+      })
+    ) as unknown as typeof fetch;
+    const audio = new Blob(["audio"], { type: "audio/wav" });
+
+    await transcribeRecordingAudio(
+      "id-token",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      audio,
+      "audio/webm;codecs=opus",
+      fetcher
+    );
+
+    const body = vi.mocked(fetcher).mock.calls[0]?.[1]?.body as FormData;
+    const uploadedAudio = body.get("audio");
+
+    expect(uploadedAudio).toBeInstanceOf(File);
+    expect((uploadedAudio as File).name).toBe("recording.wav");
+  });
+
   it("throws when the transcription route fails", async () => {
     vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
     const fetcher = vi.fn(async () => Response.json({ error: { code: "AUDIO_REQUIRED" } }, { status: 400 })) as unknown as typeof fetch;
