@@ -1,0 +1,11 @@
+Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-profile-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-invalid-clinic-code-filled.png
+locator.waitFor: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for getByText('Clinic code was not found.') to be visible[22m
+
+    at joinClinic (/Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/scripts/doctor-admin-flow.mjs:150:56)
+    at async main (/Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/scripts/doctor-admin-flow.mjs:346:5)

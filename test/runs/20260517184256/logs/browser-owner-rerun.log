@@ -1,0 +1,17 @@
+Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/01-onboarding-entry.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/04-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/05-dashboard-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/09-settings.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/10-recording-ready.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/11-recording-active.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/12-recording-saved.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/13-recording-transcription-failed-attempt-1.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/13-recording-transcription-failed-attempt-2.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/13-recording-transcribed-audio-file.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/14-dashboard-with-real-recording.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/15-recording-detail-transcript.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/16-recording-detail-summary.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/17-recording-detail-pdf.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun/18-search-results.png
+Real browser E2E completed. Screenshots saved in /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner-rerun

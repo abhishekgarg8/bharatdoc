@@ -1,0 +1,48 @@
+Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-profile-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-invalid-clinic-code-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-invalid-clinic-code-result.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-clinic-found.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e06-approved-doctor-pending-live-details.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e07-pending-guard-dashboard.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e07-pending-guard-recording.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e07-pending-guard-search.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e07-pending-guard-settings.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e07-pending-signout-result.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-profile-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-clinic-found.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-pending-live-details.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-owner-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-owner-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-owner-before-reject.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-owner-after-reject.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-gate-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-gate-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e08-rejected-doctor-access-rejected.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e09-owner-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e09-owner-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e09-owner-before-approve.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e09-owner-after-approve.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-login-filled.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-after-login.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-dashboard.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-recording.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-search.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e10-approved-doctor-settings.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e14-search-exact-result.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e14-search-partial-result.png
+screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/doctor-admin/e14-search-empty-state.png
+locator.click: Error: strict mode violation: getByRole('button', { name: /English/i }) resolved to 3 elements:
+    1) <button type="button" aria-pressed="true" class="flex w-full items-center gap-3 rounded-[14px] bg-paper px-4 py-3.5 text-left border-2 border-terracotta">…</button> aka getByRole('button', { name: 'Auto-detect Best for Hindi,' })
+    2) <button type="button" aria-pressed="false" class="flex w-full items-center gap-3 rounded-[14px] border bg-paper px-4 py-3.5 text-left border-rule">…</button> aka getByRole('button', { name: 'English Use for English-only' })
+    3) <button type="button" aria-pressed="false" class="flex w-full items-center gap-3 rounded-[14px] border bg-paper px-4 py-3.5 text-left border-rule">…</button> aka getByRole('button', { name: 'Hinglish Mixed Hindi and' })
+
+Call log:
+[2m  - waiting for getByRole('button', { name: /English/i })[22m
+
+    at testPreferences (/Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/scripts/doctor-admin-flow.mjs:229:56)
+    at async main (/Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/scripts/doctor-admin-flow.mjs:382:5)
