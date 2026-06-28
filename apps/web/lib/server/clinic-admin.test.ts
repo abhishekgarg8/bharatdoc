@@ -101,6 +101,7 @@ function createRepository(doctor: Doctor | null = owner): ClinicAdminRepository 
     updateClinicProfile: vi.fn(async (_clinicId: string, input) => ({
       ...clinic,
       name: input.name ?? clinic.name,
+      clinic_code: input.code ?? clinic.clinic_code,
       address: input.address !== undefined ? input.address : clinic.address
     }))
   };
@@ -261,16 +262,33 @@ describe("clinic admin approvals", () => {
     });
   });
 
-  it("rejects clinic code updates because the code is read-only", async () => {
+  it("updates the doctor join code for owners and normalizes it to uppercase", async () => {
     const repository = createRepository();
 
     await expect(
       updateClinicProfileForOwner(
         { uid: "firebase-owner", phoneNumber: "+919876543210" },
-        { clinic_code: "MED43Y" },
+        { code: "abc123" },
         repository
       )
-    ).rejects.toThrow();
+    ).resolves.toMatchObject({
+      code: "ABC123"
+    });
+    expect(repository.updateClinicProfile).toHaveBeenCalledWith(clinic.id, {
+      code: "ABC123"
+    });
+  });
+
+  it("rejects invalid doctor join code updates", async () => {
+    const repository = createRepository();
+
+    await expect(
+      updateClinicProfileForOwner(
+        { uid: "firebase-owner", phoneNumber: "+919876543210" },
+        { code: "TOOLONG" },
+        repository
+      )
+    ).rejects.toMatchObject({ code: "CLINIC_CODE_INVALID" });
     expect(repository.updateClinicProfile).not.toHaveBeenCalled();
   });
 

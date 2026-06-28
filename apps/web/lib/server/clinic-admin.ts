@@ -1,4 +1,4 @@
-import { assertOwner, type Clinic, type Doctor } from "@bharatdoc/shared";
+import { assertOwner, CLINIC_CODE_LENGTH, type Clinic, type Doctor } from "@bharatdoc/shared";
 import { z } from "zod";
 import type { VerifiedUser } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
@@ -56,6 +56,7 @@ export interface SettingsBootstrap {
 
 export interface ClinicProfileUpdate {
   name?: string;
+  code?: string;
   address?: string | null;
 }
 
@@ -83,9 +84,11 @@ export interface ClinicAdminRepository {
 const ClinicProfileUpdateSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
+    code: z.string().trim().optional(),
     address: z.string().trim().optional().nullable()
   })
   .strict();
+const ClinicCodePattern = /^[A-Z0-9]+$/;
 
 function toClinicProfile(clinic: Clinic, activeDoctorsCount: number): ClinicProfile {
   return {
@@ -108,6 +111,24 @@ function normalizeAddress(address: string | null | undefined): string | null | u
 
   const normalized = address.trim();
   return normalized ? normalized : null;
+}
+
+function normalizeClinicCode(code: string | undefined): string | undefined {
+  if (code === undefined) {
+    return undefined;
+  }
+
+  const normalized = code.trim().toUpperCase();
+
+  if (normalized.length !== CLINIC_CODE_LENGTH || !ClinicCodePattern.test(normalized)) {
+    throw new AppError(
+      400,
+      `Doctor join code must be exactly ${CLINIC_CODE_LENGTH} letters or numbers.`,
+      "CLINIC_CODE_INVALID"
+    );
+  }
+
+  return normalized;
 }
 
 async function requireOwnerContext(user: VerifiedUser, repository: ClinicAdminRepository): Promise<Doctor> {
@@ -281,6 +302,13 @@ export async function updateClinicProfileForOwner(
 
   if (parsed.name !== undefined) {
     update.name = parsed.name;
+  }
+
+  if (parsed.code !== undefined) {
+    const code = normalizeClinicCode(parsed.code);
+    if (code !== undefined) {
+      update.code = code;
+    }
   }
 
   if ("address" in parsed) {

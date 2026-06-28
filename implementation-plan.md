@@ -50,10 +50,10 @@ Testing is a first-class requirement: every implementation step lands with unit/
 ### 5. Owner admin and Settings
 
 - Implement Settings profile, transcription language, prompt editor, and owner-only admin tab.
-- Owner can approve/reject pending doctors, view active doctors, and view/edit clinic profile/code.
+- [x] Owner can approve/reject pending doctors, view active doctors, and view/edit clinic profile/code.
 - Prompt editor validates `{{transcript}}`, character limit, reset default, and sample test action.
 - Add unit/API tests for prompt validation, owner authorization, approve/reject state changes, and badge count.
-- Browser-test Settings and owner approval flows with screenshots before moving on.
+- [x] Browser-test Settings, owner approval, help center, and terms/privacy flows with screenshots before moving on.
 
 ### 6. Recording and local persistence
 
@@ -133,6 +133,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Add a repeatable real-account browser E2E runner with screenshots, email-confirmation resume support, fake microphone audio, and a dry-run gate before account creation.
 - [x] Add a runtime Supabase anon-key wrapper so real E2E commands can use the current linked-project anon key without editing `.env`.
 - [x] Commit, push, merge, wait for Vercel production deployment, and verify the live app with real-account audio E2E screenshots at `https://bharatdoc-web.vercel.app/`.
+- [x] Rename the dashboard list heading from "Today's consultations" to "Consultations" with focused tests and browser screenshot verification.
 
 ### 11. Production diagnostic logging and transcription recovery
 

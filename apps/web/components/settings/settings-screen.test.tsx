@@ -57,6 +57,10 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /language/i })).toHaveAttribute("href", "/settings/language");
     expect(screen.getByRole("link", { name: /summary prompt/i })).toHaveAttribute("href", "/settings/prompt");
+    expect(screen.getByRole("link", { name: /help & support/i })).toHaveAttribute("href", "/help-center");
+    expect(screen.getByRole("link", { name: /terms and privacy/i })).toHaveAttribute("href", "/terms-privacy");
+    expect(screen.getByText("FAQs and support details")).toBeInTheDocument();
+    expect(screen.getByText("Terms of use and privacy policy")).toBeInTheDocument();
     expect(screen.queryByText("Delete account")).not.toBeInTheDocument();
     expect(screen.queryByText("Not available in this build")).not.toBeInTheDocument();
   });
@@ -263,15 +267,19 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("copies the read-only doctor join code without sending profile updates", async () => {
-    const writeText = vi.fn(async () => undefined);
-    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
-    vi.stubGlobal("navigator", {
-      ...navigator,
-      clipboard: {
-        writeText
+  it("updates the doctor join code through the owner API", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString() === "/api/clinic/admin") {
+        return Response.json({
+          clinic: {
+            ...clinic,
+            code: "ABC123"
+          }
+        });
       }
-    });
+
+      return Response.json({ ok: true });
+    }) as unknown as typeof fetch;
 
     render(
       <SettingsScreen
@@ -285,9 +293,31 @@ describe("SettingsScreen", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /doctor join code/i }));
+    fireEvent.change(screen.getByLabelText("Doctor join code"), { target: { value: "abc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /save code/i }));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("MED42X"));
-    expect(screen.getByText("Doctor join code copied.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Doctor join code saved.")).toBeInTheDocument());
+    expect(screen.getByText("ABC123")).toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ code: "ABC123" })
+    });
+  });
+
+  it("validates doctor join codes before saving", async () => {
+    const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
+
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /doctor join code/i }));
+    fireEvent.change(screen.getByLabelText("Doctor join code"), { target: { value: "AB@" } });
+    fireEvent.click(screen.getByRole("button", { name: /save code/i }));
+
+    await waitFor(() => expect(screen.getByText("Doctor join code must be exactly 6 letters or numbers.")).toBeInTheDocument());
     expect(fetcher).not.toHaveBeenCalled();
   });
 

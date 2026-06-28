@@ -97,7 +97,8 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
   await page.getByRole("button", { name: /create hospital/i }).click();
   await page.getByRole("button", { name: /create hospital & continue/i }).click();
   await expect(page).toHaveURL(/\/dashboard\?demo=1$/);
-  await expect(page.getByText("Today's consultations")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Consultations" })).toBeVisible();
+  await expect(page.getByText("Today's consultations")).toHaveCount(0);
 });
 
 test("onboarding smoke renders email password entry", async ({ page }) => {
@@ -124,9 +125,25 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
   await expect(page.getByText("Hospital admin")).toBeVisible();
   await expect(page.getByRole("button", { name: /doctor join code/i })).toBeVisible();
   await expect(page.getByText("Share with doctors to join")).toBeVisible();
+  await expect(page.getByRole("link", { name: /help & support/i })).toHaveAttribute("href", "/help-center");
+  await expect(page.getByRole("link", { name: /terms and privacy/i })).toHaveAttribute("href", "/terms-privacy");
   await expect(page.getByText("Delete account")).toHaveCount(0);
   await expect(page.getByText("Dr. Meera Shah")).toBeVisible();
   await expect(page.getByRole("button", { name: /approve/i })).toBeVisible();
+});
+
+test("help center and terms pages render from settings links", async ({ page }) => {
+  await page.goto("/settings?demo=1");
+
+  await page.getByRole("link", { name: /help & support/i }).click();
+  await expect(page).toHaveURL(/\/help-center$/);
+  await expect(page.getByRole("heading", { name: "Help Center" })).toBeVisible();
+  await expect(page.getByText("How do doctors join a hospital workspace?")).toBeVisible();
+  await page.goto("/settings?demo=1");
+  await page.getByRole("link", { name: /terms and privacy/i }).click();
+  await expect(page).toHaveURL(/\/terms-privacy$/);
+  await expect(page.getByRole("heading", { name: "Terms and Privacy" })).toBeVisible();
+  await expect(page.getByText("Information we process")).toBeVisible();
 });
 
 test("settings owner approval removes pending doctor", async ({ page }) => {
@@ -159,6 +176,17 @@ test("settings owner can edit the hospital profile locally", async ({ page }) =>
   await page.getByRole("button", { name: /save hospital/i }).click();
   await expect(page.getByText("Hospital profile saved.")).toBeVisible();
   await expect(page.getByText("Sunrise Family Hospital")).toBeVisible();
+});
+
+test("settings owner can edit the doctor join code locally", async ({ page }) => {
+  await page.goto("/settings?demo=1");
+
+  await page.getByRole("button", { name: /doctor join code/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Doctor join code" })).toBeVisible();
+  await page.getByLabel("Doctor join code").fill("ABC123");
+  await page.getByRole("button", { name: /save code/i }).click();
+  await expect(page.getByText("Doctor join code saved.")).toBeVisible();
+  await expect(page.getByText("ABC123")).toBeVisible();
 });
 
 test("settings profile edit opens and saves locally", async ({ page }) => {

@@ -126,14 +126,16 @@ describe("clinic admin API client", () => {
     };
     const fetcher = vi.fn(async () => Response.json({ clinic })) as unknown as typeof fetch;
 
-    await expect(updateClinicProfile("id-token", { name: "Sunrise Family Clinic", address: null }, fetcher)).resolves.toEqual(clinic);
+    await expect(
+      updateClinicProfile("id-token", { name: "Sunrise Family Clinic", code: "ABC123", address: null }, fetcher)
+    ).resolves.toEqual(clinic);
     expect(fetcher).toHaveBeenCalledWith("/api/clinic/admin", {
       method: "PATCH",
       headers: {
         Authorization: "Bearer id-token",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ name: "Sunrise Family Clinic", address: null })
+      body: JSON.stringify({ name: "Sunrise Family Clinic", code: "ABC123", address: null })
     });
   });
 

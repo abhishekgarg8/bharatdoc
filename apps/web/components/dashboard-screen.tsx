@@ -121,7 +121,7 @@ export function DashboardScreen({
         </div>
 
         <div className="px-5 pb-2">
-          <h2 className="font-display text-[28px] italic leading-none tracking-normal text-ink">Today's consultations</h2>
+          <h2 className="font-display text-[28px] italic leading-none tracking-normal text-ink">Consultations</h2>
           <p className="mt-1.5 font-body text-xs text-ink-muted">
             {pluralize(visibleRecords.length, "record")} · {pluralize(pendingCount, "pending transcription")}
           </p>
