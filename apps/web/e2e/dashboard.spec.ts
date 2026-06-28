@@ -60,9 +60,17 @@ test("local recording flow records, transcribes, and returns to dashboard", asyn
   await expect(page.getByRole("link", { name: "Open recording P-10500" })).toHaveCount(0);
 });
 
-test("root routes unauthenticated users to onboarding", async ({ page }) => {
+test("root landing page renders and links to onboarding", async ({ page }) => {
   await page.goto("/");
 
+  await expect(page.getByRole("heading", { name: "Turn consultations into clinical notes." })).toBeVisible();
+  await expect(
+    page.getByRole("img", {
+      name: "Indian doctor reviewing a consultation with a patient while a phone records on the desk"
+    })
+  ).toBeVisible();
+  await expect(page.getByText("Built for small clinics and patchy connectivity.")).toBeVisible();
+  await page.getByRole("link", { name: "Get started" }).first().click();
   await expect(page).toHaveURL(/\/onboarding$/);
 });
 
