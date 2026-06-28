@@ -31,7 +31,7 @@ function toSettingsDoctor(doctor: Doctor): SettingsDoctorProfile {
     id: doctor.id,
     name: doctor.name,
     specialization: doctor.specialization,
-    phone: doctor.phone,
+    contact: doctor.phone,
     role: doctor.role,
     customPrompt: doctor.custom_prompt
   };
@@ -56,7 +56,7 @@ function toSettingsActiveDoctors(
     id: doctor.id,
     name: doctor.name,
     specialization: doctor.specialization,
-    phone: doctor.phone,
+    contact: doctor.phone,
     role: doctor.role,
     recordingsCount: doctor.recordings_count,
     createdAt: doctor.created_at
@@ -70,7 +70,7 @@ function toSettingsRejectedDoctors(
     id: doctor.id,
     name: doctor.name,
     specialization: doctor.specialization,
-    phone: doctor.phone,
+    contact: doctor.phone,
     role: doctor.role,
     recordingsCount: doctor.recordings_count,
     createdAt: doctor.created_at,

@@ -30,14 +30,15 @@ function demoSearch(records: DashboardRecord[], query: string): DashboardRecord[
   return records.filter((record) => normalizePatientId(record.patientId).includes(normalizedQuery));
 }
 
-function SearchResultCard({ record }: { record: DashboardRecord }) {
+function SearchResultCard({ record, returnTo }: { record: DashboardRecord; returnTo: string }) {
   const hasPdf = Boolean(record.pdfSignedUrl || record.pdfStoragePath || record.status === "pdf_saved");
+  const recordingHref = `/recordings/${record.id}?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (
     <article className="rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]">
       <Link
         className="flex items-start gap-3 transition active:scale-[0.99]"
-        href={`/recordings/${record.id}`}
+        href={recordingHref}
         aria-label={`Open recording ${record.patientId}`}
       >
         <div className="min-w-[72px] shrink-0 rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
@@ -102,6 +103,7 @@ export function SearchScreen({
   const [error, setError] = useState<string | null>(null);
   const normalizedQuery = useMemo(() => normalizePatientId(query), [query]);
   const hasSearched = Boolean(searchedQuery.trim());
+  const returnTo = hasSearched ? `/search?patient_id=${encodeURIComponent(searchedQuery)}` : "/search";
 
   async function submitSearch(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -157,7 +159,7 @@ export function SearchScreen({
               Search
             </h1>
             <p className="mt-2 font-body text-xs leading-relaxed text-ink-muted">
-              Find consultations by Patient ID across your hospital.
+              Find consultations by exact Patient ID or by entering the beginning of an ID.
             </p>
           </div>
         </header>
@@ -172,7 +174,7 @@ export function SearchScreen({
               <input
                 id="patient-search"
                 className="min-w-0 flex-1 bg-transparent font-mono text-sm font-semibold uppercase text-ink outline-none placeholder:font-body placeholder:font-normal placeholder:normal-case placeholder:text-ink-faint"
-                placeholder="P-10482"
+                placeholder="P-104… or P-10482"
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
@@ -202,6 +204,7 @@ export function SearchScreen({
           </h2>
           <p className="mt-1 font-body text-xs text-ink-muted">
             {results.length} {results.length === 1 ? "consultation" : "consultations"}
+            {hasSearched ? " · exact or partial Patient ID match" : ""}
           </p>
         </div>
 
@@ -211,12 +214,12 @@ export function SearchScreen({
             <div className="rounded-xl border border-rule bg-paper px-4 py-8 text-center">
               <p className="font-body text-sm font-bold text-ink">No consultations found</p>
               <p className="mt-2 font-body text-xs leading-relaxed text-ink-muted">
-                Check the Patient ID and search again.
+                Check the Patient ID, or enter only the first few characters such as P-104.
               </p>
             </div>
           ) : null}
           {results.map((record) => (
-            <SearchResultCard key={record.id} record={record} />
+            <SearchResultCard key={record.id} record={record} returnTo={returnTo} />
           ))}
         </div>
 

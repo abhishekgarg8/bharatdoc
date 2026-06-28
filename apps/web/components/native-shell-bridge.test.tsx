@@ -9,6 +9,13 @@ describe("shouldOpenExternally", () => {
     );
   });
 
+  it("defaults to the runtime origin instead of production", () => {
+    window.history.replaceState(null, "", "http://localhost:3000/dashboard");
+
+    expect(shouldOpenExternally("http://localhost:3000/search")).toBe(false);
+    expect(shouldOpenExternally("https://bharatdoc-web.vercel.app/search")).toBe(true);
+  });
+
   it("opens external http links outside the shell", () => {
     expect(shouldOpenExternally("https://jtezgoegatwbvdqeogiy.supabase.co/storage/v1/object/sign/file.pdf")).toBe(true);
   });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
+import { SpecializationField } from "@/components/settings/specialization-field";
 import {
   approvePendingDoctor,
   reapproveClinicDoctor,
@@ -21,7 +22,7 @@ export interface SettingsDoctorProfile {
   id?: string;
   name: string;
   specialization: string;
-  phone: string;
+  contact: string;
   role: "owner" | "doctor";
   customPrompt?: string | null;
 }
@@ -38,7 +39,7 @@ export interface SettingsActiveDoctor {
   id: string;
   name: string;
   specialization: string;
-  phone: string;
+  contact: string;
   role: "owner" | "doctor";
   recordingsCount: number;
   createdAt: string;
@@ -65,7 +66,7 @@ const defaultDoctor: SettingsDoctorProfile = {
   id: "owner-aparna",
   name: "Dr. Aparna Iyer",
   specialization: "General Physician",
-  phone: "+91 98765 43210",
+  contact: "aparna@example.com",
   role: "owner",
   customPrompt: "Summarize {{transcript}} into a concise clinical note."
 };
@@ -83,7 +84,7 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     id: "owner-aparna",
     name: "Dr. Aparna Iyer",
     specialization: "General Physician",
-    phone: "+91 98765 43210",
+    contact: "aparna@example.com",
     role: "owner",
     recordingsCount: 12,
     createdAt: "2026-04-23T06:40:00.000Z"
@@ -92,7 +93,7 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     id: "doctor-meera",
     name: "Dr. Meera Shah",
     specialization: "Pediatrician",
-    phone: "+91 98340 12340",
+    contact: "meera@example.com",
     role: "doctor",
     recordingsCount: 4,
     createdAt: "2026-04-23T07:10:00.000Z"
@@ -101,7 +102,7 @@ const defaultActiveDoctors: SettingsActiveDoctor[] = [
     id: "doctor-leena",
     name: "Dr. Leena Joshi",
     specialization: "General Physician",
-    phone: "+91 98111 22334",
+    contact: "leena@example.com",
     role: "doctor",
     recordingsCount: 7,
     createdAt: "2026-04-22T11:10:00.000Z"
@@ -113,7 +114,7 @@ const defaultRejectedDoctors: SettingsRejectedDoctor[] = [
     id: "doctor-removed",
     name: "Dr. Sameer Kulkarni",
     specialization: "General Physician",
-    phone: "+91 98000 11122",
+    contact: "sameer@example.com",
     role: "doctor",
     recordingsCount: 2,
     createdAt: "2026-04-20T11:10:00.000Z",
@@ -129,7 +130,7 @@ const defaultPendingApprovals: PendingApproval[] = [
       id: "doctor-meera",
       name: "Dr. Meera Shah",
       specialization: "Pediatrician",
-      phone: "+91 98340 12340",
+      phone: "meera@example.com",
       created_at: "2026-04-23T07:10:00.000Z"
     }
   }
@@ -226,6 +227,7 @@ export function SettingsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ownerReviewRef = useRef<HTMLElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isOwner = displayedDoctor?.role === "owner";
   const canManageClinic = Boolean(isOwner && resolvedClinic);
   const promptEdited = useMemo(() => {
@@ -460,7 +462,7 @@ export function SettingsScreen({
         { ...member, accountStatus: "rejected" },
         ...current.filter((item) => item.id !== member.id)
       ]);
-      setMessage(`${member.name} removed from clinic.`);
+      setMessage(`${member.name} removed from hospital.`);
     } catch {
       setError(`Unable to remove ${member.name}.`);
     } finally {
@@ -486,7 +488,7 @@ export function SettingsScreen({
         id: member.id,
         name: member.name,
         specialization: member.specialization,
-        phone: member.phone,
+        contact: member.contact,
         role: member.role,
         recordingsCount: member.recordingsCount,
         createdAt: member.createdAt
@@ -510,8 +512,13 @@ export function SettingsScreen({
   function scrollToPendingApprovals() {
     setMessage(null);
     setError(null);
-    if (typeof ownerReviewRef.current?.scrollIntoView === "function") {
-      ownerReviewRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    const container = scrollContainerRef.current;
+    const target = ownerReviewRef.current;
+
+    if (container && target) {
+      const targetTop = target.getBoundingClientRect().top;
+      const containerTop = container.getBoundingClientRect().top;
+      container.scrollTop += targetTop - containerTop;
     }
   }
 
@@ -540,7 +547,7 @@ export function SettingsScreen({
           <h1 className="mt-1 font-display text-[34px] italic leading-none tracking-normal text-ink">Settings</h1>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
+        <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
           <button
             className="mb-4 flex w-full items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 text-left shadow-[0_1px_0_#E5DAC5] transition active:scale-[0.99]"
             type="button"
@@ -553,7 +560,7 @@ export function SettingsScreen({
             <div className="min-w-0 flex-1">
               <h2 className="font-body text-[15px] font-bold leading-tight text-ink">{displayedDoctor.name}</h2>
               <p className="mt-0.5 font-body text-xs text-ink-muted">{displayedDoctor.specialization}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">{displayedDoctor.phone}</p>
+              <p className="mt-0.5 truncate font-body text-[11px] text-ink-faint">{displayedDoctor.contact}</p>
             </div>
             <Edit3 className="h-[18px] w-[18px] shrink-0 text-ink-soft" />
           </button>
@@ -580,17 +587,10 @@ export function SettingsScreen({
                   />
                 </label>
 
-                <label className="block">
-                  <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
-                    Specialization
-                  </span>
-                  <input
-                    className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-body text-sm text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
-                    value={profileForm.specialization}
-                    onChange={(event) => setProfileForm((current) => ({ ...current, specialization: event.target.value }))}
-                    aria-label="Specialization"
-                  />
-                </label>
+                <SpecializationField
+                  value={profileForm.specialization}
+                  onChange={(value) => setProfileForm((current) => ({ ...current, specialization: value }))}
+                />
               </div>
 
               {profileError ? <p className="mt-3 font-body text-xs font-semibold text-stamp">{profileError}</p> : null}
@@ -744,7 +744,7 @@ export function SettingsScreen({
                         </span>
                       </div>
                       <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
-                      <p className="mt-1 font-mono text-[11px] text-ink-faint">{member.phone}</p>
+                      <p className="mt-1 font-body text-[11px] text-ink-faint">{member.contact}</p>
                       <p className="mt-1 font-body text-[11px] text-ink-soft">
                         Joined {requestedLabel(member.createdAt)} · {member.recordingsCount} recordings
                       </p>
@@ -755,7 +755,7 @@ export function SettingsScreen({
                           disabled={workingRequestId === member.id}
                           onClick={() => void removeDoctor(member)}
                         >
-                          Remove from Clinic
+                          Remove from hospital
                         </button>
                       ) : null}
                     </div>
@@ -792,7 +792,7 @@ export function SettingsScreen({
                       <div className="min-w-0 flex-1">
                         <h3 className="font-body text-sm font-bold text-ink">{member.name}</h3>
                         <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
-                        <p className="mt-1 font-mono text-[11px] text-ink-faint">{member.phone}</p>
+                        <p className="mt-1 font-body text-[11px] text-ink-faint">{member.contact}</p>
                         <p className="mt-1 font-body text-[11px] text-ink-soft">
                           {member.recordingsCount} recordings · removed
                         </p>
@@ -1029,6 +1029,8 @@ function PendingDoctorCard({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const contact = request.doctor.phone;
+
   return (
     <article className="rounded-xl border border-rule bg-paper px-3.5 py-3">
       <div className="flex items-center gap-3">
@@ -1038,8 +1040,8 @@ function PendingDoctorCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-body text-sm font-bold text-ink">{request.doctor.name}</h3>
           <p className="mt-0.5 truncate font-body text-xs text-ink-muted">{request.doctor.specialization}</p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
-            {request.doctor.phone} · requested {requestedLabel(request.requested_at)}
+          <p className="mt-0.5 truncate font-body text-[11px] text-ink-faint">
+            {contact} · requested {requestedLabel(request.requested_at)}
           </p>
         </div>
       </div>

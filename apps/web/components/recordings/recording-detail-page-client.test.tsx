@@ -6,7 +6,10 @@ import type { Doctor } from "@bharatdoc/shared";
 import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  window.history.pushState({}, "", "/");
+  Object.defineProperty(document, "referrer", { configurable: true, value: "" });
 });
 
 const activeDoctor: Doctor = {
@@ -64,6 +67,37 @@ describe("RecordingDetailPageClient", () => {
     expect(fetcher).toHaveBeenCalledWith("/api/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", {
       headers: { Authorization: "Bearer id-token" }
     });
+  });
+
+  it("returns search-origin users through browser history from recording detail", async () => {
+    window.history.pushState({}, "", "/search");
+    window.history.pushState({}, "", `/recordings/${apiRecording.id}`);
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      value: `${window.location.origin}/search`
+    });
+    const historyBack = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, recording: apiRecording })) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        authClient={authClient}
+        fetcher={fetcher}
+      />
+    );
+
+    await expect(screen.findByRole("heading", { name: "P-20001" })).resolves.toBeInTheDocument();
+    expect(screen.getByLabelText("Back to search results")).toHaveAttribute("href", "/search");
+    fireEvent.click(screen.getByLabelText("Back to search results"));
+
+    expect(historyBack).toHaveBeenCalledTimes(1);
   });
 
   it("renders demo recording detail only when explicit demo fallback is enabled", async () => {

@@ -46,8 +46,32 @@ function fetchUrl(call: readonly unknown[]): string {
   return String(call[0]);
 }
 
+function ensureUsableLocalStorage() {
+  if (typeof window.localStorage?.clear === "function") {
+    return;
+  }
+
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        store.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        store.delete(key);
+      }),
+      clear: vi.fn(() => {
+        store.clear();
+      })
+    }
+  });
+}
+
 describe("RecordingScreen", () => {
   beforeEach(() => {
+    ensureUsableLocalStorage();
     window.localStorage.clear();
   });
 
@@ -86,7 +110,9 @@ describe("RecordingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
     await screen.findByText("Recording saved on this device.");
 
-    expect(screen.getByRole("button", { name: /transcribe/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /transcribe/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
+    await expect(screen.findByText("Reconnect to transcribe. Audio stays saved on this device.")).resolves.toBeInTheDocument();
     expect((await repository.list())[0]).toMatchObject({
       patientId: "P-10482",
       captureState: "stopped",
@@ -197,9 +223,14 @@ describe("RecordingScreen", () => {
     });
     expect((await repository.list())[0]!.audioBlob).toBeInstanceOf(Blob);
 
-    expect(screen.getByRole("button", { name: /transcribe/i })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: "P-10483" } });
     expect(screen.getByRole("button", { name: /transcribe/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
+    await expect(screen.findByText("Patient ID is required before transcription.")).resolves.toBeInTheDocument();
+    expect(screen.getByLabelText("Patient ID")).toHaveFocus();
+    expect(screen.getByLabelText("Patient ID")).toHaveAttribute("aria-invalid", "true");
+
+    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: "P-10483" } });
+    expect(screen.getByLabelText("Patient ID")).toHaveAttribute("aria-invalid", "false");
 
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
@@ -316,8 +347,10 @@ describe("RecordingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
     await screen.findByText("Recording saved on this device.");
 
-    expect(screen.getByRole("button", { name: /transcribe/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /transcribe/i })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
+    await expect(screen.findByText("Patient ID is required before transcription.")).resolves.toBeInTheDocument();
+    expect(screen.getByLabelText("Patient ID")).toHaveFocus();
 
     const protectedApiCalls = fetcher.mock.calls.filter((call) =>
       [RECORDINGS_URL, WORKER_TRANSCRIBE_URL].includes(fetchUrl(call))

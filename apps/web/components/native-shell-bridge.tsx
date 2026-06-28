@@ -2,9 +2,15 @@
 
 import { useEffect } from "react";
 
-const APP_ORIGIN = "https://bharatdoc-web.vercel.app";
+function runtimeOrigin(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
 
-export function shouldOpenExternally(href: string, currentOrigin: string = APP_ORIGIN): boolean {
+  return "http://localhost";
+}
+
+export function shouldOpenExternally(href: string, currentOrigin: string = runtimeOrigin()): boolean {
   try {
     const url = new URL(href, currentOrigin);
 

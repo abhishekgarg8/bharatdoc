@@ -55,7 +55,9 @@ test("local recording flow records, transcribes, and returns to dashboard", asyn
   await expect(page.getByText(/mild cough/)).toBeVisible();
   await page.goto("/dashboard?demo=1");
   await expect(page.getByText("P-10500")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open recording P-10500" }).getByLabel("Stored offline")).toBeVisible();
+  await expect(page.getByLabel("Local recording P-10500 awaiting transcription")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Resume recording P-10500" })).toHaveAttribute("href", "/recordings/new");
+  await expect(page.getByRole("link", { name: "Open recording P-10500" })).toHaveCount(0);
 });
 
 test("root routes unauthenticated users to onboarding", async ({ page }) => {
@@ -195,7 +197,7 @@ test("settings profile edit opens and saves locally", async ({ page }) => {
   await page.getByRole("button", { name: "Edit doctor profile" }).click();
   await expect(page.getByRole("heading", { name: "Doctor profile" })).toBeVisible();
   await page.getByLabel("Doctor name").fill("Dr. Nisha Shah");
-  await page.getByLabel("Specialization").fill("Pediatrics");
+  await page.getByLabel("Specialization").selectOption("Pediatrics");
   await page.getByRole("button", { name: /save profile/i }).click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
   await expect(page.getByText("Dr. Nisha Shah")).toBeVisible();

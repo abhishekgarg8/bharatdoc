@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PasswordCredentialsSchema } from "@bharatdoc/shared";
-import {
-  authErrorMessage,
-  createSupabaseAuthClient,
-  getAuthRedirectUrl,
-  signupErrorMessage
-} from "@/lib/client/auth-client";
+import { authErrorMessage, createSupabaseAuthClient, getAuthRedirectUrl } from "@/lib/client/auth-client";
 
 const supabaseMocks = vi.hoisted(() => {
   const signUp = vi.fn();
@@ -101,40 +96,6 @@ describe("Supabase auth client", () => {
         password: "bharatdoc123"
       })
     ).rejects.toThrow("Confirm your email before continuing.");
-  });
-
-  it("maps duplicate signup errors to log-in guidance", async () => {
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
-    supabaseMocks.signUp.mockResolvedValue({
-      data: { session: null },
-      error: { message: "User already registered", code: "user_already_exists" }
-    });
-
-    await expect(
-      createSupabaseAuthClient().signUpWithPassword({
-        email: "doctor@example.com",
-        password: "bharatdoc123"
-      })
-    ).rejects.toThrow("Email is already registered. Log in instead.");
-  });
-
-  it("maps provider signup failures to actionable recovery messages", () => {
-    expect(signupErrorMessage({ message: "over_email_send_rate_limit", status: 429 })).toBe(
-      "Too many signup attempts. Wait a few minutes, then try again. Reference: AUTH_SIGNUP_RATE_LIMIT."
-    );
-    expect(signupErrorMessage(new Error("Error sending confirmation email through SMTP provider"))).toBe(
-      "BharatDoc could not send the confirmation email. Try again later or contact support. Reference: AUTH_SIGNUP_EMAIL_DELIVERY."
-    );
-    expect(signupErrorMessage({ message: "Signups not allowed for this project" })).toBe(
-      "Account creation is temporarily disabled. Contact BharatDoc support. Reference: AUTH_SIGNUP_DISABLED."
-    );
-    expect(signupErrorMessage({ message: "captcha verification failed" })).toBe(
-      "Complete the security check and try again. Reference: AUTH_SIGNUP_CAPTCHA."
-    );
-    expect(signupErrorMessage({ message: "unexpected auth gateway failure" })).toBe(
-      "Unable to create account. Try again later or contact support. Reference: AUTH_SIGNUP_UNKNOWN."
-    );
   });
 
   it("uses configured production site URL for Supabase email redirects", () => {

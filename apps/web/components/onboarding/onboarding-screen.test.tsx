@@ -3,6 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
 import type { AuthClient } from "@/lib/client/auth-client";
 
+function createAuthClient(): AuthClient {
+  return {
+    signUpWithPassword: vi.fn(async () => "verified-id-token"),
+    signInWithPassword: vi.fn(async () => "verified-id-token"),
+    getCurrentIdToken: vi.fn(async () => null),
+    signOut: vi.fn()
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -15,6 +24,27 @@ describe("OnboardingScreen", () => {
     expect(screen.getByLabelText("Email")).toHaveValue("");
     expect(screen.getByLabelText("Password")).toHaveValue("");
     expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
+  });
+
+  it("hides progress only on the login credentials step", async () => {
+    const authClient = createAuthClient();
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    expect(screen.getByLabelText("Onboarding progress")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(screen.queryByLabelText("Onboarding progress")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+    expect(screen.getByLabelText("Onboarding progress")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await screen.findByText("Profile details");
+    expect(screen.getByLabelText("Onboarding progress")).toBeInTheDocument();
   });
 
   it("toggles password visibility without changing the entered value", () => {
@@ -54,13 +84,55 @@ describe("OnboardingScreen", () => {
     expect(screen.getByText("Check your email for a reset link.")).toBeInTheDocument();
   });
 
+  it("shows terms and privacy acknowledgment only for signup", () => {
+    render(<OnboardingScreen />);
+
+    expect(screen.getByText(/by creating an account/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /terms and privacy policy/i })).toHaveAttribute("href", "/terms-privacy");
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    expect(screen.queryByText(/by creating an account/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /terms and privacy policy/i })).not.toBeInTheDocument();
+  });
+
+  it("navigates back from profile and hospital while clearing active errors", async () => {
+    const authClient = createAuthClient();
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await screen.findByText("Profile details");
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter your full name.");
+
+    fireEvent.click(screen.getByRole("button", { name: /back to credentials/i }));
+
+    expect(screen.getByText("Create login")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    await screen.findByText("Profile details");
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Dr. Aparna Iyer" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Pediatrics" } });
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+    await screen.findByText("Your hospital");
+    fireEvent.change(screen.getByLabelText("Clinic Code"), { target: { value: "MED" } });
+    fireEvent.click(screen.getByRole("button", { name: /find hospital/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter the 6-character Clinic Code");
+
+    fireEvent.click(screen.getByRole("button", { name: /back to profile/i }));
+
+    expect(screen.getByText("Profile details")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("runs the join-hospital flow and navigates to pending approval", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(async () => "verified-id-token"),
-      signInWithPassword: vi.fn(async () => "verified-id-token"),
-      getCurrentIdToken: vi.fn(async () => null),
-      signOut: vi.fn()
-    };
+    const authClient = createAuthClient();
     const navigate = vi.fn();
     const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = input.toString();
@@ -123,12 +195,7 @@ describe("OnboardingScreen", () => {
   });
 
   it("uses an Other specialization text field when the dropdown value is Other", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(async () => "verified-id-token"),
-      signInWithPassword: vi.fn(async () => "verified-id-token"),
-      getCurrentIdToken: vi.fn(async () => null),
-      signOut: vi.fn()
-    };
+    const authClient = createAuthClient();
 
     render(<OnboardingScreen authClient={authClient} />);
 
