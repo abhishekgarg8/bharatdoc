@@ -183,10 +183,11 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
           for (const track of stream.getTracks()) {
             track.stop();
           }
+          const blob = recorder.getBlob();
 
           resolve({
-            blob: recorder.getBlob(),
-            mimeType,
+            blob,
+            mimeType: blob.type || "audio/wav",
             durationSeconds: clock.elapsedSeconds()
           });
         });
