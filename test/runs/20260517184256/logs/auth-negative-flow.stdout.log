@@ -1,0 +1,21 @@
+Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
+{
+  "screenshots": [
+    "test/runs/20260517184256/screenshots/auth-negative/e02-invalid-login-filled.png",
+    "test/runs/20260517184256/screenshots/auth-negative/e02-invalid-login-result.png",
+    "test/runs/20260517184256/screenshots/auth-negative/e02-duplicate-signup-filled.png",
+    "test/runs/20260517184256/screenshots/auth-negative/e02-duplicate-signup-result.png"
+  ],
+  "checks": {
+    "invalidLoginMessage": true,
+    "duplicateSignupHandled": true,
+    "duplicateSignupText": "B\nWelcome to BharatDoc\n\nRecord consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.\n\nEmail is already registered. Log in instead.\nCreate login\nSign up\nLog in\nEMAIL\nPASSWORD\n\nUse at least 8 characters.\n\nCreate account"
+  },
+  "responses": [],
+  "consoleErrors": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 400 ()",
+      "url": "https://bharatdoc-web.vercel.app/onboarding"
+    }
+  ]
+}

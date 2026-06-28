@@ -1,0 +1,13 @@
+Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
+
+> bharatdoc@0.1.0 smoke:live-flow /Users/abhishekgarg/Desktop/BharatDoc
+> cd apps/web && node --env-file=../../.env ../../scripts/live-flow-smoke.mjs
+
+Live flow smoke against https://bharatdoc-web.vercel.app
+PostgREST schema visible for: public.clinics, public.doctors, public.clinic_join_requests, public.recordings.
+Auth smoke passed for clinic 89V9QW.
+Doctor preferences language: auto
+Transcription status: transcribed
+Summary status: summary_ready
+PDF status: pdf_saved
+Live AI flow smoke passed.

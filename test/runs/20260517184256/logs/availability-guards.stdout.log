@@ -1,0 +1,26 @@
+{
+  "screenshots": [
+    "test/runs/20260517184256/screenshots/availability/e01-root-onboarding.png",
+    "test/runs/20260517184256/screenshots/availability/e01-dashboard-onboarding.png",
+    "test/runs/20260517184256/screenshots/availability/e01-recording-onboarding.png"
+  ],
+  "checks": {
+    "manifest": {
+      "status": 200,
+      "contentType": "application/manifest+json"
+    },
+    "serviceWorker": {
+      "status": 200,
+      "contentType": "application/javascript; charset=utf-8"
+    },
+    "workerHealth": {
+      "status": 200,
+      "contentType": "application/json; charset=utf-8"
+    },
+    "rootFinalUrl": "https://bharatdoc-web.vercel.app/onboarding",
+    "dashboardFinalUrl": "https://bharatdoc-web.vercel.app/onboarding",
+    "recordingFinalUrl": "https://bharatdoc-web.vercel.app/onboarding"
+  },
+  "responses": [],
+  "consoleErrors": []
+}
