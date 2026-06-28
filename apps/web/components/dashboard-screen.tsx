@@ -13,6 +13,7 @@ import {
 import {
   createIndexedDbLocalRecordingRepository,
   mapLocalRecordingsToDashboardRecords,
+  type LocalRecordingScope,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
 
@@ -21,6 +22,7 @@ interface DashboardScreenProps {
   clinicName?: string;
   records?: DashboardRecord[];
   localRepository?: LocalRecordingRepository;
+  localRecordingScope?: LocalRecordingScope;
   pendingApprovalsCount?: number;
   pendingTranscriptionsCount?: number;
 }
@@ -38,6 +40,7 @@ export function DashboardScreen({
   clinicName = "Hospital",
   records = [],
   localRepository,
+  localRecordingScope,
   pendingApprovalsCount = 0,
   pendingTranscriptionsCount
 }: DashboardScreenProps) {
@@ -59,7 +62,7 @@ export function DashboardScreen({
 
     async function loadLocalRecordings() {
       try {
-        const nextRecords = mapLocalRecordingsToDashboardRecords(await repository.list());
+        const nextRecords = mapLocalRecordingsToDashboardRecords(await repository.list(), new Date(), localRecordingScope);
 
         if (isMounted) {
           setLocalRecords(nextRecords);
@@ -76,7 +79,7 @@ export function DashboardScreen({
     return () => {
       isMounted = false;
     };
-  }, [localRepository]);
+  }, [localRepository, localRecordingScope]);
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
@@ -128,9 +131,16 @@ export function DashboardScreen({
         </div>
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 pb-28">
-          {visibleRecords.map((record) => (
-            <DashboardRecordCard key={record.id} record={record} />
-          ))}
+          {visibleRecords.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-ochre bg-paper px-4 py-8 text-center">
+              <p className="font-body text-sm font-bold text-ink">No consultations yet</p>
+              <p className="mt-2 font-body text-xs leading-relaxed text-ink-muted">
+                Start a recording to add the first consultation for this hospital.
+              </p>
+            </div>
+          ) : (
+            visibleRecords.map((record) => <DashboardRecordCard key={record.id} record={record} />)
+          )}
         </div>
 
         <div className="pointer-events-none absolute bottom-[88px] left-0 right-0 flex justify-center">

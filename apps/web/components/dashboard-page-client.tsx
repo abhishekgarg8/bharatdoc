@@ -120,6 +120,15 @@ export function DashboardPageClient({
   const screenProps = {
     records,
     pendingApprovalsCount,
+    ...(doctor
+      ? {
+          localRecordingScope: {
+            authUserId: doctor.firebase_uid,
+            doctorId: doctor.id,
+            clinicId: doctor.clinic_id
+          }
+        }
+      : {}),
     ...(doctor?.name ? { doctorName: doctor.name } : allowDemoFallback ? { doctorName: "Dr. Aparna Iyer" } : {}),
     ...(clinicName ? { clinicName } : {})
   };

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TranscriptSummaryScreen } from "@/components/recordings/transcript-summary-screen";
 import type { RecordingDetailRecord } from "@/lib/client/recording-detail-data";
 
@@ -20,6 +20,10 @@ const recording: RecordingDetailRecord = {
 };
 
 describe("TranscriptSummaryScreen", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders transcript detail and status context", () => {
     render(<TranscriptSummaryScreen recording={recording} />);
 
@@ -27,6 +31,21 @@ describe("TranscriptSummaryScreen", () => {
     expect(screen.getByText("Patient reports fever for two days.")).toBeInTheDocument();
     expect(screen.getByText("Doctor advised fluids and paracetamol.")).toBeInTheDocument();
     expect(screen.getByLabelText("Transcribed")).toBeInTheDocument();
+  });
+
+  it("uses the provided back target for search-origin detail navigation", () => {
+    render(
+      <TranscriptSummaryScreen
+        recording={recording}
+        backHref="/search?patient_id=P-10481"
+        backLabel="Back to search results"
+      />
+    );
+
+    expect(screen.getByLabelText("Back to search results")).toHaveAttribute(
+      "href",
+      "/search?patient_id=P-10481"
+    );
   });
 
   it("generates summaries and switches to the editable summary view", async () => {
@@ -154,6 +173,8 @@ describe("TranscriptSummaryScreen", () => {
       />
     );
 
+    expect(screen.getByText("PDF generated")).toBeInTheDocument();
+    expect(screen.queryByText("clinic/doctor/recording.pdf")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute(
       "href",
       "https://signed.example.com/recording.pdf"
@@ -161,6 +182,15 @@ describe("TranscriptSummaryScreen", () => {
   });
 
   it("generates PDFs after a summary is saved", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(window.HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView
+    });
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
     const generatePdf = vi.fn(async () => ({
       recording_id: recording.id,
       pdf_storage_path: "clinic/doctor/recording.pdf",
@@ -179,13 +209,29 @@ describe("TranscriptSummaryScreen", () => {
       />
     );
 
+    const scrollContainer = screen.getByTestId("transcript-summary-scroll-container");
+    const pdfPanel = screen.getByTestId("pdf-panel");
+    Object.defineProperties(scrollContainer, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, value: 0, writable: true }
+    });
+    Object.defineProperties(pdfPanel, {
+      offsetTop: { configurable: true, value: 320 },
+      offsetHeight: { configurable: true, value: 40 }
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
 
     await waitFor(() => {
       expect(screen.getByText("PDF generated.")).toBeInTheDocument();
     });
+    expect(scrollContainer.scrollTop).toBe(260);
+    expect(scrollIntoView).not.toHaveBeenCalled();
     expect(generatePdf).toHaveBeenCalledWith(recording.id);
     expect(screen.getByLabelText("PDF saved")).toBeInTheDocument();
+    expect(screen.getByText("PDF generated")).toBeInTheDocument();
+    expect(screen.queryByText("clinic/doctor/recording.pdf")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute(
       "href",
       "https://signed.example.com/recording.pdf"
