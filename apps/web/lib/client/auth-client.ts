@@ -80,6 +80,62 @@ export function authErrorMessage(error: unknown): string {
   return "Authentication failed. Please try again.";
 }
 
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "");
+  }
+
+  return String(error ?? "");
+}
+
+function errorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null) {
+    return "";
+  }
+
+  const candidate = error as { code?: unknown; status?: unknown; name?: unknown };
+  return [candidate.code, candidate.status, candidate.name].map((value) => String(value ?? "")).join(" ");
+}
+
+export function signupErrorMessage(error: unknown): string {
+  const text = errorText(error);
+  const metadata = `${text} ${errorCode(error)}`;
+
+  if (/already|registered|exists|duplicate|user_already_exists|email_exists/i.test(metadata)) {
+    return "Email is already registered. Log in instead.";
+  }
+
+  if (/rate|too many|429|over_email_send_rate_limit|email rate limit/i.test(metadata)) {
+    return "Too many signup attempts. Wait a few minutes, then try again. Reference: AUTH_SIGNUP_RATE_LIMIT.";
+  }
+
+  if (/smtp|mail|email.*deliver|send.*email|provider|relay/i.test(metadata)) {
+    return "BharatDoc could not send the confirmation email. Try again later or contact support. Reference: AUTH_SIGNUP_EMAIL_DELIVERY.";
+  }
+
+  if (/disabled|signup.*off|signups.*not allowed|not.*enabled/i.test(metadata)) {
+    return "Account creation is temporarily disabled. Contact BharatDoc support. Reference: AUTH_SIGNUP_DISABLED.";
+  }
+
+  if (/captcha|security check/i.test(metadata)) {
+    return "Complete the security check and try again. Reference: AUTH_SIGNUP_CAPTCHA.";
+  }
+
+  if (/weak.*password|password/i.test(metadata)) {
+    return "Use a stronger password with at least 8 characters.";
+  }
+
+  if (/invalid.*email|email/i.test(metadata)) {
+    return "Please enter a valid email.";
+  }
+
+  return "Unable to create account. Try again later or contact support. Reference: AUTH_SIGNUP_UNKNOWN.";
+}
+
 async function getSessionWithTimeout(supabase: SupabaseClient) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<null>((resolve) => {
@@ -112,8 +168,7 @@ export function createSupabaseAuthClient(): AuthClient {
       });
 
       if (error) {
-        const isDuplicate = /already|registered|exists/i.test(error.message);
-        throw new Error(isDuplicate ? "Email is already registered." : "Unable to create account. Please try again.");
+        throw new Error(signupErrorMessage(error));
       }
 
       if (!data.session?.access_token) {

@@ -13,6 +13,9 @@ function audioBlob(): Blob {
 
 const baseRecording: LocalRecording = {
   id: "local-recording",
+  authUserId: "auth-user-1",
+  doctorId: "doctor-1",
+  clinicId: "clinic-1",
   patientId: "P-10482",
   label: null,
   durationSeconds: 125,
@@ -34,6 +37,11 @@ describe("local recording repository", () => {
 
     const draft = await repository.createDraft({
       id: "draft-1",
+      scope: {
+        authUserId: "auth-user-1",
+        doctorId: "doctor-1",
+        clinicId: "clinic-1"
+      },
       patientId: " p-10482 ",
       label: "  Walk-in  ",
       recordedAt: "2026-04-23T06:12:00.000Z"
@@ -46,6 +54,9 @@ describe("local recording repository", () => {
 
     expect(draft).toMatchObject({
       id: "draft-1",
+      authUserId: "auth-user-1",
+      doctorId: "doctor-1",
+      clinicId: "clinic-1",
       patientId: "P-10482",
       label: "Walk-in",
       durationSeconds: 0,
@@ -169,6 +180,74 @@ describe("local recording repository", () => {
     );
 
     expect(records.map((record) => record.id)).toEqual(["local-recording"]);
+  });
+
+  it("filters local dashboard records by authenticated doctor scope", () => {
+    const records = mapLocalRecordingsToDashboardRecords(
+      [
+        baseRecording,
+        {
+          ...baseRecording,
+          id: "other-doctor",
+          doctorId: "doctor-2",
+          patientId: "P-OTHER"
+        },
+        {
+          ...baseRecording,
+          id: "legacy-unscoped",
+          authUserId: null,
+          doctorId: null,
+          clinicId: null,
+          patientId: "P-LEGACY"
+        }
+      ],
+      new Date("2026-04-23T09:00:00.000Z"),
+      {
+        authUserId: "auth-user-1",
+        doctorId: "doctor-1",
+        clinicId: "clinic-1"
+      }
+    );
+
+    expect(records.map((record) => record.patientId)).toEqual(["P-10482"]);
+  });
+
+  it("recovers interrupted recordings only for the matching authenticated scope", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      {
+        ...baseRecording,
+        id: "matching-recoverable",
+        captureState: "recording"
+      },
+      {
+        ...baseRecording,
+        id: "foreign-recoverable",
+        doctorId: "doctor-2",
+        captureState: "recording"
+      }
+    ]);
+
+    await expect(
+      repository.getLatestRecoverable({
+        authUserId: "auth-user-1",
+        doctorId: "doctor-1",
+        clinicId: "clinic-1"
+      })
+    ).resolves.toMatchObject({ id: "matching-recoverable" });
+    await expect(
+      repository.getLatestRecoverable({
+        authUserId: "auth-user-1",
+        doctorId: "doctor-2",
+        clinicId: "clinic-1"
+      })
+    ).resolves.toMatchObject({ id: "foreign-recoverable" });
+    await expect(
+      repository.getLatestRecoverable({
+        authUserId: "auth-user-1",
+        doctorId: "doctor-3",
+        clinicId: "clinic-1"
+      })
+    ).resolves.toBeNull();
   });
 
   it("sorts local dashboard records by newest first", () => {

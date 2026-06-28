@@ -17,6 +17,14 @@ describe("DashboardScreen", () => {
     expect(screen.getByRole("link", { name: /open settings/i })).toHaveAttribute("href", "/settings");
   });
 
+  it("renders a clear empty state when there are no visible records", () => {
+    render(<DashboardScreen records={[]} pendingApprovalsCount={0} />);
+
+    expect(screen.getByText("No consultations yet")).toBeInTheDocument();
+    expect(screen.getByText("Start a recording to add the first consultation for this hospital.")).toBeInTheDocument();
+    expect(screen.getByText("0 records · 0 pending transcriptions")).toBeInTheDocument();
+  });
+
   it("does not show a settings badge when there are zero pending approvals", () => {
     render(<DashboardScreen pendingApprovalsCount={0} />);
 
@@ -33,9 +41,12 @@ describe("DashboardScreen", () => {
     render(<DashboardScreen records={demoDashboardRecords} />);
 
     expect(screen.getByText("P-10482")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open recording P-10482" })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: "Open recording P-10482" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Local recording P-10482 awaiting transcription")).toBeInTheDocument();
+    expect(screen.getByText("Awaiting transcription")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume recording P-10482" })).toHaveAttribute(
       "href",
-      "/recordings/local-p-10482"
+      "/recordings/new"
     );
     expect(screen.getByText("Transcribed")).toBeInTheDocument();
     expect(screen.getByText("Summary ready")).toBeInTheDocument();
@@ -93,5 +104,66 @@ describe("DashboardScreen", () => {
 
     await expect(screen.findByText("P-LOCAL")).resolves.toBeInTheDocument();
     expect(screen.getByLabelText("Stored offline")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open recording P-LOCAL" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume recording P-LOCAL" })).toHaveAttribute(
+      "href",
+      "/recordings/new"
+    );
+  });
+
+  it("does not render unscoped or foreign local recordings when an authenticated scope is provided", async () => {
+    const matchingRecording: LocalRecording = {
+      id: "matching-local-recording",
+      authUserId: "auth-user-1",
+      doctorId: "doctor-1",
+      clinicId: "clinic-1",
+      patientId: "P-MATCH",
+      label: null,
+      durationSeconds: 30,
+      recordedAt: "2026-04-23T08:00:00.000Z",
+      updatedAt: "2026-04-23T08:00:00.000Z",
+      audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+      audioChunks: [new Blob(["audio"], { type: "audio/webm" })],
+      audioMimeType: "audio/webm",
+      captureState: "stopped",
+      syncState: "local",
+      serverRecordingId: null,
+      transcript: null,
+      error: null
+    };
+    const localRepository = createMemoryLocalRecordingRepository([
+      matchingRecording,
+      {
+        ...matchingRecording,
+        id: "foreign-local-recording",
+        doctorId: "doctor-2",
+        patientId: "P-FOREIGN"
+      },
+      {
+        ...matchingRecording,
+        id: "legacy-local-recording",
+        authUserId: null,
+        doctorId: null,
+        clinicId: null,
+        patientId: "P-LEGACY"
+      }
+    ]);
+
+    render(
+      <DashboardScreen
+        records={[]}
+        localRepository={localRepository}
+        localRecordingScope={{
+          authUserId: "auth-user-1",
+          doctorId: "doctor-1",
+          clinicId: "clinic-1"
+        }}
+        pendingApprovalsCount={0}
+      />
+    );
+
+    await expect(screen.findByText("P-MATCH")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("P-FOREIGN")).not.toBeInTheDocument();
+    expect(screen.queryByText("P-LEGACY")).not.toBeInTheDocument();
   });
 });

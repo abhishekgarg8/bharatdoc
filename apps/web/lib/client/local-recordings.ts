@@ -14,8 +14,17 @@ import {
 
 export type LocalRecordingSyncState = "local" | "syncing" | "synced" | "transcribing" | "transcribed" | "failed";
 
+export interface LocalRecordingScope {
+  authUserId: string;
+  doctorId: string;
+  clinicId: string | null;
+}
+
 export interface LocalRecording {
   id: string;
+  authUserId?: string | null;
+  doctorId?: string | null;
+  clinicId?: string | null;
   patientId: string | null;
   label: string | null;
   durationSeconds: number;
@@ -33,6 +42,7 @@ export interface LocalRecording {
 
 export interface LocalRecordingDraftInput {
   id?: string;
+  scope?: LocalRecordingScope | null;
   patientId?: string | null;
   label?: string | null;
   recordedAt?: string;
@@ -72,7 +82,7 @@ export interface LocalRecordingRepository {
   remove(id: string): Promise<void>;
   updateDraft(input: UpdateLocalRecordingDraftInput): Promise<LocalRecording>;
   appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording>;
-  getLatestRecoverable(): Promise<LocalRecording | null>;
+  getLatestRecoverable(scope?: LocalRecordingScope | null): Promise<LocalRecording | null>;
   finalize(input: FinalizeLocalRecordingInput): Promise<LocalRecording>;
   markSyncing(id: string): Promise<LocalRecording>;
   markSynced(id: string, serverRecordingId: string): Promise<LocalRecording>;
@@ -128,6 +138,26 @@ function sortByNewest(recordings: LocalRecording[]): LocalRecording[] {
   return [...recordings].sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt));
 }
 
+function scopeFields(scope: LocalRecordingScope | null | undefined) {
+  return {
+    authUserId: scope?.authUserId ?? null,
+    doctorId: scope?.doctorId ?? null,
+    clinicId: scope?.clinicId ?? null
+  };
+}
+
+export function localRecordingMatchesScope(recording: LocalRecording, scope?: LocalRecordingScope | null): boolean {
+  if (!scope) {
+    return true;
+  }
+
+  return (
+    recording.authUserId === scope.authUserId &&
+    recording.doctorId === scope.doctorId &&
+    recording.clinicId === scope.clinicId
+  );
+}
+
 function nextCaptureState(
   current: LocalRecordingCaptureState,
   nextState: LocalRecordingCaptureState | undefined
@@ -164,6 +194,7 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
     const timestamp = input.recordedAt ?? nowIso();
     return this.save({
       id: input.id ?? createLocalRecordingId(),
+      ...scopeFields(input.scope),
       patientId: normalizeOptionalPatientId(input.patientId),
       label: normalizeOptionalText(input.label),
       durationSeconds: 0,
@@ -210,12 +241,13 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
     });
   }
 
-  async getLatestRecoverable(): Promise<LocalRecording | null> {
+  async getLatestRecoverable(scope?: LocalRecordingScope | null): Promise<LocalRecording | null> {
     const recordings = await this.list();
 
     return (
       recordings.find(
         (recording) =>
+          localRecordingMatchesScope(recording, scope) &&
           (recording.captureState === "recording" || recording.captureState === "paused") &&
           Boolean(localRecordingAudioBlob(recording))
       ) ?? null
@@ -385,9 +417,11 @@ export function toLocalDashboardRecord(recording: LocalRecording, now = new Date
 
 export function mapLocalRecordingsToDashboardRecords(
   recordings: LocalRecording[],
-  now = new Date()
+  now = new Date(),
+  scope?: LocalRecordingScope | null
 ): LocalDashboardRecord[] {
   return sortByNewest(recordings)
+    .filter((recording) => localRecordingMatchesScope(recording, scope))
     .filter(isDashboardVisibleRecording)
     .map((recording) => toLocalDashboardRecord(recording, now));
 }

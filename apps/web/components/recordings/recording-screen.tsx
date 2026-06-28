@@ -16,6 +16,7 @@ import {
   createIndexedDbLocalRecordingRepository,
   localRecordingAudioBlob,
   type LocalRecording,
+  type LocalRecordingScope,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
 import { appendDeviceLog, flushDeviceLogs, type DeviceLogInput } from "@/lib/client/device-logs";
@@ -27,6 +28,7 @@ interface RecordingScreenProps {
   clinicName?: string;
   fetcher?: typeof fetch;
   localRepository?: LocalRecordingRepository;
+  localRecordingScope?: LocalRecordingScope;
   recorderFactory?: AudioRecorderFactory;
   useDemoRecorder?: boolean;
   onNavigate?: (href: string) => void;
@@ -54,6 +56,7 @@ export function RecordingScreen({
   clinicName = "Hospital",
   fetcher = fetch,
   localRepository,
+  localRecordingScope,
   recorderFactory,
   useDemoRecorder = false,
   onNavigate
@@ -66,6 +69,7 @@ export function RecordingScreen({
     recorderFactory ?? (useDemoRecorder ? createDemoAudioRecorder : createRecordRtcAudioRecorder);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const chunkUnsubscribeRef = useRef<(() => void) | null>(null);
+  const patientIdInputRef = useRef<HTMLInputElement>(null);
   const patientIdRef = useRef("");
   const labelRef = useRef("");
   const limitReachedRef = useRef(false);
@@ -78,6 +82,7 @@ export function RecordingScreen({
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shouldHighlightPatientId, setShouldHighlightPatientId] = useState(false);
   const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
 
   function logDeviceEvent(input: DeviceLogInput) {
@@ -145,7 +150,7 @@ export function RecordingScreen({
       }
 
       try {
-        const recoverable = await repository.getLatestRecoverable();
+        const recoverable = await repository.getLatestRecoverable(localRecordingScope);
 
         if (!isMounted || !recoverable) {
           return;
@@ -186,7 +191,7 @@ export function RecordingScreen({
     return () => {
       isMounted = false;
     };
-  }, [audioUrl, localRepository, phase, recording, repository]);
+  }, [audioUrl, localRepository, localRecordingScope, phase, recording, repository]);
 
   useEffect(() => {
     return () => {
@@ -206,7 +211,11 @@ export function RecordingScreen({
 
     try {
       const nextRecorder = await selectedRecorderFactory();
-      const draft = await repository.createDraft({ patientId, label });
+      const draft = await repository.createDraft({
+        patientId,
+        label,
+        ...(localRecordingScope ? { scope: localRecordingScope } : {})
+      });
       chunkUnsubscribeRef.current?.();
       chunkUnsubscribeRef.current = nextRecorder.onChunk(async (chunk) => {
         const updated = await repository.appendChunk({
@@ -363,18 +372,21 @@ export function RecordingScreen({
   async function transcribeNow() {
     let workingRecording = recording;
 
-    if (idToken && !isOnline) {
-      setError("Reconnect to transcribe. Audio stays saved on this device.");
-      setMessage(null);
-      return;
-    }
-
     if (workingRecording && (phase === "stopped" || phase === "failed")) {
       workingRecording = await persistEditableMetadata(workingRecording);
     }
 
     if (!normalizePatientId(workingRecording?.patientId ?? patientId)) {
       setError("Patient ID is required before transcription.");
+      setMessage(null);
+      setShouldHighlightPatientId(true);
+      patientIdInputRef.current?.focus();
+      window.requestAnimationFrame?.(() => patientIdInputRef.current?.focus());
+      return;
+    }
+
+    if (idToken && !isOnline) {
+      setError("Reconnect to transcribe. Audio stays saved on this device.");
       setMessage(null);
       return;
     }
@@ -505,12 +517,18 @@ export function RecordingScreen({
   const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped";
   const transcript = recording?.transcript;
   const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
-  const canTranscribe = Boolean(normalizePatientId(patientId)) && (!idToken || isOnline);
+  const patientIdErrorId = "recording-patient-id-error";
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
-        <header className="flex items-start gap-3 px-5 pb-4 pt-5">
+        <header
+          className="flex items-start gap-3 px-5 pb-4"
+          style={{
+            marginTop: "calc(-1 * var(--safe-area-top, 0px))",
+            paddingTop: "calc(1.25rem + var(--safe-area-top, 0px))"
+          }}
+        >
           <Link
             className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             href="/dashboard"
@@ -562,11 +580,25 @@ export function RecordingScreen({
               <label className="col-span-2 block">
                 <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
                   Patient ID
+                  <span className="ml-1 text-stamp" aria-hidden="true">
+                    *
+                  </span>
                 </span>
                 <input
-                  className="mt-2 min-h-12 w-full rounded-xl border border-rule bg-paper-deep px-3 font-mono text-base font-bold text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                  ref={patientIdInputRef}
+                  className={cn(
+                    "mt-2 min-h-12 w-full rounded-xl border bg-paper-deep px-3 font-mono text-base font-bold text-ink outline-none focus:ring-2",
+                    shouldHighlightPatientId
+                      ? "border-stamp ring-2 ring-stamp/15 focus:ring-stamp/20"
+                      : "border-rule focus:ring-terracotta/20"
+                  )}
                   value={patientId}
-                  onChange={(event) => setPatientId(event.target.value)}
+                  onChange={(event) => {
+                    setPatientId(event.target.value);
+                    if (normalizePatientId(event.target.value)) {
+                      setShouldHighlightPatientId(false);
+                    }
+                  }}
                   onBlur={() => {
                     if (recording && (phase === "stopped" || phase === "failed")) {
                       void persistEditableMetadata(recording);
@@ -575,6 +607,9 @@ export function RecordingScreen({
                   disabled={!canEditPatient}
                   placeholder="P-10482"
                   aria-label="Patient ID"
+                  aria-required="true"
+                  aria-invalid={shouldHighlightPatientId}
+                  aria-describedby={error === "Patient ID is required before transcription." ? patientIdErrorId : undefined}
                 />
               </label>
               <label className="col-span-2 block">
@@ -605,7 +640,14 @@ export function RecordingScreen({
           </section>
 
           {message ? <p className="mt-3 font-body text-xs font-semibold text-sage">{message}</p> : null}
-          {error ? <p className="mt-3 font-body text-xs font-semibold text-stamp">{error}</p> : null}
+          {error ? (
+            <p
+              id={error === "Patient ID is required before transcription." ? patientIdErrorId : undefined}
+              className="mt-3 font-body text-xs font-semibold text-stamp"
+            >
+              {error}
+            </p>
+          ) : null}
 
           {transcript ? (
             <section className="mt-4 rounded-xl border border-rule bg-paper p-4">
@@ -634,7 +676,7 @@ export function RecordingScreen({
                 <Save className="h-4 w-4" />
                 Later
               </Link>
-              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow} disabled={!canTranscribe}>
+              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow}>
                 Retry
               </BharatButton>
             </>
@@ -668,7 +710,7 @@ export function RecordingScreen({
                 <Save className="h-4 w-4" />
                 Later
               </Link>
-              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow} disabled={!canTranscribe}>
+              <BharatButton icon={<UploadCloud className="h-4 w-4" />} onClick={transcribeNow}>
                 Transcribe
               </BharatButton>
             </>
