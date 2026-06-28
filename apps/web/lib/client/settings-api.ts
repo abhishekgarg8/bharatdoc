@@ -19,6 +19,13 @@ export interface DoctorPreferencesBootstrap {
 export interface DoctorPreferencesUpdate {
   custom_prompt?: string | null;
   transcription_lang?: TranscriptionLanguage;
+  name?: string;
+  specialization?: string;
+}
+
+export interface DoctorProfileUpdate {
+  name: string;
+  specialization: string;
 }
 
 function authHeaders(idToken: string): HeadersInit {
@@ -66,4 +73,22 @@ export async function updateDoctorPreferences(
   const payload = await parseJsonOrThrow<{ preferences: DoctorPreferences }>(response, "Unable to save settings preferences.");
 
   return payload.preferences;
+}
+
+export async function updateDoctorProfile(
+  idToken: string,
+  input: DoctorProfileUpdate,
+  fetcher: typeof fetch = fetch
+): Promise<Doctor> {
+  const response = await fetcher("/api/settings/preferences", {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(idToken),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  const payload = await parseJsonOrThrow<{ doctor: Doctor }>(response, "Unable to save doctor profile.");
+
+  return payload.doctor;
 }

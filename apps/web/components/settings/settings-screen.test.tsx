@@ -49,14 +49,16 @@ describe("SettingsScreen", () => {
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit doctor profile" })).toBeInTheDocument();
     expect(screen.getByText("Hospital admin")).toBeInTheDocument();
     expect(screen.getByText("1 doctor waiting")).toBeInTheDocument();
-    expect(screen.getByText("Hospital code")).toBeInTheDocument();
+    expect(screen.getByText("Doctor join code")).toBeInTheDocument();
+    expect(screen.getByText(/Share with doctors to join/)).toBeInTheDocument();
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /language/i })).toHaveAttribute("href", "/settings/language");
     expect(screen.getByRole("link", { name: /summary prompt/i })).toHaveAttribute("href", "/settings/prompt");
-    expect(screen.getByText("Delete account")).toBeInTheDocument();
-    expect(screen.getByText("Not available in this build")).toBeInTheDocument();
+    expect(screen.queryByText("Delete account")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not available in this build")).not.toBeInTheDocument();
   });
 
   it("shows active doctor details when the owner expands the hospital team", async () => {
@@ -134,6 +136,47 @@ describe("SettingsScreen", () => {
 
     expect(screen.getByText("Default prompt")).toBeInTheDocument();
     expect(screen.queryByText("Edited")).not.toBeInTheDocument();
+  });
+
+  it("edits the signed-in doctor profile through the settings API", async () => {
+    const updatedDoctor = {
+      id: "owner-aparna",
+      firebase_uid: "firebase-owner",
+      clinic_id: "demo-clinic",
+      role: "owner" as const,
+      account_status: "active" as const,
+      name: "Dr. Nisha Shah",
+      specialization: "Pediatrics",
+      phone: "+91 98765 43210",
+      profile_photo_path: null,
+      custom_prompt: null,
+      transcription_lang: "auto" as const,
+      created_at: "2026-04-23T09:00:00.000Z"
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: updatedDoctor })) as unknown as typeof fetch;
+
+    render(<SettingsScreen demoMode pendingApprovals={pendingApprovals} idToken="id-token" fetcher={fetcher} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit doctor profile" }));
+    expect(await screen.findByRole("heading", { name: "Doctor profile" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Doctor name"), { target: { value: "Dr. Nisha Shah" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Pediatrics" } });
+    fireEvent.click(screen.getByRole("button", { name: /save profile/i }));
+
+    await waitFor(() => expect(screen.getByText("Profile saved.")).toBeInTheDocument());
+    expect(screen.getByText("Dr. Nisha Shah")).toBeInTheDocument();
+    expect(screen.getByText("Pediatrics")).toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith("/api/settings/preferences", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Dr. Nisha Shah",
+        specialization: "Pediatrics"
+      })
+    });
   });
 
   it("approves a pending doctor through the API and removes the card", async () => {
@@ -220,7 +263,7 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("copies the read-only hospital code without sending profile updates", async () => {
+  it("copies the read-only doctor join code without sending profile updates", async () => {
     const writeText = vi.fn(async () => undefined);
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch;
     vi.stubGlobal("navigator", {
@@ -241,10 +284,10 @@ describe("SettingsScreen", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /hospital code/i }));
+    fireEvent.click(screen.getByRole("button", { name: /doctor join code/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("MED42X"));
-    expect(screen.getByText("Hospital code copied.")).toBeInTheDocument();
+    expect(screen.getByText("Doctor join code copied.")).toBeInTheDocument();
     expect(fetcher).not.toHaveBeenCalled();
   });
 
