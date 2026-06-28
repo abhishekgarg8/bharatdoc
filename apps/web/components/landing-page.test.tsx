@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ImgHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { LandingPage } from "@/components/landing-page";
@@ -15,13 +15,12 @@ describe("LandingPage", () => {
   it("renders the photo-led hero with accurate v1 copy", () => {
     render(<LandingPage />);
 
-    expect(screen.getByText("AI-assisted documentation for Indian clinics")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Turn consultations into clinical notes." })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Record a consultation, review the AI-drafted summary, and save a PDF record tied to a Patient ID. Built for small clinics and patchy connectivity."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI Scribe for Indian clinics" })).toBeInTheDocument();
+    const heroWorkflow = screen.getByRole("list");
+    expect(within(heroWorkflow).getByText("Record")).toBeInTheDocument();
+    expect(within(heroWorkflow).getByText("Transcribe")).toBeInTheDocument();
+    expect(within(heroWorkflow).getByText("Review the AI-drafted summary")).toBeInTheDocument();
+    expect(within(heroWorkflow).getByText("Save that as a PDF automatically with the Patient ID")).toBeInTheDocument();
     expect(
       screen.getByRole("img", {
         name: "Indian doctor reviewing a consultation with a patient while a phone records on the desk"
@@ -51,5 +50,7 @@ describe("LandingPage", () => {
     expect(screen.queryByText(/WhatsApp native/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/ICD codes/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/listens in the background/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Turn consultations into clinical notes/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Record a consultation, review the AI-drafted summary/i)).not.toBeInTheDocument();
   });
 });
