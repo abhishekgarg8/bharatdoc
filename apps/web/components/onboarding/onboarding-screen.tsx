@@ -15,6 +15,35 @@ type OnboardingStep = "credentials" | "profile" | "hospital";
 type AuthMode = "signup" | "login";
 type HospitalMode = "join_hospital" | "create_hospital";
 
+const OTHER_SPECIALIZATION = "Other";
+const DOCTOR_SPECIALIZATIONS = [
+  "General Physician",
+  "Family Medicine",
+  "Internal Medicine",
+  "Pediatrics",
+  "Obstetrics and Gynecology",
+  "Cardiology",
+  "Anesthesiology",
+  "Dermatology",
+  "Emergency Medicine",
+  "Endocrinology",
+  "ENT",
+  "Gastroenterology",
+  "Nephrology",
+  "Neurology",
+  "Oncology",
+  "Ophthalmology",
+  "Orthopedics",
+  "Pathology",
+  "Psychiatry",
+  "Pulmonology",
+  "Radiology",
+  "Rheumatology",
+  "Surgery",
+  "Urology",
+  OTHER_SPECIALIZATION
+] as const;
+
 interface OnboardingScreenProps {
   authClient?: AuthClient;
   onNavigate?: (href: string) => void;
@@ -81,6 +110,10 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   const [password, setPassword] = useState(effectiveDemoMode ? demoDefaults.password : "");
   const [idToken, setIdToken] = useState<string | null>(null);
   const [profile, setProfile] = useState(effectiveDemoMode ? demoDefaults.profile : { name: "", specialization: "" });
+  const [specializationChoice, setSpecializationChoice] = useState(
+    effectiveDemoMode ? demoDefaults.profile.specialization : ""
+  );
+  const [otherSpecialization, setOtherSpecialization] = useState("");
   const [hospitalMode, setHospitalMode] = useState<HospitalMode>("join_hospital");
   const [clinicCode, setClinicCode] = useState(effectiveDemoMode ? demoDefaults.clinicCode : "");
   const [clinicLookupResult, setClinicLookupResult] = useState<ClinicLookupResponse | null>(
@@ -172,8 +205,35 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
       return;
     }
 
+    if (!profile.name.trim()) {
+      setError("Enter your full name.");
+      return;
+    }
+
+    if (!profile.specialization.trim()) {
+      setError("Select your specialization.");
+      return;
+    }
+
     setError(null);
     setStep("hospital");
+  }
+
+  function handleSpecializationChoice(value: string) {
+    setSpecializationChoice(value);
+    setError(null);
+
+    if (value === OTHER_SPECIALIZATION) {
+      setProfile((current) => ({ ...current, specialization: otherSpecialization }));
+      return;
+    }
+
+    setProfile((current) => ({ ...current, specialization: value }));
+  }
+
+  function handleOtherSpecialization(value: string) {
+    setOtherSpecialization(value);
+    setProfile((current) => ({ ...current, specialization: value }));
   }
 
   async function handleClinicLookup(): Promise<ClinicLookupResponse | null> {
@@ -352,11 +412,18 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
         {step === "profile" ? (
           <Panel title="Profile details" icon={<FileText className="h-4 w-4 text-terracotta" />}>
             <TextField label="Full name" value={profile.name} onChange={(value) => setProfile((current) => ({ ...current, name: value }))} />
-            <TextField
-              label="Specialization"
-              value={profile.specialization}
-              onChange={(value) => setProfile((current) => ({ ...current, specialization: value }))}
+            <SpecializationSelect
+              value={specializationChoice}
+              onChange={handleSpecializationChoice}
             />
+            {specializationChoice === OTHER_SPECIALIZATION ? (
+              <TextField
+                label="Other specialization"
+                value={otherSpecialization}
+                onChange={handleOtherSpecialization}
+                placeholder="Enter your specialization"
+              />
+            ) : null}
             <BharatButton className="mt-3 w-full" onClick={handleProfileContinue}>
               Continue
             </BharatButton>
@@ -474,6 +541,31 @@ function Panel({ children, title, icon }: { children: React.ReactNode; title: st
       </div>
       {children}
     </div>
+  );
+}
+
+function SpecializationSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1 block font-body text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+        Specialization
+      </span>
+      <select
+        className="w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-body text-sm font-semibold text-ink outline-none focus:border-terracotta focus:ring-2 focus:ring-terracotta/20"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="Specialization"
+      >
+        <option value="" disabled>
+          Select specialization
+        </option>
+        {DOCTOR_SPECIALIZATIONS.map((specialization) => (
+          <option key={specialization} value={specialization}>
+            {specialization}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

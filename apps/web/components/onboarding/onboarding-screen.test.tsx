@@ -88,6 +88,8 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await screen.findByText("Profile details");
     expect(screen.queryByLabelText(/medical registration no/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Dr. Aparna Iyer" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Pediatrics" } });
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
     await screen.findByText("Your hospital");
@@ -114,6 +116,38 @@ describe("OnboardingScreen", () => {
       clinic_code: "MED42X"
     });
     expect(registerBody.profile).not.toHaveProperty("medical_reg_no");
+    expect(registerBody.profile).toMatchObject({
+      name: "Dr. Aparna Iyer",
+      specialization: "Pediatrics"
+    });
+  });
+
+  it("uses an Other specialization text field when the dropdown value is Other", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(async () => "verified-id-token"),
+      signInWithPassword: vi.fn(async () => "verified-id-token"),
+      getCurrentIdToken: vi.fn(async () => null),
+      signOut: vi.fn()
+    };
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await screen.findByText("Profile details");
+    expect(screen.getByRole("combobox", { name: "Specialization" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "General Physician" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Other" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Dr. Kavita Rao" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Other" } });
+    expect(screen.getByLabelText("Other specialization")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Other specialization"), { target: { value: "Sports Medicine" } });
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+    await screen.findByText("Your hospital");
   });
 
   it("supports deterministic demo onboarding without external auth or API calls", async () => {
