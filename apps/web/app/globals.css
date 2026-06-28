@@ -6,6 +6,10 @@
   --font-display: "Instrument Serif";
   --font-body: "Figtree";
   --font-mono: "JetBrains Mono";
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
 }
 
 * {
@@ -30,4 +34,21 @@ body {
     radial-gradient(ellipse at 20% 0%, rgba(214, 138, 60, 0.04), transparent 50%),
     radial-gradient(ellipse at 80% 100%, rgba(194, 74, 42, 0.03), transparent 50%),
     #faf5ea;
+}
+
+html[data-native-shell="capacitor"],
+html[data-native-shell="capacitor"] body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+html[data-native-shell="capacitor"] .paper-bg {
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+  padding-top: var(--safe-area-top);
+}
+
+html[data-native-shell="capacitor"] nav[aria-label="Primary navigation"],
+html[data-native-shell="capacitor"] footer {
+  padding-bottom: calc(0.75rem + var(--safe-area-bottom));
 }

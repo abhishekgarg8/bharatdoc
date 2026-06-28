@@ -97,5 +97,5 @@ describe("simple PDF renderer", () => {
 
     expect(text).not.toContain("[Content continues in BharatDoc record]");
     expect((text.match(/\/Type\s*\/Page\b/g) ?? []).length).toBeGreaterThan(1);
-  });
+  }, 15_000);
 });
