@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import type { AudioRecorder, RecordedAudioChunk } from "@/lib/client/audio-recorder";
 import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
@@ -38,9 +38,22 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
   };
 }
 
+const DEVICE_LOGS_URL = "/api/device-logs";
+const RECORDINGS_URL = "/api/recordings";
+const WORKER_TRANSCRIBE_URL = "https://worker.example.com/api/transcribe";
+
+function fetchUrl(call: readonly unknown[]): string {
+  return String(call[0]);
+}
+
 describe("RecordingScreen", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
+    window.localStorage.clear();
     Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
   });
 
@@ -211,22 +224,33 @@ describe("RecordingScreen", () => {
       status: "recorded",
       recorded_at: "2026-04-23T06:12:00.000Z"
     };
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ record: apiRecord }, { status: 201 }))
-      .mockResolvedValueOnce(
-        Response.json({
+    const fetcher = vi.fn(async (input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) => {
+      const url = String(input);
+
+      if (url === DEVICE_LOGS_URL) {
+        return Response.json({ accepted: 1 }, { status: 202 });
+      }
+
+      if (url === RECORDINGS_URL) {
+        return Response.json({ record: apiRecord }, { status: 201 });
+      }
+
+      if (url === WORKER_TRANSCRIBE_URL) {
+        return Response.json({
           recording_id: apiRecord.id,
           transcript: "Authenticated transcript.",
           audio_storage_path: "clinic/doctor/recording.webm",
           status: "transcribed"
-        })
-      ) as unknown as typeof fetch;
+        });
+      }
+
+      return Response.json({ error: { code: "UNEXPECTED_TEST_REQUEST", url } }, { status: 500 });
+    });
 
     render(
       <RecordingScreen
         idToken="id-token"
-        fetcher={fetcher}
+        fetcher={fetcher as unknown as typeof fetch}
         localRepository={repository}
         recorderFactory={async () => recorder}
         onNavigate={navigate}
@@ -242,38 +266,45 @@ describe("RecordingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(`/recordings/${apiRecord.id}`));
-    expect(fetcher).toHaveBeenNthCalledWith(
-      1,
-      "/api/recordings",
+    const recordingCall = fetcher.mock.calls.find((call) => fetchUrl(call) === RECORDINGS_URL);
+    expect(recordingCall).toEqual([
+      RECORDINGS_URL,
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ Authorization: "Bearer id-token" })
       })
-    );
-    expect(JSON.parse(String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body))).toMatchObject({
+    ]);
+    expect(JSON.parse(String((recordingCall?.[1] as RequestInit | undefined)?.body))).toMatchObject({
       patient_id: "P-10483",
       label: "Follow-up"
     });
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      "https://worker.example.com/api/transcribe",
+
+    const transcribeCall = fetcher.mock.calls.find((call) => fetchUrl(call) === WORKER_TRANSCRIBE_URL);
+    expect(transcribeCall).toEqual([
+      WORKER_TRANSCRIBE_URL,
       expect.objectContaining({
         method: "POST",
         headers: { Authorization: "Bearer id-token" },
         body: expect.any(FormData)
       })
-    );
+    ]);
   });
 
   it("does not call authenticated recording APIs when Patient ID is missing", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
-    const fetcher = vi.fn() as unknown as typeof fetch;
+    const fetcher = vi.fn(async (input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) => {
+      if (String(input) === DEVICE_LOGS_URL) {
+        return Response.json({ accepted: 1 }, { status: 202 });
+      }
+
+      return Response.json({ error: { code: "UNEXPECTED_TEST_REQUEST" } }, { status: 500 });
+    });
 
     render(
       <RecordingScreen
         idToken="id-token"
-        fetcher={fetcher}
+        fetcher={fetcher as unknown as typeof fetch}
         localRepository={repository}
         recorderFactory={async () => recorder}
         onNavigate={vi.fn()}
@@ -288,7 +319,10 @@ describe("RecordingScreen", () => {
     expect(screen.getByRole("button", { name: /transcribe/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
 
-    expect(fetcher).not.toHaveBeenCalled();
+    const protectedApiCalls = fetcher.mock.calls.filter((call) =>
+      [RECORDINGS_URL, WORKER_TRANSCRIBE_URL].includes(fetchUrl(call))
+    );
+    expect(protectedApiCalls).toHaveLength(0);
     expect((await repository.list())[0]).toMatchObject({
       patientId: null,
       captureState: "stopped",
@@ -337,23 +371,40 @@ describe("RecordingScreen", () => {
       status: "recorded",
       recorded_at: "2026-04-23T06:12:00.000Z"
     };
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ record: apiRecord }, { status: 201 }))
-      .mockResolvedValueOnce(Response.json({ error: { code: "WORKER_DOWN" } }, { status: 502 }))
-      .mockResolvedValueOnce(
-        Response.json({
+    let transcribeAttempts = 0;
+    const fetcher = vi.fn(async (input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) => {
+      const url = String(input);
+
+      if (url === DEVICE_LOGS_URL) {
+        return Response.json({ accepted: 1 }, { status: 202 });
+      }
+
+      if (url === RECORDINGS_URL) {
+        return Response.json({ record: apiRecord }, { status: 201 });
+      }
+
+      if (url === WORKER_TRANSCRIBE_URL) {
+        transcribeAttempts += 1;
+
+        if (transcribeAttempts === 1) {
+          return Response.json({ error: { code: "WORKER_DOWN" } }, { status: 502 });
+        }
+
+        return Response.json({
           recording_id: apiRecord.id,
           transcript: "Retry transcript.",
           audio_storage_path: "clinic/doctor/recording.webm",
           status: "transcribed"
-        })
-      ) as unknown as typeof fetch;
+        });
+      }
+
+      return Response.json({ error: { code: "UNEXPECTED_TEST_REQUEST", url } }, { status: 500 });
+    });
 
     render(
       <RecordingScreen
         idToken="id-token"
-        fetcher={fetcher}
+        fetcher={fetcher as unknown as typeof fetch}
         localRepository={repository}
         recorderFactory={async () => recorder}
         onNavigate={vi.fn()}
@@ -370,10 +421,8 @@ describe("RecordingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
 
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledTimes(3);
-    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/recordings", expect.any(Object));
-    expect(fetcher).toHaveBeenNthCalledWith(2, "https://worker.example.com/api/transcribe", expect.any(Object));
-    expect(fetcher).toHaveBeenNthCalledWith(3, "https://worker.example.com/api/transcribe", expect.any(Object));
+    expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === RECORDINGS_URL)).toHaveLength(1);
+    expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === WORKER_TRANSCRIBE_URL)).toHaveLength(2);
     expect((await repository.list())[0]).toMatchObject({
       serverRecordingId: "server-recording",
       syncState: "transcribed",

@@ -8,6 +8,12 @@
     "dev:web": "pnpm --filter @bharatdoc/web dev",
     "dev:worker": "pnpm --filter @bharatdoc/worker dev",
     "lint": "pnpm -r lint",
+    "mobile:assets": "pnpm --filter @bharatdoc/mobile run assets",
+    "mobile:build:android": "pnpm --filter @bharatdoc/mobile run build:android",
+    "mobile:doctor": "pnpm --filter @bharatdoc/mobile run doctor",
+    "mobile:open:android": "pnpm --filter @bharatdoc/mobile run open:android",
+    "mobile:open:ios": "pnpm --filter @bharatdoc/mobile run open:ios",
+    "mobile:sync": "pnpm --filter @bharatdoc/mobile run sync",
     "smoke:live-flow": "cd apps/web && node --env-file=../../.env ../../scripts/live-flow-smoke.mjs",
     "smoke:pwa": "cd apps/web && node ../../scripts/pwa-offline-smoke.mjs",
     "smoke:real-browser": "node --env-file=.env scripts/real-account-browser-e2e.mjs",
@@ -29,7 +35,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@railway/cli"
+      "@railway/cli",
+      "sharp"
     ]
   }
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { NativeShellBridge } from "@/components/native-shell-bridge";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -41,7 +42,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${instrumentSerif.variable} ${figtree.variable} ${jetBrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <NativeShellBridge />
+        {children}
+      </body>
     </html>
   );
 }
