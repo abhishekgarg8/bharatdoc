@@ -212,7 +212,21 @@ export function createSupabaseClinicAdminRepository(supabase: SupabaseClient): C
     },
 
     async updateClinicProfile(clinicId: string, input: ClinicProfileUpdate): Promise<Clinic> {
-      const { data, error } = await supabase.from("clinics").update(input).eq("id", clinicId).select("*").single();
+      const update: Record<string, string | null> = {};
+
+      if (input.name !== undefined) {
+        update.name = input.name;
+      }
+
+      if (input.code !== undefined) {
+        update.clinic_code = input.code;
+      }
+
+      if (input.address !== undefined) {
+        update.address = input.address;
+      }
+
+      const { data, error } = await supabase.from("clinics").update(update).eq("id", clinicId).select("*").single();
 
       if (error) {
         throw error;

@@ -59,6 +59,7 @@ export interface SettingsBootstrapSnapshot {
 
 export interface ClinicProfileUpdate {
   name?: string;
+  code?: string;
   address?: string | null;
 }
 

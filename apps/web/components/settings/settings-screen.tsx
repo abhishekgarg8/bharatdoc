@@ -14,7 +14,7 @@ import {
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
 import { updateDoctorProfile } from "@/lib/client/settings-api";
-import { DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
+import { CLINIC_CODE_LENGTH, DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
 import { cn } from "@/lib/utils";
 
 export interface SettingsDoctorProfile {
@@ -134,6 +134,7 @@ const defaultPendingApprovals: PendingApproval[] = [
     }
   }
 ];
+const ClinicCodePattern = /^[A-Z0-9]+$/;
 
 function initialForName(name: string): string {
   return name.replace(/^Dr\.\s*/i, "").trim().charAt(0).toUpperCase() || "D";
@@ -212,11 +213,15 @@ export function SettingsScreen({
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingClinic, setSavingClinic] = useState(false);
-  const [expandedPanel, setExpandedPanel] = useState<"active-doctors" | "rejected-doctors" | "clinic-profile" | null>(null);
+  const [savingClinicCode, setSavingClinicCode] = useState(false);
+  const [expandedPanel, setExpandedPanel] = useState<
+    "active-doctors" | "rejected-doctors" | "clinic-profile" | "doctor-join-code" | null
+  >(null);
   const [clinicForm, setClinicForm] = useState({
     name: clinicForState.name,
     address: clinicForState.address ?? ""
   });
+  const [clinicCodeForm, setClinicCodeForm] = useState(clinicForState.code);
   const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -400,6 +405,42 @@ export function SettingsScreen({
     }
   }
 
+  async function saveClinicCode() {
+    setError(null);
+    setMessage(null);
+
+    const normalizedCode = clinicCodeForm.trim().toUpperCase();
+
+    if (normalizedCode.length !== CLINIC_CODE_LENGTH || !ClinicCodePattern.test(normalizedCode)) {
+      setError(`Doctor join code must be exactly ${CLINIC_CODE_LENGTH} letters or numbers.`);
+      return;
+    }
+
+    setSavingClinicCode(true);
+
+    try {
+      if (!idToken && !allowLocalDemoWrites) {
+        throw new Error("Authentication is required.");
+      }
+
+      const updatedClinic = idToken
+        ? await updateClinicProfile(idToken, { code: normalizedCode }, fetcher)
+        : {
+            ...clinicState,
+            code: normalizedCode
+          };
+
+      setClinicState(updatedClinic);
+      setClinicCodeForm(updatedClinic.code);
+      setMessage("Doctor join code saved.");
+      setExpandedPanel(null);
+    } catch {
+      setError("Unable to save doctor join code.");
+    } finally {
+      setSavingClinicCode(false);
+    }
+  }
+
   async function removeDoctor(member: SettingsActiveDoctor) {
     setWorkingRequestId(member.id);
     setError(null);
@@ -460,7 +501,7 @@ export function SettingsScreen({
     }
   }
 
-  function togglePanel(panel: "active-doctors" | "rejected-doctors" | "clinic-profile") {
+  function togglePanel(panel: "active-doctors" | "rejected-doctors" | "clinic-profile" | "doctor-join-code") {
     setMessage(null);
     setError(null);
     setExpandedPanel((current) => (current === panel ? null : panel));
@@ -471,22 +512,6 @@ export function SettingsScreen({
     setError(null);
     if (typeof ownerReviewRef.current?.scrollIntoView === "function") {
       ownerReviewRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
-    }
-  }
-
-  async function copyDoctorJoinCode() {
-    if (!clinicState.code) {
-      return;
-    }
-
-    setError(null);
-    setMessage(null);
-
-    try {
-      await navigator.clipboard.writeText(clinicState.code);
-      setMessage("Doctor join code copied.");
-    } catch {
-      setError("Unable to copy doctor join code.");
     }
   }
 
@@ -635,9 +660,56 @@ export function SettingsScreen({
                   </span>
                 }
                 icon={<Clipboard className="h-4 w-4" />}
-                onClick={copyDoctorJoinCode}
+                onClick={() => togglePanel("doctor-join-code")}
+                expanded={expandedPanel === "doctor-join-code"}
               />
             </SettingsGroup>
+          ) : null}
+
+          {canManageClinic && expandedPanel === "doctor-join-code" ? (
+            <section className="mb-5 rounded-[14px] border border-rule bg-paper px-4 py-4 shadow-[0_1px_0_#E5DAC5]">
+              <div className="mb-4">
+                <h2 className="font-body text-sm font-bold text-ink">Doctor join code</h2>
+                <p className="mt-1 font-body text-[11.5px] leading-relaxed text-ink-muted">
+                  Doctors use this code to request access to the hospital workspace.
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
+                  Join code
+                </span>
+                <input
+                  className="mt-2 min-h-11 w-full rounded-xl border border-rule bg-paper-deep px-3 font-mono text-sm uppercase tracking-[0.14em] text-ink outline-none focus:ring-2 focus:ring-terracotta/20"
+                  value={clinicCodeForm}
+                  maxLength={CLINIC_CODE_LENGTH}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  onChange={(event) => setClinicCodeForm(event.target.value.toUpperCase())}
+                  aria-label="Doctor join code"
+                />
+              </label>
+              <p className="mt-2 font-body text-[11px] text-ink-muted">
+                Use exactly {CLINIC_CODE_LENGTH} letters or numbers.
+              </p>
+
+              <div className="mt-4 flex gap-2">
+                <BharatButton className="flex-1" disabled={savingClinicCode} onClick={saveClinicCode}>
+                  Save code
+                </BharatButton>
+                <BharatButton
+                  className="flex-1"
+                  variant="ghost"
+                  onClick={() => {
+                    setClinicCodeForm(clinicState.code);
+                    setExpandedPanel(null);
+                    setError(null);
+                  }}
+                >
+                  Cancel
+                </BharatButton>
+              </div>
+            </section>
           ) : null}
 
           {canManageClinic && expandedPanel === "active-doctors" ? (
@@ -852,8 +924,8 @@ export function SettingsScreen({
           ) : null}
 
           <SettingsGroup title="About">
-            <SettingsRow title="Help & support" subtitle="Not configured yet" />
-            <SettingsRow title="Terms and privacy" subtitle="Not configured yet" />
+            <SettingsRow title="Help & support" subtitle="FAQs and support details" href="/help-center" />
+            <SettingsRow title="Terms and privacy" subtitle="Terms of use and privacy policy" href="/terms-privacy" />
             <SettingsRow title="Version" subtitle="v0.9.1 · MVP" />
           </SettingsGroup>
 

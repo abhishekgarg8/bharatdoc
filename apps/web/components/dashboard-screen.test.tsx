@@ -10,6 +10,8 @@ describe("DashboardScreen", () => {
 
     expect(screen.getByText("Dr. Aparna Iyer")).toBeInTheDocument();
     expect(screen.getByText("Sunrise Hospital, Pune")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Consultations" })).toBeInTheDocument();
+    expect(screen.queryByText("Today's consultations")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start recording/i })).toHaveAttribute("href", "/recordings/new");
     expect(screen.getByRole("link", { name: /search by patient id/i })).toHaveAttribute("href", "/search");
     expect(screen.getByRole("link", { name: /open settings/i })).toHaveAttribute("href", "/settings");
