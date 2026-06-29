@@ -136,6 +136,7 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Rename the dashboard list heading from "Today's consultations" to "Consultations" with focused tests and browser screenshot verification.
 - [x] Add owner-scoped consultation deletion for dashboard and recording detail, including storage cleanup, local-audio cleanup, focused tests, and browser screenshot verification.
 - [x] Replace the landing hero workflow list with a concise doctor-facing marketing line, focused test, and mobile screenshot verification.
+- [x] Add Vercel Speed Insights to the root app layout using the documented Next.js component integration.
 
 ### 11. Production diagnostic logging and transcription recovery
 
