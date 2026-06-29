@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { NativeShellBridge } from "@/components/native-shell-bridge";
 import "./globals.css";
 
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <NativeShellBridge />
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );
