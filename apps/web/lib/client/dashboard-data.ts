@@ -13,6 +13,7 @@ export interface DashboardRecord {
   recordedAt?: string;
   pdfStoragePath?: string | null;
   pdfSignedUrl?: string | null;
+  canEdit?: boolean;
   offline?: boolean;
 }
 
@@ -27,6 +28,7 @@ export interface DashboardApiRecord {
   recorded_at: string;
   pdf_storage_path?: string | null;
   pdf_signed_url?: string | null;
+  can_edit?: boolean;
 }
 
 export interface DashboardRecordListResponse {
@@ -172,7 +174,8 @@ export function mapApiRecordingToDashboardRecord(record: DashboardApiRecord, now
     status: record.status,
     recordedAt: record.recorded_at,
     pdfStoragePath: record.pdf_storage_path ?? null,
-    pdfSignedUrl: record.pdf_signed_url ?? null
+    pdfSignedUrl: record.pdf_signed_url ?? null,
+    canEdit: record.can_edit ?? true
   };
 }
 

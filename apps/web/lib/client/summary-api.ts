@@ -29,6 +29,10 @@ export interface WorkerPdfResponse {
   status: "pdf_saved";
 }
 
+export interface DeleteRecordingResponse {
+  recording_id: string;
+}
+
 export async function fetchRecordingDetail(
   idToken: string,
   recordingId: string,
@@ -112,4 +116,19 @@ export async function generateRecordingPdf(
   });
 
   return parseJsonOrThrow<WorkerPdfResponse>(response, "Unable to generate PDF.");
+}
+
+export async function deleteRecording(
+  idToken: string,
+  recordingId: string,
+  fetcher: typeof fetch = fetch
+): Promise<DeleteRecordingResponse> {
+  const response = await fetcher(`/api/recordings/${encodeURIComponent(recordingId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${idToken}`
+    }
+  });
+
+  return parseJsonOrThrow<DeleteRecordingResponse>(response, "Unable to delete consultation.");
 }

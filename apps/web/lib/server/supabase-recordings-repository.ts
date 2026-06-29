@@ -32,6 +32,13 @@ function toRecordingListItem(row: RecordingWithDoctorRow): RecordingListItem {
   };
 }
 
+function toDeletedRecordingListItem(row: Recording): RecordingListItem {
+  return {
+    ...row,
+    doctor_name: null
+  };
+}
+
 export function createSupabaseRecordingsRepository(supabase: SupabaseClient): RecordingsRepository {
   return {
     async findDoctorByAuthUid(authUid: string): Promise<Doctor | null> {
@@ -188,6 +195,54 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       }
 
       return toRecordingListItem(data as RecordingWithDoctorRow);
+    },
+
+    async deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null> {
+      const { data, error } = await supabase
+        .from("recordings")
+        .delete()
+        .eq("id", recordingId)
+        .eq("doctor_id", doctorId)
+        .select("*")
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? toDeletedRecordingListItem(data as Recording) : null;
+    },
+
+    async removeRecordingStorageObjects(input): Promise<void> {
+      const removals: PromiseLike<unknown>[] = [];
+
+      if (input.audioStoragePath) {
+        removals.push(
+          supabase.storage
+            .from("audio")
+            .remove([input.audioStoragePath])
+            .then(({ error }) => {
+              if (error) {
+                throw error;
+              }
+            })
+        );
+      }
+
+      if (input.pdfStoragePath) {
+        removals.push(
+          supabase.storage
+            .from("pdfs")
+            .remove([input.pdfStoragePath])
+            .then(({ error }) => {
+              if (error) {
+                throw error;
+              }
+            })
+        );
+      }
+
+      await Promise.all(removals);
     },
 
     async createPdfSignedUrl(path: string): Promise<string> {

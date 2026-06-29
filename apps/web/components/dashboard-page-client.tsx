@@ -12,6 +12,7 @@ import {
 } from "@/lib/client/dashboard-data";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
+import { deleteRecording } from "@/lib/client/summary-api";
 import type { Doctor } from "@bharatdoc/shared";
 
 interface DashboardPageClientProps {
@@ -36,6 +37,7 @@ export function DashboardPageClient({
   const [clinicName, setClinicName] = useState<string | null>(allowDemoFallback ? "Sunrise Hospital, Pune" : null);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(allowDemoFallback ? 1 : 0);
   const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
+  const [idToken, setIdToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,6 +59,7 @@ export function DashboardPageClient({
         return;
       }
 
+      setIdToken(idToken);
       let didRedirect = false;
 
       try {
@@ -117,9 +120,20 @@ export function DashboardPageClient({
     return <PageError message={error} />;
   }
 
+  async function deleteDashboardRecording(record: DashboardRecord): Promise<void> {
+    if (idToken) {
+      await deleteRecording(idToken, record.id, fetcher);
+    } else if (!allowDemoFallback) {
+      throw new Error("Authentication is required.");
+    }
+
+    setRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id));
+  }
+
   const screenProps = {
     records,
     pendingApprovalsCount,
+    onDeleteRecording: deleteDashboardRecording,
     ...(doctor
       ? {
           localRecordingScope: {

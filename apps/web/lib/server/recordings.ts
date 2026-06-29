@@ -27,6 +27,7 @@ export interface DashboardRecording {
   recorded_at: string;
   pdf_storage_path: string | null;
   pdf_signed_url: string | null;
+  can_edit: boolean;
 }
 
 export interface DashboardClinicContext {
@@ -87,6 +88,11 @@ export interface RecordingsRepository {
     doctorId: string;
     summary: string;
   }): Promise<RecordingListItem>;
+  deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null>;
+  removeRecordingStorageObjects(input: {
+    audioStoragePath: string | null;
+    pdfStoragePath: string | null;
+  }): Promise<void>;
   createPdfSignedUrl(path: string): Promise<string>;
 }
 
@@ -182,7 +188,8 @@ export function toDashboardRecording(
   recording: RecordingListItem,
   fallbackDoctorName: string,
   clinicName: string | null = null,
-  pdfSignedUrl: string | null = null
+  pdfSignedUrl: string | null = null,
+  currentDoctorId?: string
 ): DashboardRecording {
   return {
     id: recording.id,
@@ -194,7 +201,8 @@ export function toDashboardRecording(
     status: recording.status,
     recorded_at: recording.recorded_at,
     pdf_storage_path: recording.pdf_storage_path,
-    pdf_signed_url: pdfSignedUrl
+    pdf_signed_url: pdfSignedUrl,
+    can_edit: currentDoctorId ? recording.doctor_id === currentDoctorId : true
   };
 }
 
@@ -229,7 +237,7 @@ export async function listDashboardRecordingsForDoctor(
   const clinicId = requireClinicId(doctor);
 
   const recordings = await repository.listRecentClinicRecordings(clinicId, clampLimit(limit, 10));
-  return recordings.map((recording) => toDashboardRecording(recording, doctor.name));
+  return recordings.map((recording) => toDashboardRecording(recording, doctor.name, null, null, doctor.id));
 }
 
 export async function getDashboardSnapshotForUser(
@@ -258,7 +266,9 @@ export async function getDashboardSnapshotForUser(
     doctor,
     clinic: clinic ? toDashboardClinicContext(clinic) : null,
     pending_approvals_count: pendingApprovalsCount,
-    records: recordings.map((recording) => toDashboardRecording(recording, doctor.name, clinic?.name ?? null))
+    records: recordings.map((recording) =>
+      toDashboardRecording(recording, doctor.name, clinic?.name ?? null, null, doctor.id)
+    )
   };
 }
 
@@ -325,7 +335,8 @@ export async function searchPatientRecordingsForClinic(
         recording,
         recording.doctor_name ?? doctor.name,
         clinicName,
-        recording.pdf_storage_path ? await repository.createPdfSignedUrl(recording.pdf_storage_path) : null
+        recording.pdf_storage_path ? await repository.createPdfSignedUrl(recording.pdf_storage_path) : null,
+        doctor.id
       )
     )
   );
@@ -357,6 +368,27 @@ export async function saveRecordingSummaryForDoctor(
   });
 
   return toRecordingDetail(updated, doctor.name, null, doctor.id);
+}
+
+export async function deleteRecordingForDoctor(
+  user: VerifiedUser,
+  recordingId: string | null | undefined,
+  repository: RecordingsRepository
+): Promise<{ recording_id: string }> {
+  const doctor = await requireActiveDoctorContext(user, repository);
+  requireClinicId(doctor);
+  const deleted = await repository.deleteRecordingForDoctor(requireRecordingId(recordingId), doctor.id);
+
+  if (!deleted) {
+    throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
+  }
+
+  await repository.removeRecordingStorageObjects({
+    audioStoragePath: deleted.audio_storage_path,
+    pdfStoragePath: deleted.pdf_storage_path
+  });
+
+  return { recording_id: deleted.id };
 }
 
 export async function createRecordingMetadataForDoctor(

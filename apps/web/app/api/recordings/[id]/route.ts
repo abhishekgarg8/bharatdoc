@@ -1,7 +1,7 @@
 import { verifyRequestUser } from "@/lib/server/auth";
 import { createSupabaseAuthVerifier } from "@/lib/server/supabase-auth";
 import { errorResponse } from "@/lib/server/errors";
-import { getRecordingDetailBootstrapForDoctor } from "@/lib/server/recordings";
+import { deleteRecordingForDoctor, getRecordingDetailBootstrapForDoctor } from "@/lib/server/recordings";
 import { createServerTiming, jsonWithServerTiming } from "@/lib/server/server-timing";
 import { createSupabaseRecordingsRepository } from "@/lib/server/supabase-recordings-repository";
 import { createSupabaseServerClient } from "@/lib/server/supabase";
@@ -26,6 +26,20 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
 
     return jsonWithServerTiming(bootstrap, timing);
+  } catch (error) {
+    return errorResponse(error, request);
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  const timing = createServerTiming();
+
+  try {
+    const user = await timing.measure("auth", () => verifyRequestUser(request, createSupabaseAuthVerifier()));
+    const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
+    const result = await timing.measure("recording_delete", () => deleteRecordingForDoctor(user, params.id, repository));
+
+    return jsonWithServerTiming(result, timing);
   } catch (error) {
     return errorResponse(error, request);
   }

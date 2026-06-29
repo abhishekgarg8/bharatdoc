@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  deleteRecording,
   fetchRecordingDetail,
   generateRecordingPdf,
   saveRecordingSummary,
@@ -106,6 +107,24 @@ describe("summary client API", () => {
     });
     expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}/pdf`, {
       method: "POST",
+      headers: {
+        Authorization: "Bearer id-token"
+      }
+    });
+  });
+
+  it("deletes recordings through the recording endpoint", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        recording_id: apiRecording.id
+      })
+    ) as unknown as typeof fetch;
+
+    await expect(deleteRecording("id-token", apiRecording.id, fetcher)).resolves.toEqual({
+      recording_id: apiRecording.id
+    });
+    expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}`, {
+      method: "DELETE",
       headers: {
         Authorization: "Bearer id-token"
       }

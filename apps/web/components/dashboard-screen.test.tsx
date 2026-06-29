@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { DashboardScreen } from "@/components/dashboard-screen";
 import { demoDashboardRecords, type DashboardRecord } from "@/lib/client/dashboard-data";
 import { createMemoryLocalRecordingRepository, type LocalRecording } from "@/lib/client/local-recordings";
@@ -14,6 +14,8 @@ describe("DashboardScreen", () => {
     expect(screen.queryByText("Today's consultations")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start recording/i })).toHaveAttribute("href", "/recordings/new");
     expect(screen.getByRole("link", { name: /search by patient id/i })).toHaveAttribute("href", "/search");
+    expect(screen.getByText("all records")).toBeInTheDocument();
+    expect(screen.queryByText("hospital")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open settings/i })).toHaveAttribute("href", "/settings");
   });
 
@@ -81,6 +83,51 @@ describe("DashboardScreen", () => {
     expect(screen.getByText("1 record · 1 pending transcription")).toBeInTheDocument();
   });
 
+  it("confirms before deleting a server-backed consultation", async () => {
+    const record: DashboardRecord = {
+      id: "p-20001",
+      patientId: "P-20001",
+      time: "Today, 12:05",
+      duration: "4:18",
+      doctorName: "Dr. Nisha",
+      status: "transcribed",
+      recordedAt: "2026-04-23T06:35:00.000Z",
+      canEdit: true
+    };
+    const deleteRecording = vi.fn(async () => undefined);
+
+    render(<DashboardScreen records={[record]} onDeleteRecording={deleteRecording} pendingApprovalsCount={0} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete consultation P-20001" }));
+    expect(screen.getByText("Delete this consultation and recording?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(deleteRecording).toHaveBeenCalledWith(record));
+  });
+
+  it("hides delete controls for read-only same-clinic consultations", () => {
+    render(
+      <DashboardScreen
+        records={[
+          {
+            id: "p-20001",
+            patientId: "P-20001",
+            time: "Today, 12:05",
+            duration: "4:18",
+            doctorName: "Dr. Nisha",
+            status: "transcribed",
+            recordedAt: "2026-04-23T06:35:00.000Z",
+            canEdit: false
+          }
+        ]}
+        onDeleteRecording={vi.fn()}
+        pendingApprovalsCount={0}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Delete consultation P-20001" })).not.toBeInTheDocument();
+  });
+
   it("merges local device recordings into the dashboard", async () => {
     const localRecording: LocalRecording = {
       id: "local-recording",
@@ -109,6 +156,35 @@ describe("DashboardScreen", () => {
       "href",
       "/recordings/new"
     );
+  });
+
+  it("deletes local device recordings from IndexedDB after confirmation", async () => {
+    const localRecording: LocalRecording = {
+      id: "local-recording",
+      patientId: "P-LOCAL",
+      label: null,
+      durationSeconds: 30,
+      recordedAt: "2026-04-23T08:00:00.000Z",
+      updatedAt: "2026-04-23T08:00:00.000Z",
+      audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+      audioChunks: [new Blob(["audio"], { type: "audio/webm" })],
+      audioMimeType: "audio/webm",
+      captureState: "stopped",
+      syncState: "local",
+      serverRecordingId: null,
+      transcript: null,
+      error: null
+    };
+    const localRepository = createMemoryLocalRecordingRepository([localRecording]);
+
+    render(<DashboardScreen records={[]} localRepository={localRepository} pendingApprovalsCount={0} />);
+
+    await screen.findByText("P-LOCAL");
+    fireEvent.click(screen.getByRole("button", { name: "Delete consultation P-LOCAL" }));
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(screen.queryByText("P-LOCAL")).not.toBeInTheDocument());
+    await expect(localRepository.list()).resolves.toHaveLength(0);
   });
 
   it("does not render unscoped or foreign local recordings when an authenticated scope is provided", async () => {
