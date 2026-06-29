@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Doctor } from "@bharatdoc/shared";
 import {
   createRecordingMetadataForDoctor,
+  deleteRecordingForDoctor,
   getDashboardSnapshotForUser,
   getRecordingDetailForDoctor,
   listDashboardRecordingsForDoctor,
@@ -78,6 +79,8 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
       status: "summary_ready" as const,
       pdf_storage_path: null
     })),
+    deleteRecordingForDoctor: vi.fn(async () => recording),
+    removeRecordingStorageObjects: vi.fn(async () => undefined),
     createPdfSignedUrl: vi.fn(async () => "https://signed.example.com/recording.pdf")
   };
 }
@@ -99,7 +102,8 @@ describe("recordings service", () => {
         status: "transcribed",
         recorded_at: "2026-04-23T06:12:00.000Z",
         pdf_storage_path: null,
-        pdf_signed_url: null
+        pdf_signed_url: null,
+        can_edit: true
       }
     ]);
     expect(repository.listRecentClinicRecordings).toHaveBeenCalledWith(activeDoctor.clinic_id, 10);
@@ -145,6 +149,28 @@ describe("recordings service", () => {
     expect(repository.findClinicById).toHaveBeenCalledWith(activeDoctor.clinic_id);
     expect(repository.countPendingJoinRequests).not.toHaveBeenCalled();
     expect(repository.listRecentClinicRecordings).toHaveBeenCalledWith(activeDoctor.clinic_id, 10);
+  });
+
+  it("marks other doctors' dashboard recordings as read-only", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.listRecentClinicRecordings).mockResolvedValueOnce([
+      {
+        ...recording,
+        doctor_id: "99999999-9999-4999-8999-999999999999",
+        doctor_name: "Dr. Sameer"
+      }
+    ]);
+
+    await expect(
+      getDashboardSnapshotForUser({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, repository)
+    ).resolves.toMatchObject({
+      records: [
+        {
+          doctor_name: "Dr. Sameer",
+          can_edit: false
+        }
+      ]
+    });
   });
 
   it("returns real pending approval counts for owner dashboard snapshots", async () => {
@@ -339,6 +365,35 @@ describe("recordings service", () => {
       )
     ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
     expect(repository.updateRecordingSummary).not.toHaveBeenCalled();
+  });
+
+  it("deletes owned recordings and removes associated audio and PDFs", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.deleteRecordingForDoctor).mockResolvedValueOnce({
+      ...recording,
+      audio_storage_path: "clinic/doctor/recording.webm",
+      pdf_storage_path: "clinic/doctor/recording.pdf"
+    });
+
+    await expect(
+      deleteRecordingForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
+    ).resolves.toEqual({ recording_id: recording.id });
+
+    expect(repository.deleteRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
+    expect(repository.removeRecordingStorageObjects).toHaveBeenCalledWith({
+      audioStoragePath: "clinic/doctor/recording.webm",
+      pdfStoragePath: "clinic/doctor/recording.pdf"
+    });
+  });
+
+  it("does not allow same-clinic doctors to delete recordings they do not own", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.deleteRecordingForDoctor).mockResolvedValueOnce(null);
+
+    await expect(
+      deleteRecordingForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
+    ).rejects.toMatchObject({ code: "RECORDING_NOT_FOUND" });
+    expect(repository.removeRecordingStorageObjects).not.toHaveBeenCalled();
   });
 
   it("requires patient id, transcript, and summary text before saving summaries", async () => {

@@ -10,4 +10,13 @@ describe("supabase recordings repository source contract", () => {
     expect(source).toContain('.ilike("patient_id", patientIdSearchPattern(patientId))');
     expect(source).not.toContain('.eq("patient_id", patientId)');
   });
+
+  it("deletes owned recordings and cleans private audio and PDF objects", () => {
+    expect(source).toContain('async deleteRecordingForDoctor(recordingId: string, doctorId: string)');
+    expect(source).toContain('.eq("doctor_id", doctorId)');
+    expect(source).toContain('.from("audio")');
+    expect(source).toContain('.from("pdfs")');
+    expect(source).toContain(".remove([input.audioStoragePath])");
+    expect(source).toContain(".remove([input.pdfStoragePath])");
+  });
 });

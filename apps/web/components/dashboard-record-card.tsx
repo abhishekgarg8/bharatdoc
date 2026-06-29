@@ -1,13 +1,29 @@
-import { ChevronRight, WifiOff } from "lucide-react";
+import { ChevronRight, Trash2, WifiOff } from "lucide-react";
 import Link from "next/link";
 import type { DashboardRecord } from "@/lib/client/dashboard-data";
 import { StatusTick } from "@/components/status-tick";
+import { BharatButton } from "@/components/bharat-button";
 
 interface DashboardRecordCardProps {
   record: DashboardRecord;
+  deleteState?: "idle" | "confirming" | "deleting";
+  deleteError?: string | null;
+  onRequestDelete?: (record: DashboardRecord) => void;
+  onCancelDelete?: () => void;
+  onConfirmDelete?: (record: DashboardRecord) => void;
 }
 
-export function DashboardRecordCard({ record }: DashboardRecordCardProps) {
+export function DashboardRecordCard({
+  record,
+  deleteState = "idle",
+  deleteError,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete
+}: DashboardRecordCardProps) {
+  const canDelete = Boolean(onRequestDelete) && (record.offline || record.canEdit !== false);
+  const isConfirmingDelete = deleteState === "confirming";
+  const isDeleting = deleteState === "deleting";
   const content = (
     <>
       <div className="min-w-[68px] shrink-0 rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
@@ -38,32 +54,78 @@ export function DashboardRecordCard({ record }: DashboardRecordCardProps) {
     </>
   );
 
+  const deleteButton = canDelete ? (
+    <button
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-stamp transition active:scale-[0.98] disabled:opacity-60"
+      type="button"
+      aria-label={`Delete consultation ${record.patientId}`}
+      disabled={isDeleting}
+      onClick={() => onRequestDelete?.(record)}
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  ) : null;
+
+  const confirmation = isConfirmingDelete || isDeleting || deleteError ? (
+    <div className="border-t border-rule px-4 py-3">
+      <p className="font-body text-xs font-semibold text-ink">Delete this consultation and recording?</p>
+      <p className="mt-1 font-body text-[11px] leading-relaxed text-ink-muted">
+        This removes the consultation, transcript, summary, PDF, and stored audio.
+      </p>
+      {deleteError ? <p className="mt-2 font-body text-[11px] font-semibold text-stamp">{deleteError}</p> : null}
+      <div className="mt-3 flex gap-2">
+        <BharatButton className="min-h-10 flex-1 px-3 py-2 text-xs" variant="ghost" disabled={isDeleting} onClick={onCancelDelete}>
+          Cancel
+        </BharatButton>
+        <BharatButton
+          className="min-h-10 flex-1 bg-stamp px-3 py-2 text-xs text-white"
+          disabled={isDeleting}
+          onClick={() => onConfirmDelete?.(record)}
+        >
+          {isDeleting ? "Deleting" : "Delete"}
+        </BharatButton>
+      </div>
+    </div>
+  ) : null;
+
   if (record.offline) {
     return (
       <article
-        className="flex items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]"
+        className="overflow-hidden rounded-[14px] border border-rule bg-paper shadow-[0_1px_0_#E5DAC5]"
         aria-label={`Local recording ${record.patientId} awaiting transcription`}
       >
-        {content}
-        <Link
-          className="shrink-0 rounded-full border border-rule bg-paper-deep px-3 py-1.5 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
-          href="/recordings/new"
-          aria-label={`Resume recording ${record.patientId}`}
-        >
-          Resume
-        </Link>
+        <div className="flex items-center gap-3 p-4">
+          {content}
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              className="rounded-full border border-rule bg-paper-deep px-3 py-1.5 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
+              href="/recordings/new"
+              aria-label={`Resume recording ${record.patientId}`}
+            >
+              Resume
+            </Link>
+            {deleteButton}
+          </div>
+        </div>
+        {confirmation}
       </article>
     );
   }
 
   return (
-    <Link
-      className="flex items-center gap-3 rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5] transition active:scale-[0.99]"
-      href={`/recordings/${record.id}`}
-      aria-label={`Open recording ${record.patientId}`}
-    >
-      {content}
-      <ChevronRight className="h-4.5 w-4.5 shrink-0 text-ink-faint" />
-    </Link>
+    <article className="overflow-hidden rounded-[14px] border border-rule bg-paper shadow-[0_1px_0_#E5DAC5]">
+      <div className="flex items-center gap-2 p-4">
+        <Link
+          className="flex min-w-0 flex-1 items-center gap-3 transition active:scale-[0.99]"
+          href={`/recordings/${record.id}`}
+          aria-label={`Open recording ${record.patientId}`}
+        >
+          {content}
+          <ChevronRight className="h-4.5 w-4.5 shrink-0 text-ink-faint" />
+        </Link>
+        {deleteButton}
+      </div>
+      {confirmation}
+    </article>
   );
 }

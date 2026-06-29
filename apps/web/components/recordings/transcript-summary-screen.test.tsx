@@ -287,6 +287,33 @@ describe("TranscriptSummaryScreen", () => {
     expect(generatePdf).not.toHaveBeenCalled();
   });
 
+  it("confirms before deleting an editable consultation", async () => {
+    const deleteRecording = vi.fn(async () => undefined);
+
+    render(<TranscriptSummaryScreen recording={recording} onDeleteRecording={deleteRecording} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete consultation" }));
+    expect(screen.getByText("This cannot be undone.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(deleteRecording).toHaveBeenCalledWith(recording.id));
+  });
+
+  it("does not offer deletion for read-only consultations", () => {
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          canEdit: false,
+          summary: "Initial summary",
+          status: "summary_ready"
+        }}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Delete consultation" })).not.toBeInTheDocument();
+  });
+
   it("shows validation when saving an empty summary", () => {
     render(
       <TranscriptSummaryScreen

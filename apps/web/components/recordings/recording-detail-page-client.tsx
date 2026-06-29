@@ -11,7 +11,7 @@ import {
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
-import { fetchRecordingDetailBootstrap } from "@/lib/client/summary-api";
+import { deleteRecording, fetchRecordingDetailBootstrap } from "@/lib/client/summary-api";
 import {
   transcribeRecordingAudio,
   transcribeStoredRecordingAudio,
@@ -206,12 +206,33 @@ export function RecordingDetailPageClient({
     return result;
   }
 
+  async function removeMatchingLocalRecording(recordingIdToDelete: string): Promise<void> {
+    const localRecordings = await repository.list();
+    const matchingRecordings = localRecordings.filter(
+      (item) => item.id === recordingIdToDelete || item.serverRecordingId === recordingIdToDelete
+    );
+
+    await Promise.all(matchingRecordings.map((item) => repository.remove(item.id)));
+  }
+
+  async function deleteCurrentRecording(recordingIdToDelete: string): Promise<void> {
+    if (idToken) {
+      await deleteRecording(idToken, recordingIdToDelete, fetcher);
+    } else if (!allowDemoFallback) {
+      throw new Error("Authentication is required.");
+    }
+
+    await removeMatchingLocalRecording(recordingIdToDelete);
+    navigate(backNavigation.href);
+  }
+
   const detailProps = {
     recording,
     backHref: backNavigation.href,
     backLabel: backNavigation.label,
     fetcher,
     onGenerateTranscript: generateTranscriptFromLocalAudio,
+    onDeleteRecording: deleteCurrentRecording,
     ...(backNavigation.useHistoryBack ? { onBack: () => window.history.back() } : {}),
     ...(idToken ? { idToken } : {})
   };

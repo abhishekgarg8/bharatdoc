@@ -25,6 +25,7 @@ interface DashboardScreenProps {
   localRecordingScope?: LocalRecordingScope;
   pendingApprovalsCount?: number;
   pendingTranscriptionsCount?: number;
+  onDeleteRecording?: (record: DashboardRecord) => Promise<void>;
 }
 
 function doctorInitial(name: string): string {
@@ -42,9 +43,13 @@ export function DashboardScreen({
   localRepository,
   localRecordingScope,
   pendingApprovalsCount = 0,
-  pendingTranscriptionsCount
+  pendingTranscriptionsCount,
+  onDeleteRecording
 }: DashboardScreenProps) {
   const [localRecords, setLocalRecords] = useState<LocalDashboardRecord[]>([]);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const visibleRecords = useMemo(
     () => mergeDashboardRecords(records, localRecords),
     [records, localRecords]
@@ -80,6 +85,52 @@ export function DashboardScreen({
       isMounted = false;
     };
   }, [localRepository, localRecordingScope]);
+
+  async function deleteLocalRecord(record: DashboardRecord): Promise<boolean> {
+    const repository = localRepository ?? createIndexedDbLocalRecordingRepository();
+    const localRecording = (await repository.list()).find(
+      (item) => item.id === record.id || item.serverRecordingId === record.id
+    );
+
+    if (!localRecording) {
+      return false;
+    }
+
+    if (localRecording.serverRecordingId && onDeleteRecording) {
+      await onDeleteRecording({ ...record, id: localRecording.serverRecordingId, offline: false });
+    }
+
+    await repository.remove(localRecording.id);
+    setLocalRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id));
+    return true;
+  }
+
+  async function confirmDelete(record: DashboardRecord) {
+    setDeletingRecordId(record.id);
+    setDeleteError(null);
+
+    try {
+      if (record.offline) {
+        const didDeleteLocalRecord = await deleteLocalRecord(record);
+
+        if (!didDeleteLocalRecord && onDeleteRecording) {
+          await onDeleteRecording(record);
+        }
+      } else {
+        if (!onDeleteRecording) {
+          throw new Error("Delete is not available.");
+        }
+
+        await onDeleteRecording(record);
+      }
+
+      setConfirmingDeleteId(null);
+    } catch {
+      setDeleteError("Unable to delete consultation. Try again.");
+    } finally {
+      setDeletingRecordId(null);
+    }
+  }
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
@@ -118,7 +169,7 @@ export function DashboardScreen({
             <Search className="h-[18px] w-[18px] text-ink-muted" />
             <span className="flex-1 font-body text-sm text-ink-faint">Search by Patient ID</span>
             <span className="rounded border border-rule bg-paper px-1.5 py-0.5 font-mono text-[11px] text-ink-muted">
-              hospital
+              all records
             </span>
           </Link>
         </div>
@@ -139,7 +190,29 @@ export function DashboardScreen({
               </p>
             </div>
           ) : (
-            visibleRecords.map((record) => <DashboardRecordCard key={record.id} record={record} />)
+            visibleRecords.map((record) => (
+              <DashboardRecordCard
+                key={record.id}
+                record={record}
+                deleteState={
+                  deletingRecordId === record.id
+                    ? "deleting"
+                    : confirmingDeleteId === record.id
+                      ? "confirming"
+                      : "idle"
+                }
+                deleteError={confirmingDeleteId === record.id ? deleteError : null}
+                onRequestDelete={(nextRecord) => {
+                  setDeleteError(null);
+                  setConfirmingDeleteId(nextRecord.id);
+                }}
+                onCancelDelete={() => {
+                  setDeleteError(null);
+                  setConfirmingDeleteId(null);
+                }}
+                onConfirmDelete={(nextRecord) => void confirmDelete(nextRecord)}
+              />
+            ))
           )}
         </div>
 

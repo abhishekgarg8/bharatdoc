@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Download, FileCheck2, FileText, Save, Sparkles } from "lucide-react";
+import { ArrowLeft, Download, FileCheck2, FileText, Save, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/client/recording-detail-data";
 import { appendDeviceLog, flushDeviceLogs } from "@/lib/client/device-logs";
 import {
+  deleteRecording,
   generateRecordingPdf,
   saveRecordingSummary,
   summarizeRecording,
@@ -32,6 +33,7 @@ interface TranscriptSummaryScreenProps {
   onGenerateSummary?: (recordingId: string) => Promise<WorkerSummaryResponse>;
   onSaveSummary?: (recordingId: string, summary: string) => Promise<RecordingDetailRecord>;
   onGeneratePdf?: (recordingId: string) => Promise<WorkerPdfResponse>;
+  onDeleteRecording?: (recordingId: string) => Promise<void>;
 }
 
 type ActiveTab = "transcript" | "summary";
@@ -70,7 +72,8 @@ export function TranscriptSummaryScreen({
   onGenerateTranscript,
   onGenerateSummary,
   onSaveSummary,
-  onGeneratePdf
+  onGeneratePdf,
+  onDeleteRecording
 }: TranscriptSummaryScreenProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>(recording.summary ? "summary" : "transcript");
   const [transcript, setTranscript] = useState(recording.transcript ?? "");
@@ -82,6 +85,8 @@ export function TranscriptSummaryScreen({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -302,6 +307,30 @@ export function TranscriptSummaryScreen({
     }
   }
 
+  async function deleteCurrentRecording() {
+    if (!guardEditable()) {
+      return;
+    }
+
+    setMessage(null);
+    setError(null);
+    setDeleting(true);
+
+    try {
+      if (onDeleteRecording) {
+        await onDeleteRecording(recording.id);
+      } else if (idToken) {
+        await deleteRecording(idToken, recording.id, fetcher);
+      } else {
+        setMessage("Consultation deleted.");
+      }
+    } catch {
+      setError("Unable to delete consultation.");
+      setDeleting(false);
+      return;
+    }
+  }
+
   return (
     <main className="relative mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
@@ -482,6 +511,61 @@ export function TranscriptSummaryScreen({
 
           {message ? <p className="mt-3 font-body text-xs font-semibold text-sage">{message}</p> : null}
           {error ? <p className="mt-3 font-body text-xs font-semibold text-stamp">{error}</p> : null}
+
+          {canEditRecording ? (
+            <section className="mt-5 rounded-xl border border-stamp/25 bg-paper p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stamp/10 text-stamp">
+                  <Trash2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-body text-sm font-bold text-ink">Delete consultation</h2>
+                  <p className="mt-1 font-body text-xs leading-relaxed text-ink-muted">
+                    Remove this consultation, transcript, summary, generated PDF, and stored audio.
+                  </p>
+                </div>
+              </div>
+
+              {confirmingDelete ? (
+                <div className="mt-3 rounded-lg border border-stamp/25 bg-paper-deep p-3">
+                  <p className="font-body text-xs font-semibold text-ink">This cannot be undone.</p>
+                  <div className="mt-3 flex gap-2">
+                    <BharatButton
+                      className="min-h-10 flex-1 px-3 py-2 text-xs"
+                      variant="ghost"
+                      disabled={deleting}
+                      onClick={() => {
+                        setConfirmingDelete(false);
+                        setError(null);
+                      }}
+                    >
+                      Cancel
+                    </BharatButton>
+                    <BharatButton
+                      className="min-h-10 flex-1 bg-stamp px-3 py-2 text-xs text-white"
+                      disabled={deleting}
+                      onClick={() => void deleteCurrentRecording()}
+                    >
+                      {deleting ? "Deleting" : "Delete"}
+                    </BharatButton>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-stamp/30 bg-paper-deep px-3 py-2 font-body text-xs font-bold text-stamp transition active:scale-[0.99]"
+                  type="button"
+                  onClick={() => {
+                    setMessage(null);
+                    setError(null);
+                    setConfirmingDelete(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete consultation
+                </button>
+              )}
+            </section>
+          ) : null}
         </div>
 
         <footer className="flex shrink-0 gap-2 border-t border-rule bg-paper px-5 pb-4 pt-3">

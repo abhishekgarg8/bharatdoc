@@ -354,4 +354,68 @@ describe("RecordingDetailPageClient", () => {
     expect(screen.getByRole("textbox", { name: "Summary" })).toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
   });
+
+  it("deletes authenticated recordings and returns to the dashboard", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const navigate = vi.fn();
+    const repository = createMemoryLocalRecordingRepository([
+      {
+        id: "local-recording",
+        patientId: "P-20001",
+        label: null,
+        durationSeconds: 180,
+        recordedAt: "2026-04-23T06:12:00.000Z",
+        updatedAt: "2026-04-23T06:13:00.000Z",
+        audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+        audioChunks: [],
+        audioMimeType: "audio/webm",
+        captureState: "stopped",
+        syncState: "synced",
+        serverRecordingId: apiRecording.id,
+        transcript: null,
+        error: null
+      }
+    ]);
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const url = _input.toString();
+
+      if (url === `/api/recordings/${apiRecording.id}` && init?.method === "DELETE") {
+        return Response.json({ recording_id: apiRecording.id });
+      }
+
+      if (url === `/api/recordings/${apiRecording.id}`) {
+        return Response.json({ doctor: activeDoctor, recording: apiRecording });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId={apiRecording.id}
+        authClient={authClient}
+        fetcher={fetcher}
+        localRepository={repository}
+        onNavigate={navigate}
+      />
+    );
+
+    await screen.findByRole("heading", { name: "P-20001" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete consultation" }));
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}`, {
+        method: "DELETE",
+        headers: { Authorization: "Bearer id-token" }
+      })
+    );
+    await expect(repository.list()).resolves.toHaveLength(0);
+    expect(navigate).toHaveBeenCalledWith("/dashboard");
+  });
 });

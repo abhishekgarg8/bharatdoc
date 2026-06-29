@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { ImgHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { LandingPage } from "@/components/landing-page";
@@ -16,11 +16,10 @@ describe("LandingPage", () => {
     render(<LandingPage />);
 
     expect(screen.getByRole("heading", { name: "AI Scribe for Indian clinics" })).toBeInTheDocument();
-    const heroWorkflow = screen.getByRole("list");
-    expect(within(heroWorkflow).getByText("Record")).toBeInTheDocument();
-    expect(within(heroWorkflow).getByText("Transcribe")).toBeInTheDocument();
-    expect(within(heroWorkflow).getByText("Review the AI-drafted summary")).toBeInTheDocument();
-    expect(within(heroWorkflow).getByText("Save that as a PDF automatically with the Patient ID")).toBeInTheDocument();
+    expect(
+      screen.getByText("Turn every consultation into an AI-drafted, doctor-reviewed summary and Patient ID PDF.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Save that as a PDF automatically with the Patient ID")).not.toBeInTheDocument();
     expect(
       screen.getByRole("img", {
         name: "Indian doctor reviewing a consultation with a patient while a phone records on the desk"

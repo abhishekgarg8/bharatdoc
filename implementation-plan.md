@@ -134,6 +134,8 @@ Testing is a first-class requirement: every implementation step lands with unit/
 - [x] Add a runtime Supabase anon-key wrapper so real E2E commands can use the current linked-project anon key without editing `.env`.
 - [x] Commit, push, merge, wait for Vercel production deployment, and verify the live app with real-account audio E2E screenshots at `https://bharatdoc-web.vercel.app/`.
 - [x] Rename the dashboard list heading from "Today's consultations" to "Consultations" with focused tests and browser screenshot verification.
+- [x] Add owner-scoped consultation deletion for dashboard and recording detail, including storage cleanup, local-audio cleanup, focused tests, and browser screenshot verification.
+- [x] Replace the landing hero workflow list with a concise doctor-facing marketing line, focused test, and mobile screenshot verification.
 
 ### 11. Production diagnostic logging and transcription recovery
 

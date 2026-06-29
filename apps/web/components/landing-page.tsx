@@ -60,19 +60,9 @@ export function LandingPage() {
             </h1>
 
             {/* Body */}
-            <ol className="mb-9 grid max-w-[430px] gap-2 text-base leading-relaxed text-ink-soft sm:text-lg">
-              {[
-                "Record",
-                "Transcribe",
-                "Review the AI-drafted summary",
-                "Save that as a PDF automatically with the Patient ID"
-              ].map((step, index) => (
-                <li key={step} className="flex items-baseline gap-3">
-                  <span className="font-mono text-xs text-terracotta">{index + 1}.</span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
+            <p className="mb-9 max-w-[430px] text-[22px] leading-snug text-ink-soft sm:text-2xl">
+              Turn every consultation into an AI-drafted, doctor-reviewed summary and Patient ID PDF.
+            </p>
 
             {/* CTAs */}
             <div className="flex flex-wrap items-center gap-4">
