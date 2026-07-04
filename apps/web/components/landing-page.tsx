@@ -14,6 +14,12 @@ export function LandingPage() {
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
             <Link
+              href="/faqs"
+              className="text-sm text-ink-muted transition-colors hover:text-ink"
+            >
+              FAQs
+            </Link>
+            <Link
               href="/onboarding"
               className="text-sm text-ink-muted transition-colors hover:text-ink"
             >
