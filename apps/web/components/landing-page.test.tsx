@@ -53,4 +53,32 @@ describe("LandingPage", () => {
     expect(screen.queryByText(/Turn consultations into clinical notes/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Record a consultation, review the AI-drafted summary/i)).not.toBeInTheDocument();
   });
+
+  it("renders exactly two narrated product walkthrough videos with accessible transcripts", () => {
+    const { container } = render(<LandingPage />);
+
+    expect(screen.getByRole("heading", { name: "Watch BharatDoc in use" })).toBeInTheDocument();
+    expect(screen.getByText("Narration in these walkthroughs is AI-generated.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "From consultation to clinical note" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review and use generated documentation" })).toBeInTheDocument();
+    expect(screen.getByText("See how a doctor can use BharatDoc to capture a consultation workflow and review the generated documentation.")).toBeInTheDocument();
+    expect(screen.getByText("See how generated output can be reviewed, corrected, and prepared for use in the doctor's normal workflow.")).toBeInTheDocument();
+
+    const videos = Array.from(container.querySelectorAll("video"));
+    expect(videos).toHaveLength(2);
+    expect(videos.map((video) => video.getAttribute("src"))).toEqual([
+      "/videos/issue-21-consultation-to-note.mp4",
+      "/videos/issue-21-review-documentation.mp4"
+    ]);
+
+    for (const video of videos) {
+      expect(video).toHaveAttribute("controls");
+      expect(video).toHaveAttribute("preload", "metadata");
+      expect(video).not.toHaveAttribute("autoplay");
+      expect(video.querySelector("track")?.getAttribute("kind")).toBe("captions");
+    }
+
+    expect(screen.getByText(/Transcript: From consultation to clinical note/i)).toBeInTheDocument();
+    expect(screen.getByText(/Transcript: Review and use generated documentation/i)).toBeInTheDocument();
+  });
 });

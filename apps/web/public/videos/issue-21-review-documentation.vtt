@@ -1,0 +1,22 @@
+WEBVTT
+
+00:00.000 --> 00:05.700
+After documentation exists, BharatDoc keeps review in the doctor's hands.
+
+00:05.700 --> 00:11.600
+From the dashboard, the doctor opens a test consultation and switches between transcript and summary.
+
+00:11.600 --> 00:18.300
+The summary is editable, so corrections can be made before anything is finalized.
+
+00:18.300 --> 00:24.500
+Here the doctor adds a short review note and saves the updated summary.
+
+00:24.500 --> 00:31.000
+Once the summary is saved, BharatDoc can generate a Patient ID PDF for clinic use.
+
+00:31.000 --> 00:36.800
+The PDF panel confirms when the file is ready and provides an open button for the generated document.
+
+00:36.800 --> 00:39.864
+This shows current product behavior: review, edit, save, and prepare documentation for use.

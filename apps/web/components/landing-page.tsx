@@ -2,6 +2,29 @@ import Image from "next/image";
 import Link from "next/link";
 import { LogoMark } from "@/components/onboarding/logo-mark";
 
+const walkthroughVideos = [
+  {
+    title: "From consultation to clinical note",
+    description:
+      "See how a doctor can use BharatDoc to capture a consultation workflow and review the generated documentation.",
+    src: "/videos/issue-21-consultation-to-note.mp4",
+    poster: "/videos/issue-21-consultation-to-note-poster.jpg",
+    captions: "/videos/issue-21-consultation-to-note.vtt",
+    transcript:
+      "Here is BharatDoc in a real doctor workflow. The doctor starts on the clinic dashboard, creates a new consultation, and enters a test Patient ID. Recording begins with one tap. The timer and online status make it clear that audio is captured locally first. When the consultation is finished, the doctor stops the recording. BharatDoc saves the audio on the device, then sends it for transcription and note generation. The output opens as a consultation record. The doctor can review the transcript, generate a structured clinical summary, and check the draft before it becomes part of the clinic record. The goal is simple: keep the consultation natural, then turn it into documentation the doctor can verify."
+  },
+  {
+    title: "Review and use generated documentation",
+    description:
+      "See how generated output can be reviewed, corrected, and prepared for use in the doctor's normal workflow.",
+    src: "/videos/issue-21-review-documentation.mp4",
+    poster: "/videos/issue-21-review-documentation-poster.jpg",
+    captions: "/videos/issue-21-review-documentation.vtt",
+    transcript:
+      "After documentation exists, BharatDoc keeps review in the doctor's hands. From the dashboard, the doctor opens a test consultation and switches between transcript and summary. The summary is editable, so corrections can be made before anything is finalized. Here the doctor adds a short review note and saves the updated summary. Once the summary is saved, BharatDoc can generate a Patient ID PDF for clinic use. The PDF panel confirms when the file is ready and provides an open button for the generated document. This walkthrough shows only current product behavior: review, edit, save, and prepare the documentation for use in the doctor's normal workflow."
+  }
+] as const;
+
 export function LandingPage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-paper font-body text-ink">
@@ -167,6 +190,65 @@ export function LandingPage() {
                   <p className="leading-relaxed text-ink-muted">{step.desc}</p>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-28 border-t border-rule" />
+      </section>
+
+      {/* Product walkthroughs */}
+      <section className="pb-28 pt-4" aria-labelledby="product-walkthroughs">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-12 max-w-2xl">
+            <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">
+              Product walkthroughs
+            </span>
+            <h2
+              id="product-walkthroughs"
+              className="mt-3 font-display italic text-[40px] leading-tight text-ink sm:text-[48px]"
+            >
+              Watch BharatDoc in use
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-ink-muted">
+              Narration in these walkthroughs is AI-generated.
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {walkthroughVideos.map((video) => (
+              <article key={video.src} className="overflow-hidden rounded-lg border border-rule bg-paper-deep">
+                <div className="border-b border-rule bg-ink px-4 py-5">
+                  <video
+                    className="mx-auto aspect-[43/76] w-full max-w-[310px] rounded-md bg-ink"
+                    src={video.src}
+                    poster={video.poster}
+                    controls
+                    playsInline
+                    preload="metadata"
+                  >
+                    <track
+                      kind="captions"
+                      src={video.captions}
+                      srcLang="en"
+                      label="English captions"
+                      default
+                    />
+                  </video>
+                </div>
+                <div className="p-6">
+                  <h3 className="font-display italic text-[26px] leading-snug text-ink">
+                    {video.title}
+                  </h3>
+                  <p className="mt-3 leading-relaxed text-ink-muted">{video.description}</p>
+                  <details className="mt-5 border-t border-rule pt-4">
+                    <summary className="cursor-pointer font-body text-sm font-bold text-terracotta">
+                      Transcript: {video.title}
+                    </summary>
+                    <p className="mt-3 text-sm leading-relaxed text-ink-muted">{video.transcript}</p>
+                  </details>
+                </div>
+              </article>
             ))}
           </div>
         </div>

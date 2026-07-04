@@ -1,0 +1,22 @@
+WEBVTT
+
+00:00.000 --> 00:05.800
+Here is BharatDoc in a real doctor workflow.
+
+00:05.800 --> 00:12.400
+The doctor starts on the clinic dashboard, creates a new consultation, and enters a test Patient ID.
+
+00:12.400 --> 00:18.600
+Recording begins with one tap. The timer and online status make it clear that audio is captured locally first.
+
+00:18.600 --> 00:24.800
+When the consultation is finished, the doctor stops the recording. BharatDoc saves the audio on the device.
+
+00:24.800 --> 00:31.400
+The recording is sent for transcription and note generation, then opens as a consultation record.
+
+00:31.400 --> 00:38.300
+The doctor can review the transcript, generate a structured clinical summary, and check the draft.
+
+00:38.300 --> 00:44.352
+The goal is simple: keep the consultation natural, then turn it into documentation the doctor can verify.
