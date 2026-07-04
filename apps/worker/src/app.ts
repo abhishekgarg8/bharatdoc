@@ -21,11 +21,20 @@ interface WorkerAppOptions {
   corsOrigins?: string;
 }
 
+const DEFAULT_CORS_ORIGINS = [
+  "https://bharatdoc.vercel.app",
+  "https://bharatdoc-web.vercel.app",
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+];
+
 function parseCorsOrigins(corsOrigins: string | undefined): string[] {
-  return (corsOrigins ?? "")
+  const configuredOrigins = (corsOrigins ?? "")
     .split(",")
     .map((origin) => origin.trim().replace(/\/$/, ""))
     .filter(Boolean);
+
+  return Array.from(new Set([...DEFAULT_CORS_ORIGINS, ...configuredOrigins]));
 }
 
 function requestIdFromHeader(

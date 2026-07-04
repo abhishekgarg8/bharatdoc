@@ -158,6 +158,19 @@ describe("worker app", () => {
       });
   });
 
+  it("allows the production website origin for browser transcription uploads", async () => {
+    await request(
+      createApp(depsFor(null), {
+        corsOrigins: "https://bharatdoc-web.vercel.app",
+      }),
+    )
+      .options("/api/transcribe")
+      .set("Origin", "https://bharatdoc.vercel.app")
+      .set("Access-Control-Request-Method", "POST")
+      .expect("Access-Control-Allow-Origin", "https://bharatdoc.vercel.app")
+      .expect(204);
+  });
+
   it("rejects protected routes without bearer tokens", async () => {
     await request(createApp(depsFor(activeDoctor)))
       .get("/api/me")
