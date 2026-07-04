@@ -69,9 +69,21 @@ test("root landing page renders and links to onboarding", async ({ page }) => {
       name: "Indian doctor reviewing a consultation with a patient while a phone records on the desk"
     })
   ).toBeVisible();
-  await expect(page.getByText("Save that as a PDF automatically with the Patient ID")).toBeVisible();
+  await expect(page.getByText("Turn every consultation into an AI-drafted, doctor-reviewed summary and Patient ID PDF.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "FAQs" })).toHaveAttribute("href", "/faqs");
   await page.getByRole("link", { name: "Get started" }).first().click();
   await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("public FAQs page renders doctor adoption guidance", async ({ page }) => {
+  await page.goto("/faqs");
+
+  await expect(page.getByRole("heading", { name: "FAQs for doctors" })).toBeVisible();
+  await expect(page.getByText("Is BharatDoc currently free?")).toBeVisible();
+  await expect(page.getByText(/expect to introduce paid plans soon/i)).toBeVisible();
+  await expect(page.getByText("Is patient data safe and private?")).toBeVisible();
+  await expect(page.getByText(/doctor remains responsible for the final clinical judgment/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: /start using bharatdoc/i })).toHaveAttribute("href", "/onboarding");
 });
 
 test("demo onboarding join flow reaches pending approval", async ({ page }) => {

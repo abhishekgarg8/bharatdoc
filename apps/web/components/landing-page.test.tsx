@@ -26,6 +26,7 @@ describe("LandingPage", () => {
       })
     ).toHaveAttribute("src", "/images/bharatdoc-hero-clinic-consultation-recording.png");
 
+    expect(screen.getByRole("link", { name: "FAQs" })).toHaveAttribute("href", "/faqs");
     for (const link of screen.getAllByRole("link", { name: /get started/i })) {
       expect(link).toHaveAttribute("href", "/onboarding");
     }
