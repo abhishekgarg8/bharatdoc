@@ -3,7 +3,9 @@ import {
   type Doctor,
   type ProfileInput,
   RegistrationInputSchema,
-  generateClinicCode
+  generateClinicCode,
+  isPgimerClinicCode,
+  normalizeClinicCode
 } from "@bharatdoc/shared";
 import { AppError } from "@/lib/server/errors";
 import type { VerifiedUser } from "@/lib/server/auth";
@@ -43,6 +45,7 @@ export interface OnboardingRepository {
     phone: string;
     profile: ProfileInput;
     clinic: Clinic;
+    autoApprove: boolean;
   }): Promise<{ doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest }>;
 }
 
@@ -61,9 +64,10 @@ export interface ClinicLookupResult {
 export type RegistrationResult =
   | {
       status: "active";
-      role: "owner";
+      role: "owner" | "doctor";
       doctor: Doctor;
       clinic: Clinic;
+      joinRequest?: PendingJoinRequest;
     }
   | {
       status: "pending_approval";
@@ -83,7 +87,7 @@ export async function lookupClinicByCode(
   clinicCode: string,
   repository: Pick<OnboardingRepository, "findClinicByCode">
 ): Promise<ClinicLookupResult> {
-  const clinic = await repository.findClinicByCode(clinicCode.trim().toUpperCase());
+  const clinic = await repository.findClinicByCode(normalizeClinicCode(clinicCode));
 
   if (!clinic) {
     throw new AppError(404, "Hospital code was not found.", "CLINIC_NOT_FOUND");
@@ -163,13 +167,18 @@ export async function registerDoctorAccount(
     throw new AppError(404, "Hospital was not found.", "CLINIC_NOT_FOUND");
   }
 
+  const autoApprove =
+    registrationInput.mode === "join_clinic" &&
+    isPgimerClinicCode(registrationInput.clinic_code) &&
+    isPgimerClinicCode(clinic.clinic_code);
   const result = await createAccountOrReturnExisting(
     () =>
       repository.createDoctorJoinRequest({
         authUid: user.uid,
         phone: user.phoneNumber,
         profile: registrationInput.profile,
-        clinic
+        clinic,
+        autoApprove
       }),
     repository,
     user.uid
@@ -180,7 +189,7 @@ export async function registerDoctorAccount(
   }
 
   return {
-    status: "pending_approval",
+    status: result.doctor.account_status === "active" ? "active" : "pending_approval",
     role: "doctor",
     ...result
   };

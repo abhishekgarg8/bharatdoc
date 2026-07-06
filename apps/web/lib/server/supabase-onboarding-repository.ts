@@ -133,6 +133,7 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
       phone: string;
       profile: ProfileInput;
       clinic: Clinic;
+      autoApprove: boolean;
     }): Promise<{ doctor: Doctor; clinic: Clinic; joinRequest: PendingJoinRequest }> {
       const { data, error } = await supabase.rpc("create_doctor_join_request", {
         p_auth_uid: input.authUid,
@@ -140,7 +141,8 @@ export function createSupabaseOnboardingRepository(supabase: SupabaseClient): On
         p_name: input.profile.name,
         p_specialization: input.profile.specialization,
         p_profile_photo_path: normalizeOptional(input.profile.profile_photo_path),
-        p_clinic_id: input.clinic.id
+        p_clinic_id: input.clinic.id,
+        p_auto_approve: input.autoApprove
       });
 
       if (error) {

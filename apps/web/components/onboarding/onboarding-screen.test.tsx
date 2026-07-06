@@ -219,7 +219,7 @@ describe("OnboardingScreen", () => {
       }
 
       if (url === "/api/auth/register") {
-        return Response.json({ status: "pending_approval", role: "doctor" });
+        return Response.json({ status: "active", role: "doctor" });
       }
 
       return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
@@ -242,6 +242,7 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
     await screen.findByText("PGIMER pilot workspace");
+    expect(screen.getByText("New PGIMER doctors join this hospital workspace after signup.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create hospital" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /find hospital/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Clinic Code")).toHaveValue("PGIMER");
@@ -249,9 +250,9 @@ describe("OnboardingScreen", () => {
     fireEvent.change(screen.getByLabelText("Clinic Code"), { target: { value: "MED42X" } });
     expect(screen.getByLabelText("Clinic Code")).toHaveValue("PGIMER");
 
-    fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
+    fireEvent.click(screen.getByRole("button", { name: /join pgimer/i }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
     expect(fetcher).toHaveBeenCalledWith("/api/clinics/lookup?code=PGIMER");
     const registerCall = fetcher.mock.calls.find(([input]) => input.toString() === "/api/auth/register");
     const registerBody = JSON.parse((registerCall?.[1] as RequestInit).body as string);
@@ -287,7 +288,7 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
     await screen.findByText("PGIMER pilot workspace");
-    fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
+    fireEvent.click(screen.getByRole("button", { name: /join pgimer/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Hospital code was not found.");
     expect(fetcher).not.toHaveBeenCalledWith("/api/auth/register", expect.anything());
