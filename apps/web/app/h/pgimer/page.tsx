@@ -4,8 +4,8 @@ import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "PGIMER Chandigarh | BharatDoc",
-  description: "Join the PGIMER Chandigarh BharatDoc pilot workspace."
+  title: "AI Scribe for PGIMER | BharatDoc",
+  description: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs for PGIMER."
 };
 
 export default function PgimerOnboardingPage() {
@@ -17,8 +17,8 @@ export default function PgimerOnboardingPage() {
         address: "Sector-12, Chandigarh PIN-160012, India",
         headerImageSrc: "/images/pgimer-header.png",
         headerImageAlt: "Postgraduate Institute of Medical Education and Research Chandigarh",
-        welcomeTitle: "Join PGIMER on BharatDoc",
-        welcomeCopy: "Create your doctor login and request access to the PGIMER pilot workspace."
+        welcomeTitle: "AI Scribe for PGIMER",
+        welcomeCopy: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs."
       }}
     />
   );
