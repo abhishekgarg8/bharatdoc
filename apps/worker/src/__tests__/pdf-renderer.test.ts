@@ -79,6 +79,31 @@ describe("simple PDF renderer", () => {
     expect(pdf.byteLength).toBeGreaterThan(1000);
   });
 
+  it("renders the PGIMER branded header for the PGIMER clinic code", async () => {
+    const renderer = createSimplePdfRenderer();
+    const defaultPdf = await renderer.render({
+      clinic,
+      doctor,
+      recording,
+      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+    });
+    const pgimerPdf = await renderer.render({
+      clinic: {
+        ...clinic,
+        name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
+        clinic_code: "PGIMER",
+        address: "Sector-12, Chandigarh PIN-160012, India"
+      },
+      doctor,
+      recording,
+      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+    });
+
+    expect(pgimerPdf.toString("ascii").startsWith("%PDF-")).toBe(true);
+    expect(pgimerPdf.toString("ascii")).toContain("%%EOF");
+    expect(pgimerPdf.byteLength).toBeGreaterThan(defaultPdf.byteLength);
+  });
+
   it("keeps long summaries in the PDF instead of replacing them with a continuation note", async () => {
     const longSummary = Array.from(
       { length: 90 },

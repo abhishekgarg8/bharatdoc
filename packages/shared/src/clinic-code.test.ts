@@ -9,10 +9,12 @@ describe("clinic code generation", () => {
     expect(isClinicCode(code)).toBe(true);
   });
 
-  it("rejects ambiguous or malformed clinic codes", () => {
+  it("accepts database-compatible human-assigned clinic codes", () => {
     expect(isClinicCode("MED42X")).toBe(true);
-    expect(isClinicCode("MED4OX")).toBe(false);
+    expect(isClinicCode("PGIMER")).toBe(true);
+    expect(isClinicCode("MED4OX")).toBe(true);
     expect(isClinicCode("med42x")).toBe(false);
     expect(isClinicCode("MED42")).toBe(false);
+    expect(isClinicCode("MED401")).toBe(false);
   });
 });
