@@ -6,10 +6,11 @@ import {
   RECORDING_STATUSES,
   TRANSCRIPTION_LANGUAGES
 } from "./constants.js";
+import { normalizeClinicCode } from "./clinic-code.js";
 
 export const UuidSchema = z.string().uuid();
 export const PhoneSchema = z.string().min(8).max(20);
-export const ClinicCodeSchema = z.string().length(6).toUpperCase();
+export const ClinicCodeSchema = z.string().transform(normalizeClinicCode).pipe(z.string().length(6));
 export const DoctorRoleSchema = z.enum(DOCTOR_ROLES);
 export const AccountStatusSchema = z.enum(ACCOUNT_STATUSES);
 export const JoinRequestStatusSchema = z.enum(JOIN_REQUEST_STATUSES);

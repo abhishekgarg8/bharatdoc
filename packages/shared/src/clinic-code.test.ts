@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateClinicCode, isClinicCode } from "./clinic-code.js";
+import { generateClinicCode, isClinicCode, isPgimerClinicCode, normalizeClinicCode } from "./clinic-code.js";
 
 describe("clinic code generation", () => {
   it("generates deterministic uppercase six-character codes from supplied random bytes", () => {
@@ -16,5 +16,13 @@ describe("clinic code generation", () => {
     expect(isClinicCode("med42x")).toBe(false);
     expect(isClinicCode("MED42")).toBe(false);
     expect(isClinicCode("MED401")).toBe(false);
+  });
+
+  it("normalizes clinic codes before PGIMER auto-approval checks", () => {
+    expect(normalizeClinicCode(" pgimer ")).toBe("PGIMER");
+    expect(isPgimerClinicCode("pgimer")).toBe(true);
+    expect(isPgimerClinicCode(" PGIMER ")).toBe(true);
+    expect(isPgimerClinicCode("PG1MER")).toBe(false);
+    expect(isPgimerClinicCode("")).toBe(false);
   });
 });

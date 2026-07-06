@@ -142,8 +142,12 @@ test("PGIMER onboarding smoke renders branded locked join entry", async ({ page 
   await page.getByRole("button", { name: /create account/i }).click();
   await page.getByRole("button", { name: /^continue$/i }).click();
   await expect(page.getByText("PGIMER pilot workspace", { exact: true })).toBeVisible();
+  await expect(page.getByText("New PGIMER doctors join this hospital workspace after signup.")).toBeVisible();
   await expect(page.getByLabel("Clinic Code")).toHaveValue("PGIMER");
+  await expect(page.getByRole("button", { name: /join pgimer/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /create hospital/i })).toHaveCount(0);
+  await page.getByRole("button", { name: /join pgimer/i }).click();
+  await expect(page).toHaveURL(/\/dashboard\?demo=1$/);
 });
 
 test("pending approval smoke renders locked state", async ({ page }) => {

@@ -16,6 +16,14 @@ const clinic: Clinic = {
   created_at: "2026-04-23T09:00:00.000Z"
 };
 
+const pgimerClinic: Clinic = {
+  ...clinic,
+  id: "55555555-5555-4555-8555-555555555555",
+  name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
+  clinic_code: "PGIMER",
+  address: "Sector-12, Chandigarh PIN-160012, India"
+};
+
 const activeOwner: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
   firebase_uid: "firebase-owner",
@@ -132,7 +140,78 @@ describe("doctor registration", () => {
       expect.objectContaining({
         authUid: "firebase-doctor",
         phone: "+919800000000",
-        clinic
+        clinic,
+        autoApprove: false
+      })
+    );
+  });
+
+  it("creates an active doctor account for normalized PGIMER clinic-code joins", async () => {
+    const repository = createRepository({
+      findClinicByCode: vi.fn(async () => pgimerClinic),
+      createDoctorJoinRequest: vi.fn(async ({ authUid, phone, profile, clinic: selectedClinic, autoApprove }) => ({
+        clinic: selectedClinic,
+        doctor: {
+          ...activeOwner,
+          id: "66666666-6666-4666-8666-666666666666",
+          firebase_uid: authUid,
+          clinic_id: selectedClinic.id,
+          phone,
+          role: "doctor" as const,
+          account_status: autoApprove ? ("active" as const) : ("pending_approval" as const),
+          name: profile.name,
+          specialization: profile.specialization
+        },
+        joinRequest: {
+          id: "77777777-7777-4777-8777-777777777777",
+          clinic_id: selectedClinic.id,
+          doctor_id: "66666666-6666-4666-8666-666666666666",
+          status: autoApprove ? ("approved" as const) : ("pending" as const)
+        }
+      }))
+    });
+
+    const result = await registerDoctorAccount(
+      {
+        mode: "join_clinic",
+        profile: { name: "Dr. PGIMER Pilot", specialization: "Internal Medicine" },
+        clinic_code: " pgimer "
+      },
+      { uid: "firebase-pgimer", phoneNumber: "+919800000001" },
+      repository
+    );
+
+    expect(result.status).toBe("active");
+    expect(result.role).toBe("doctor");
+    expect(repository.findClinicByCode).toHaveBeenCalledWith("PGIMER");
+    expect(repository.createDoctorJoinRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clinic: pgimerClinic,
+        autoApprove: true
+      })
+    );
+  });
+
+  it("keeps PGIMER hospital-id joins in the manual approval flow", async () => {
+    const repository = createRepository({
+      findClinicById: vi.fn(async () => pgimerClinic)
+    });
+
+    const result = await registerDoctorAccount(
+      {
+        mode: "join_hospital",
+        profile: { name: "Dr. PGIMER Pilot", specialization: "Internal Medicine" },
+        hospital_id: pgimerClinic.id
+      },
+      { uid: "firebase-pgimer", phoneNumber: "+919800000001" },
+      repository
+    );
+
+    expect(result.status).toBe("pending_approval");
+    expect(repository.createDoctorJoinRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clinic: pgimerClinic,
+        autoApprove: false
       })
     );
   });

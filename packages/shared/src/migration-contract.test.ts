@@ -46,6 +46,13 @@ const diagnosticLoggingMigration = readFileSync(
   ),
   "utf8",
 );
+const pgimerAutoApprovalMigration = readFileSync(
+  resolve(
+    dirname,
+    "../../../supabase/migrations/202607060002_auto_approve_pgimer_join_requests.sql",
+  ),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -161,6 +168,20 @@ describe("initial Supabase migration contract", () => {
     );
     expect(atomicOnboardingRpcMigration).toContain(
       "grant execute on function public.create_doctor_join_request(text, text, text, text, text, uuid) to service_role",
+    );
+  });
+
+  it("adds PGIMER auto-approval to the atomic join-request RPC", () => {
+    expect(pgimerAutoApprovalMigration).toContain(
+      "drop function if exists public.create_doctor_join_request(text, text, text, text, text, uuid)",
+    );
+    expect(pgimerAutoApprovalMigration).toContain("p_auto_approve boolean default false");
+    expect(pgimerAutoApprovalMigration).toContain("auto_approve_join := p_auto_approve and target_clinic.clinic_code = 'PGIMER'");
+    expect(pgimerAutoApprovalMigration).toContain("case when auto_approve_join then 'active' else 'pending_approval' end");
+    expect(pgimerAutoApprovalMigration).toContain("case when auto_approve_join then 'approved' else 'pending' end");
+    expect(pgimerAutoApprovalMigration).toContain("case when auto_approve_join then now() else null end");
+    expect(pgimerAutoApprovalMigration).toContain(
+      "grant execute on function public.create_doctor_join_request(text, text, text, text, text, uuid, boolean) to service_role",
     );
   });
 

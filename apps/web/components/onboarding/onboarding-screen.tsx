@@ -104,6 +104,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
   const queryDemoMode = useExplicitDemoMode();
   const effectiveDemoMode = demoMode || queryDemoMode;
   const lockedClinicCode = brandedJoinTarget?.clinicCode.toUpperCase();
+  const autoApprovedJoin = lockedClinicCode === "PGIMER";
   const auth = useMemo(
     () => authClient ?? (effectiveDemoMode ? createDemoAuthClient() : createSupabaseAuthClient()),
     [effectiveDemoMode, authClient]
@@ -331,7 +332,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
 
     try {
       if (effectiveDemoMode) {
-        navigate(hospitalMode === "join_hospital" ? "/pending-approval?demo=1" : "/dashboard?demo=1");
+        navigate(hospitalMode === "join_hospital" && !autoApprovedJoin ? "/pending-approval?demo=1" : "/dashboard?demo=1");
       } else {
         if (hospitalMode === "join_hospital" && !clinicLookupResult) {
           const lookupResult = await handleClinicLookup();
@@ -498,7 +499,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
                   PGIMER pilot workspace
                 </p>
                 <p className="mt-1 font-body text-xs leading-5 text-ink-muted">
-                  New doctors request access to this hospital workspace and wait for owner approval.
+                  New PGIMER doctors join this hospital workspace after signup.
                 </p>
               </div>
             ) : (
@@ -594,7 +595,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
               }
             >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {hospitalMode === "join_hospital" ? "Request to join" : "Create hospital & continue"}
+              {hospitalMode === "join_hospital" ? (autoApprovedJoin ? "Join PGIMER" : "Request to join") : "Create hospital & continue"}
             </BharatButton>
             <BharatButton className="mt-3 w-full" variant="ghost" onClick={handleBackToProfile} disabled={isBusy || isLookingUpClinic}>
               <ChevronLeft className="h-4 w-4" />

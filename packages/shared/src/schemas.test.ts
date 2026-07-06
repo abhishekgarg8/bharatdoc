@@ -71,6 +71,22 @@ describe("registration input schemas", () => {
     });
   });
 
+  it("normalizes clinic code input before registration", () => {
+    expect(
+      RegistrationInputSchema.parse({
+        mode: "join_clinic",
+        profile: {
+          name: "Dr. PGIMER Pilot",
+          specialization: "Internal Medicine"
+        },
+        clinic_code: " pgimer "
+      })
+    ).toMatchObject({
+      mode: "join_clinic",
+      clinic_code: "PGIMER"
+    });
+  });
+
   it("does not expose legacy medical registration values in parsed registration input", () => {
     const parsed = RegistrationInputSchema.parse({
       mode: "join_clinic",

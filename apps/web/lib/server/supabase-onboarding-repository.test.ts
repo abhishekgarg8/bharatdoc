@@ -13,6 +13,7 @@ describe("supabase onboarding repository source contract", () => {
 
   it("creates doctor join requests through the atomic onboarding RPC", () => {
     expect(source).toContain('supabase.rpc("create_doctor_join_request"');
+    expect(source).toContain("p_auto_approve: input.autoApprove");
     expect(source).not.toContain('.from("clinic_join_requests")\n        .insert');
   });
 
