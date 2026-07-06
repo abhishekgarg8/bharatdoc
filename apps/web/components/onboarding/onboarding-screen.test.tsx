@@ -18,8 +18,8 @@ const pgimerTarget = {
   address: "Sector-12, Chandigarh PIN-160012, India",
   headerImageSrc: "/images/pgimer-header.png",
   headerImageAlt: "Postgraduate Institute of Medical Education and Research Chandigarh",
-  welcomeTitle: "Join PGIMER on BharatDoc",
-  welcomeCopy: "Create your doctor login and request access to the PGIMER pilot workspace."
+  welcomeTitle: "AI Scribe for PGIMER",
+  welcomeCopy: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs."
 };
 
 afterEach(() => {
@@ -229,8 +229,9 @@ describe("OnboardingScreen", () => {
     render(<OnboardingScreen authClient={authClient} brandedJoinTarget={pgimerTarget} onNavigate={navigate} />);
 
     expect(screen.getByAltText(pgimerTarget.headerImageAlt)).toHaveAttribute("src", "/images/pgimer-header.png");
-    expect(screen.getByText("Join PGIMER on BharatDoc")).toBeInTheDocument();
-    expect(screen.getByText("Powered by BharatDoc")).toBeInTheDocument();
+    expect(screen.getByText("AI Scribe for PGIMER")).toBeInTheDocument();
+    expect(screen.getByText("Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs.")).toBeInTheDocument();
+    expect(screen.getAllByText("Powered by BharatDoc")).toHaveLength(1);
 
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@pgimer.edu.in" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });

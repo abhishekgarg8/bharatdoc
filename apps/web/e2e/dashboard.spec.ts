@@ -136,7 +136,9 @@ test("PGIMER onboarding smoke renders branded locked join entry", async ({ page 
   await page.goto("/h/pgimer?demo=1");
 
   await expect(page.getByRole("img", { name: "Postgraduate Institute of Medical Education and Research Chandigarh" })).toBeVisible();
-  await expect(page.getByText("Join PGIMER on BharatDoc")).toBeVisible();
+  await expect(page.getByText("AI Scribe for PGIMER")).toBeVisible();
+  await expect(page.getByText("Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs.")).toBeVisible();
+  await expect(page.getByText("Powered by BharatDoc")).toHaveCount(1);
   await page.getByRole("button", { name: /create account/i }).click();
   await page.getByRole("button", { name: /^continue$/i }).click();
   await expect(page.getByText("PGIMER pilot workspace", { exact: true })).toBeVisible();
