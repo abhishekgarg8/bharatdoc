@@ -12,6 +12,16 @@ function createAuthClient(): AuthClient {
   };
 }
 
+const pgimerTarget = {
+  clinicCode: "PGIMER",
+  name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
+  address: "Sector-12, Chandigarh PIN-160012, India",
+  headerImageSrc: "/images/pgimer-header.png",
+  headerImageAlt: "Postgraduate Institute of Medical Education and Research Chandigarh",
+  welcomeTitle: "Join PGIMER on BharatDoc",
+  welcomeCopy: "Create your doctor login and request access to the PGIMER pilot workspace."
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -192,6 +202,94 @@ describe("OnboardingScreen", () => {
       name: "Dr. Aparna Iyer",
       specialization: "Pediatrics"
     });
+  });
+
+  it("runs the PGIMER branded join flow with a locked clinic code", async () => {
+    const authClient = createAuthClient();
+    const navigate = vi.fn();
+    const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = input.toString();
+
+      if (url === "/api/clinics/lookup?code=PGIMER") {
+        return Response.json({
+          clinic_id: "pgimer-id",
+          clinic_name: pgimerTarget.name,
+          clinic_address: pgimerTarget.address
+        });
+      }
+
+      if (url === "/api/auth/register") {
+        return Response.json({ status: "pending_approval", role: "doctor" });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    render(<OnboardingScreen authClient={authClient} brandedJoinTarget={pgimerTarget} onNavigate={navigate} />);
+
+    expect(screen.getByAltText(pgimerTarget.headerImageAlt)).toHaveAttribute("src", "/images/pgimer-header.png");
+    expect(screen.getByText("Join PGIMER on BharatDoc")).toBeInTheDocument();
+    expect(screen.getByText("Powered by BharatDoc")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@pgimer.edu.in" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    await screen.findByText("Profile details");
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Dr. PGIMER Pilot" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Internal Medicine" } });
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+    await screen.findByText("PGIMER pilot workspace");
+    expect(screen.queryByRole("button", { name: "Create hospital" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /find hospital/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Clinic Code")).toHaveValue("PGIMER");
+
+    fireEvent.change(screen.getByLabelText("Clinic Code"), { target: { value: "MED42X" } });
+    expect(screen.getByLabelText("Clinic Code")).toHaveValue("PGIMER");
+
+    fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
+    expect(fetcher).toHaveBeenCalledWith("/api/clinics/lookup?code=PGIMER");
+    const registerCall = fetcher.mock.calls.find(([input]) => input.toString() === "/api/auth/register");
+    const registerBody = JSON.parse((registerCall?.[1] as RequestInit).body as string);
+    expect(registerBody).toMatchObject({
+      mode: "join_clinic",
+      clinic_code: "PGIMER",
+      profile: {
+        name: "Dr. PGIMER Pilot",
+        specialization: "Internal Medicine"
+      }
+    });
+  });
+
+  it("shows a clear error when the PGIMER clinic code is not seeded", async () => {
+    const authClient = createAuthClient();
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString() === "/api/clinics/lookup?code=PGIMER") {
+        return Response.json({ error: { message: "Hospital code was not found." } }, { status: 404 });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    render(<OnboardingScreen authClient={authClient} brandedJoinTarget={pgimerTarget} />);
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@pgimer.edu.in" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    await screen.findByText("Profile details");
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Dr. PGIMER Pilot" } });
+    fireEvent.change(screen.getByLabelText("Specialization"), { target: { value: "Internal Medicine" } });
+    fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+    await screen.findByText("PGIMER pilot workspace");
+    fireEvent.click(screen.getByRole("button", { name: /request to join/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Hospital code was not found.");
+    expect(fetcher).not.toHaveBeenCalledWith("/api/auth/register", expect.anything());
   });
 
   it("uses an Other specialization text field when the dropdown value is Other", async () => {

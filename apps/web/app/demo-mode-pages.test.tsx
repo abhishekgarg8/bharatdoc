@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "@/app/dashboard/page";
+import PgimerOnboardingPage from "@/app/h/pgimer/page";
 import OnboardingPage from "@/app/onboarding/page";
 import RecordingDetailPage from "@/app/recordings/[id]/page";
 import NewRecordingPage from "@/app/recordings/new/page";
@@ -12,6 +13,9 @@ import PromptSettingsPage from "@/app/settings/prompt/page";
 import { isExplicitDemoModeEnabled } from "@/lib/demo-mode";
 
 interface DemoFallbackProps {
+  brandedJoinTarget?: {
+    clinicCode: string;
+  };
   demoOnMissingToken?: boolean;
   demoMode?: boolean;
   useDemoRecorder?: boolean;
@@ -45,6 +49,7 @@ describe("production demo route gate", () => {
     expect(propsFor(PromptSettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(LanguageSettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(OnboardingPage() as ReactElement).demoMode).toBeUndefined();
+    expect(propsFor(PgimerOnboardingPage() as ReactElement).brandedJoinTarget?.clinicCode).toBe("PGIMER");
   });
 
   it("allows the client-side demo helper only when the explicit demo env flag is enabled", () => {
@@ -55,5 +60,6 @@ describe("production demo route gate", () => {
     expect(propsFor(PendingApprovalPage() as ReactElement).demoOnMissingToken).toBeUndefined();
     expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
     expect(propsFor(OnboardingPage() as ReactElement).demoMode).toBeUndefined();
+    expect(propsFor(PgimerOnboardingPage() as ReactElement).brandedJoinTarget?.clinicCode).toBe("PGIMER");
   });
 });

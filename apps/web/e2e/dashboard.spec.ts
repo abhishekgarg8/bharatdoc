@@ -132,6 +132,18 @@ test("onboarding smoke renders email password entry", async ({ page }) => {
   await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
 });
 
+test("PGIMER onboarding smoke renders branded locked join entry", async ({ page }) => {
+  await page.goto("/h/pgimer?demo=1");
+
+  await expect(page.getByRole("img", { name: "Postgraduate Institute of Medical Education and Research Chandigarh" })).toBeVisible();
+  await expect(page.getByText("Join PGIMER on BharatDoc")).toBeVisible();
+  await page.getByRole("button", { name: /create account/i }).click();
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await expect(page.getByText("PGIMER pilot workspace", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Clinic Code")).toHaveValue("PGIMER");
+  await expect(page.getByRole("button", { name: /create hospital/i })).toHaveCount(0);
+});
+
 test("pending approval smoke renders locked state", async ({ page }) => {
   await page.goto("/pending-approval?demo=1");
 

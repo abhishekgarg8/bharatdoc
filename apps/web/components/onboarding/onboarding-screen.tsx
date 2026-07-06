@@ -48,6 +48,15 @@ interface OnboardingScreenProps {
   authClient?: AuthClient;
   onNavigate?: (href: string) => void;
   demoMode?: boolean;
+  brandedJoinTarget?: {
+    clinicCode: string;
+    name: string;
+    address?: string;
+    headerImageSrc: string;
+    headerImageAlt: string;
+    welcomeTitle: string;
+    welcomeCopy: string;
+  };
 }
 
 function createDemoAuthClient(): AuthClient {
@@ -91,9 +100,10 @@ const demoClinicLookup: ClinicLookupResponse = {
   clinic_address: demoDefaults.hospital.address
 };
 
-export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: OnboardingScreenProps) {
+export function OnboardingScreen({ authClient, onNavigate, demoMode = false, brandedJoinTarget }: OnboardingScreenProps) {
   const queryDemoMode = useExplicitDemoMode();
   const effectiveDemoMode = demoMode || queryDemoMode;
+  const lockedClinicCode = brandedJoinTarget?.clinicCode.toUpperCase();
   const auth = useMemo(
     () => authClient ?? (effectiveDemoMode ? createDemoAuthClient() : createSupabaseAuthClient()),
     [effectiveDemoMode, authClient]
@@ -115,12 +125,21 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   );
   const [otherSpecialization, setOtherSpecialization] = useState("");
   const [hospitalMode, setHospitalMode] = useState<HospitalMode>("join_hospital");
-  const [clinicCode, setClinicCode] = useState(effectiveDemoMode ? demoDefaults.clinicCode : "");
+  const [clinicCode, setClinicCode] = useState(lockedClinicCode ?? (effectiveDemoMode ? demoDefaults.clinicCode : ""));
   const [clinicLookupResult, setClinicLookupResult] = useState<ClinicLookupResponse | null>(
-    effectiveDemoMode ? demoClinicLookup : null
+    effectiveDemoMode && !brandedJoinTarget ? demoClinicLookup : null
   );
   const [isLookingUpClinic, setIsLookingUpClinic] = useState(false);
   const [hospital, setHospital] = useState(effectiveDemoMode ? demoDefaults.hospital : { name: "", address: "" });
+  const selectedClinic =
+    clinicLookupResult ??
+    (brandedJoinTarget
+      ? {
+          clinic_id: "",
+          clinic_name: brandedJoinTarget.name,
+          clinic_address: brandedJoinTarget.address ?? null
+        }
+      : null);
 
   async function handleCredentials() {
     setIsBusy(true);
@@ -335,13 +354,29 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
   return (
     <OnboardingShell>
       <section className="flex flex-1 flex-col px-7 py-10">
-        <LogoMark />
+        {brandedJoinTarget ? (
+          <img
+            alt={brandedJoinTarget.headerImageAlt}
+            className="w-full rounded-xl border border-rule bg-white object-contain p-2 shadow-[0_3px_14px_rgba(28,23,18,0.06)]"
+            src={brandedJoinTarget.headerImageSrc}
+          />
+        ) : (
+          <LogoMark />
+        )}
 
         <div className="mt-10">
-          <h1 className="font-display text-[40px] italic leading-none tracking-normal text-ink">Welcome to BharatDoc</h1>
+          <h1 className="font-display text-[40px] italic leading-none tracking-normal text-ink">
+            {brandedJoinTarget?.welcomeTitle ?? "Welcome to BharatDoc"}
+          </h1>
           <p className="mt-3 max-w-[320px] font-body text-sm leading-6 text-ink-muted">
-            Record consultations. Get AI-drafted clinical summaries. Save to PDF in one tap.
+            {brandedJoinTarget?.welcomeCopy ??
+              "Record consultations. Get AI-drafted clinical summaries. Save to PDF in one tap."}
           </p>
+          {brandedJoinTarget ? (
+            <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta">
+              Powered by BharatDoc
+            </p>
+          ) : null}
         </div>
 
         {authMode === "login" && step === "credentials" ? null : <StepIndicator step={step} />}
@@ -457,14 +492,25 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
 
         {step === "hospital" ? (
           <Panel title="Your hospital" icon={<Building2 className="h-4 w-4 text-terracotta" />}>
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <ModeButton active={hospitalMode === "join_hospital"} onClick={() => setHospitalMode("join_hospital")}>
-                Join hospital
-              </ModeButton>
-              <ModeButton active={hospitalMode === "create_hospital"} onClick={() => setHospitalMode("create_hospital")}>
-                Create hospital
-              </ModeButton>
-            </div>
+            {brandedJoinTarget ? (
+              <div className="mb-4 rounded-[14px] border border-rule bg-paper-deep px-3 py-3">
+                <p className="font-body text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta">
+                  PGIMER pilot workspace
+                </p>
+                <p className="mt-1 font-body text-xs leading-5 text-ink-muted">
+                  New doctors request access to this hospital workspace and wait for owner approval.
+                </p>
+              </div>
+            ) : (
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <ModeButton active={hospitalMode === "join_hospital"} onClick={() => setHospitalMode("join_hospital")}>
+                  Join hospital
+                </ModeButton>
+                <ModeButton active={hospitalMode === "create_hospital"} onClick={() => setHospitalMode("create_hospital")}>
+                  Create hospital
+                </ModeButton>
+              </div>
+            )}
 
             {hospitalMode === "join_hospital" ? (
               <div>
@@ -476,6 +522,11 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
                     className="w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink outline-none"
                     value={clinicCode}
                     onChange={(event) => {
+                      if (lockedClinicCode) {
+                        setClinicCode(lockedClinicCode);
+                        return;
+                      }
+
                       setClinicCode(event.target.value.toUpperCase());
                       setClinicLookupResult(null);
                     }}
@@ -483,29 +534,32 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
                     autoCapitalize="characters"
                     aria-label="Clinic Code"
                     placeholder="MED42X"
+                    readOnly={Boolean(lockedClinicCode)}
                     disabled={isBusy || isLookingUpClinic}
                   />
                 </label>
-                <BharatButton
-                  className="w-full"
-                  variant="ghost"
-                  onClick={() => void handleClinicLookup()}
-                  disabled={isBusy || isLookingUpClinic}
-                >
-                  {isLookingUpClinic ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Find hospital
-                </BharatButton>
-                {clinicLookupResult ? (
+                {brandedJoinTarget ? null : (
+                  <BharatButton
+                    className="w-full"
+                    variant="ghost"
+                    onClick={() => void handleClinicLookup()}
+                    disabled={isBusy || isLookingUpClinic}
+                  >
+                    {isLookingUpClinic ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Find hospital
+                  </BharatButton>
+                )}
+                {selectedClinic ? (
                   <div className="mt-3 rounded-lg border border-rule bg-paper-deep px-3 py-2">
                     <div className="flex items-center gap-1.5 font-body text-[10px] font-bold uppercase tracking-[0.12em] text-sage">
                       <Check className="h-3 w-3" />
-                      Hospital selected
+                      {clinicLookupResult ? "Hospital selected" : "Pilot hospital"}
                     </div>
                     <div className="mt-1 font-display text-[22px] italic leading-none text-ink">
-                      {clinicLookupResult.clinic_name}
+                      {selectedClinic.clinic_name}
                     </div>
                     <div className="mt-1 font-body text-[11px] text-ink-muted">
-                      {clinicLookupResult.clinic_address ?? "Address not added"}
+                      {selectedClinic.clinic_address ?? "Address not added"}
                     </div>
                   </div>
                 ) : null}
@@ -533,7 +587,11 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false }: O
             <BharatButton
               className="mt-5 w-full"
               onClick={handleRegister}
-              disabled={isBusy || isLookingUpClinic || (hospitalMode === "join_hospital" && !clinicLookupResult)}
+              disabled={
+                isBusy ||
+                isLookingUpClinic ||
+                (hospitalMode === "join_hospital" && !clinicLookupResult && !brandedJoinTarget)
+              }
             >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {hospitalMode === "join_hospital" ? "Request to join" : "Create hospital & continue"}

@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
     {
       urlPattern: ({ url, request }) =>
         request.mode === "navigate" &&
-        ["/", "/dashboard", "/search", "/settings", "/settings/language", "/settings/prompt", "/recordings/new", "/onboarding", "/pending-approval"].includes(
+        ["/", "/dashboard", "/search", "/settings", "/settings/language", "/settings/prompt", "/recordings/new", "/onboarding", "/h/pgimer", "/pending-approval"].includes(
           url.pathname
         ),
       handler: "NetworkFirst",
