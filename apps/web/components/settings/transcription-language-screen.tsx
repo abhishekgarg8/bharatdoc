@@ -61,7 +61,7 @@ export function TranscriptionLanguageScreen({
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
         <header className="flex items-start gap-3 px-5 pb-4 pt-5">
           <Link
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             href="/settings"
             aria-label="Back to settings"
           >

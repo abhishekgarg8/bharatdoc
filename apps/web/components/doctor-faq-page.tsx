@@ -99,12 +99,12 @@ export function DoctorFaqPage() {
             <Link href="/help-center" className="hidden text-sm text-ink-muted transition-colors hover:text-ink sm:inline">
               Help
             </Link>
-            <Link href="/onboarding" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/onboarding" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Log in
             </Link>
             <Link
               href="/onboarding"
-              className="inline-flex items-center gap-1.5 rounded-full bg-terracotta px-5 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(194,74,42,0.35)] transition-opacity hover:opacity-90"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(194,74,42,0.35)] transition-opacity hover:opacity-90 sm:px-5"
             >
               Get started
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -173,7 +173,7 @@ export function DoctorFaqPage() {
             </div>
             <Link
               href="/onboarding"
-              className="inline-flex w-fit items-center gap-2 rounded-full bg-terracotta px-7 py-3 font-semibold text-white shadow-warm transition-opacity hover:opacity-90"
+              className="inline-flex min-h-11 w-fit items-center gap-2 rounded-full bg-terracotta px-7 py-3 font-semibold text-white shadow-warm transition-opacity hover:opacity-90"
             >
               Start using BharatDoc
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -189,16 +189,16 @@ export function DoctorFaqPage() {
             <span className="font-display italic text-ink">BharatDoc</span>
           </div>
           <nav className="flex flex-wrap items-center gap-6" aria-label="Footer navigation">
-            <Link href="/" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Home
             </Link>
-            <Link href="/terms-privacy?page=terms" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/terms-privacy?page=terms" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Terms
             </Link>
-            <Link href="/terms-privacy?page=privacy" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/terms-privacy?page=privacy" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Privacy
             </Link>
-            <Link href="/help-center" className="text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/help-center" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Help
             </Link>
           </nav>

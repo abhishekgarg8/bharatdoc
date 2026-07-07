@@ -38,19 +38,19 @@ export function LandingPage() {
           <div className="flex items-center gap-3 sm:gap-5">
             <Link
               href="/faqs"
-              className="text-sm text-ink-muted transition-colors hover:text-ink"
+              className="hidden text-sm text-ink-muted transition-colors hover:text-ink sm:inline"
             >
               FAQs
             </Link>
             <Link
               href="/onboarding"
-              className="text-sm text-ink-muted transition-colors hover:text-ink"
+              className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink"
             >
               Log in
             </Link>
             <Link
               href="/onboarding"
-              className="flex items-center gap-1.5 rounded-full bg-terracotta px-5 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(194,74,42,0.35)] transition-opacity hover:opacity-90"
+              className="flex min-h-11 items-center gap-1.5 rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(194,74,42,0.35)] transition-opacity hover:opacity-90 sm:px-5"
             >
               Get started
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -82,8 +82,7 @@ export function LandingPage() {
           <div className="w-full max-w-[590px] pt-5 sm:pt-8 lg:pt-0">
             {/* Headline */}
             <h1
-              className="mb-7 max-w-[9ch] font-display italic leading-[1.02] text-ink sm:max-w-[12ch]"
-              style={{ fontSize: "clamp(48px, 7vw, 84px)" }}
+              className="mb-7 max-w-[9ch] font-display text-[48px] italic leading-[1.02] text-ink sm:max-w-[12ch] sm:text-[72px] lg:text-[84px]"
             >
               AI Scribe for Indian clinics
             </h1>
@@ -97,7 +96,7 @@ export function LandingPage() {
             <div className="flex flex-wrap items-center gap-4">
               <Link
                 href="/onboarding"
-                className="flex items-center gap-2 rounded-full bg-terracotta px-8 py-3.5 font-semibold text-white shadow-[0_6px_24px_rgba(194,74,42,0.38),0_2px_0_rgba(0,0,0,0.08)] transition-opacity hover:opacity-90"
+                className="flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-7 py-3.5 font-semibold text-white shadow-[0_6px_24px_rgba(194,74,42,0.38),0_2px_0_rgba(0,0,0,0.08)] transition-opacity hover:opacity-90 sm:px-8"
               >
                 Get started
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -106,7 +105,7 @@ export function LandingPage() {
               </Link>
               <a
                 href="#how-it-works"
-                className="flex items-center gap-2 rounded-full bg-paper/70 px-4 py-3 text-sm font-medium text-ink-muted shadow-[0_3px_14px_rgba(28,23,18,0.08)] backdrop-blur-sm transition-colors hover:text-ink"
+                className="flex min-h-11 items-center gap-2 rounded-full bg-paper/70 px-4 py-3 text-sm font-medium text-ink-muted shadow-[0_3px_14px_rgba(28,23,18,0.08)] backdrop-blur-sm transition-colors hover:text-ink"
               >
                 See how it works
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -316,12 +315,7 @@ export function LandingPage() {
       <section className="py-28">
         <div className="mx-auto max-w-6xl px-6">
           <div className="relative overflow-hidden rounded-3xl bg-terracotta px-6 py-20 text-center sm:px-16 sm:py-24">
-            {/* Subtle texture rings */}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl" aria-hidden="true">
-              <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full border border-white/10" />
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-white/10" />
-              <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full border border-white/10" />
-            </div>
+            <div className="pointer-events-none absolute inset-3 rounded-[1.25rem] border border-white/10" aria-hidden="true" />
 
             <p className="mb-3 font-mono text-xs uppercase tracking-widest text-white/60">
               Start today
@@ -334,7 +328,7 @@ export function LandingPage() {
             </p>
             <Link
               href="/onboarding"
-              className="inline-flex items-center gap-2 rounded-full bg-paper px-10 py-4 font-semibold text-terracotta shadow-[0_4px_24px_rgba(0,0,0,0.18)] transition-opacity hover:opacity-90"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-paper px-8 py-4 font-semibold text-terracotta shadow-[0_4px_24px_rgba(0,0,0,0.18)] transition-opacity hover:opacity-90 sm:px-10"
             >
               Get started
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -356,19 +350,19 @@ export function LandingPage() {
             <nav className="flex items-center gap-6" aria-label="Footer navigation">
               <Link
                 href="/terms-privacy?page=terms"
-                className="text-sm text-ink-muted transition-colors hover:text-ink"
+                className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink"
               >
                 Terms
               </Link>
               <Link
                 href="/terms-privacy?page=privacy"
-                className="text-sm text-ink-muted transition-colors hover:text-ink"
+                className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink"
               >
                 Privacy
               </Link>
               <Link
                 href="/help-center"
-                className="text-sm text-ink-muted transition-colors hover:text-ink"
+                className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink"
               >
                 Help
               </Link>

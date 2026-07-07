@@ -732,8 +732,8 @@ export function SettingsScreen({
                       {initialForName(member.name)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-body text-sm font-bold text-ink">{member.name}</h3>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="min-w-0 truncate font-body text-sm font-bold text-ink">{member.name}</h3>
                         <span
                           className={cn(
                             "rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-[0.08em]",
@@ -744,13 +744,13 @@ export function SettingsScreen({
                         </span>
                       </div>
                       <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
-                      <p className="mt-1 font-body text-[11px] text-ink-faint">{member.contact}</p>
+                      <p className="mt-1 truncate font-body text-[11px] text-ink-faint">{member.contact}</p>
                       <p className="mt-1 font-body text-[11px] text-ink-soft">
                         Joined {requestedLabel(member.createdAt)} · {member.recordingsCount} recordings
                       </p>
                       {member.role !== "owner" ? (
                         <button
-                          className="mt-2 font-body text-[11px] font-bold text-stamp underline-offset-2 hover:underline disabled:opacity-60"
+                          className="mt-2 inline-flex min-h-11 items-center font-body text-[11px] font-bold text-stamp underline-offset-2 hover:underline disabled:opacity-60"
                           type="button"
                           disabled={workingRequestId === member.id}
                           onClick={() => void removeDoctor(member)}
@@ -792,12 +792,12 @@ export function SettingsScreen({
                       <div className="min-w-0 flex-1">
                         <h3 className="font-body text-sm font-bold text-ink">{member.name}</h3>
                         <p className="mt-1 font-body text-xs text-ink-muted">{member.specialization}</p>
-                        <p className="mt-1 font-body text-[11px] text-ink-faint">{member.contact}</p>
+                        <p className="mt-1 truncate font-body text-[11px] text-ink-faint">{member.contact}</p>
                         <p className="mt-1 font-body text-[11px] text-ink-soft">
                           {member.recordingsCount} recordings · removed
                         </p>
                         <button
-                          className="mt-2 font-body text-[11px] font-bold text-sage underline-offset-2 hover:underline disabled:opacity-60"
+                          className="mt-2 inline-flex min-h-11 items-center font-body text-[11px] font-bold text-sage underline-offset-2 hover:underline disabled:opacity-60"
                           type="button"
                           disabled={workingRequestId === member.id}
                           onClick={() => void reapproveDoctor(member)}
@@ -1047,7 +1047,7 @@ function PendingDoctorCard({
       </div>
       <div className="mt-3 grid grid-cols-[1fr_1.35fr] gap-2">
         <BharatButton
-          className="min-h-10 border-stamp/30 py-2 text-stamp"
+          className="min-h-11 border-stamp/30 py-2 text-stamp"
           variant="ghost"
           icon={<X className="h-4 w-4" />}
           disabled={working}
@@ -1056,7 +1056,7 @@ function PendingDoctorCard({
           Reject
         </BharatButton>
         <BharatButton
-          className="min-h-10 bg-sage py-2 text-white shadow-[0_4px_12px_rgba(95,122,82,0.25)]"
+          className="min-h-11 bg-sage py-2 text-white shadow-[0_4px_12px_rgba(95,122,82,0.25)]"
           icon={<Check className="h-4 w-4" />}
           disabled={working}
           onClick={onApprove}

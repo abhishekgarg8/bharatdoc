@@ -47,7 +47,7 @@ export function PageError({
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col bg-paper px-5 text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
       <header className="flex items-center gap-3 pb-4 pt-5">
         <button
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
           type="button"
           onClick={goBack}
           aria-label="Go back"

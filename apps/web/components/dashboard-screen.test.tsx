@@ -83,6 +83,27 @@ describe("DashboardScreen", () => {
     expect(screen.getByText("1 record · 1 pending transcription")).toBeInTheDocument();
   });
 
+  it("constrains long record metadata for narrow mobile cards", () => {
+    const records: DashboardRecord[] = [
+      {
+        id: "local-long-record",
+        patientId: "P-12345678901234567890",
+        time: "Today, 12:05",
+        duration: "1:04:18",
+        doctorName: "Dr. Nisha Shah With A Very Long Clinic Display Name",
+        status: "recorded",
+        offline: true
+      }
+    ];
+
+    render(<DashboardScreen records={records} pendingApprovalsCount={0} />);
+
+    const patientId = screen.getByText("P-12345678901234567890");
+    expect(patientId).toHaveClass("truncate");
+    expect(patientId.parentElement).toHaveClass("w-[72px]", "overflow-hidden");
+    expect(screen.getByText("Dr. Nisha Shah With A Very Long Clinic Display Name")).toHaveClass("truncate");
+  });
+
   it("confirms before deleting a server-backed consultation", async () => {
     const record: DashboardRecord = {
       id: "p-20001",

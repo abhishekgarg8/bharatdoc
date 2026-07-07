@@ -148,7 +148,7 @@ export function DashboardScreen({
           </div>
           <Link
             href="/settings"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             aria-label="Open settings"
           >
             <Settings className="h-[18px] w-[18px]" />
@@ -216,7 +216,7 @@ export function DashboardScreen({
           )}
         </div>
 
-        <div className="pointer-events-none absolute bottom-[88px] left-0 right-0 flex justify-center">
+        <div className="pointer-events-none absolute bottom-[calc(var(--bottom-nav-height)+1rem)] left-0 right-0 flex justify-center">
           <Link
             className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-terracotta px-5 py-4 font-body text-base font-bold tracking-[0.01em] text-white shadow-warm transition active:scale-[0.99]"
             href="/recordings/new"

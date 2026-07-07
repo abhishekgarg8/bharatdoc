@@ -430,7 +430,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
                 aria-label="Password"
               />
               <button
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-ink-muted transition hover:bg-paper"
+                className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-ink-muted transition hover:bg-paper"
                 type="button"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 onClick={() => setShowPassword((current) => !current)}
@@ -442,7 +442,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
               <p className="mt-2 font-body text-[11px] text-ink-muted">Use at least 8 characters.</p>
             ) : (
               <button
-                className="mt-2 font-body text-[11px] font-bold text-terracotta underline-offset-2 hover:underline disabled:opacity-60"
+                className="mt-2 inline-flex min-h-11 items-center font-body text-[11px] font-bold text-terracotta underline-offset-2 hover:underline disabled:opacity-60"
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={isResettingPassword}
@@ -674,7 +674,7 @@ function TextField({
     <label className="mb-3 block">
       <span className="mb-1 block font-body text-[10px] font-bold uppercase tracking-[0.12em] text-ink-muted">{label}</span>
       <input
-        className={mono ? "w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink outline-none" : "w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-body text-sm font-semibold text-ink outline-none"}
+        className={mono ? "min-h-11 w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink outline-none" : "min-h-11 w-full rounded-[10px] border border-rule bg-paper-deep px-3 py-2 font-body text-sm font-semibold text-ink outline-none"}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -688,8 +688,8 @@ function ModeButton({ active, children, onClick }: { active: boolean; children: 
     <button
       className={
         active
-          ? "rounded-xl border-[1.5px] border-terracotta bg-terracotta/10 px-3 py-2 font-body text-xs font-bold text-terracotta"
-          : "rounded-xl border border-rule bg-paper-deep px-3 py-2 font-body text-xs font-bold text-ink-muted"
+          ? "min-h-11 rounded-xl border-[1.5px] border-terracotta bg-terracotta/10 px-3 py-2 font-body text-xs font-bold text-terracotta"
+          : "min-h-11 rounded-xl border border-rule bg-paper-deep px-3 py-2 font-body text-xs font-bold text-ink-muted"
       }
       type="button"
       onClick={onClick}

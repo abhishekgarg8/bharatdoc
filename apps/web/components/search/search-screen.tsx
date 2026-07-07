@@ -41,14 +41,14 @@ function SearchResultCard({ record, returnTo }: { record: DashboardRecord; retur
         href={recordingHref}
         aria-label={`Open recording ${record.patientId}`}
       >
-        <div className="min-w-[72px] shrink-0 rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
+        <div className="w-[72px] shrink-0 overflow-hidden rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
           <div className="font-body text-[9px] font-bold uppercase tracking-[0.12em] text-ochre">Patient</div>
-          <div className="mt-0.5 font-mono text-[13px] font-bold text-ink">{record.patientId}</div>
+          <div className="mt-0.5 truncate font-mono text-[13px] font-bold text-ink">{record.patientId}</div>
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 font-body text-[13px] font-bold text-ink">
-            <span>{record.time}</span>
+          <div className="flex min-w-0 items-center gap-1.5 font-body text-[13px] font-bold text-ink">
+            <span className="shrink-0">{record.time}</span>
             {record.label ? <span className="truncate text-ink-muted">· {record.label}</span> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-body text-[11.5px] text-ink-muted">
@@ -145,7 +145,7 @@ export function SearchScreen({
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
         <header className="flex items-start gap-3 px-5 pb-4 pt-5">
           <Link
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             href="/dashboard"
             aria-label="Back to dashboard"
           >
@@ -183,7 +183,7 @@ export function SearchScreen({
               />
               {query ? (
                 <button
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted"
                   type="button"
                   aria-label="Clear search"
                   onClick={clearSearch}
