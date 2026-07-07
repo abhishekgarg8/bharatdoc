@@ -11,12 +11,14 @@ export default defineConfig({
     trace: "retain-on-failure",
     ...devices["Pixel 5"]
   },
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
+  ...(process.env.PLAYWRIGHT_BASE_URL
+    ? {}
     : {
-        command: "NEXT_PUBLIC_ENABLE_DEMO_MODE=true pnpm dev",
-        url: baseURL,
-        reuseExistingServer: true,
-        timeout: 120000
-      }
+        webServer: {
+          command: "NEXT_PUBLIC_ENABLE_DEMO_MODE=true pnpm dev",
+          url: baseURL,
+          reuseExistingServer: true,
+          timeout: 120000
+        }
+      })
 });
