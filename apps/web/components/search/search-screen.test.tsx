@@ -36,6 +36,28 @@ describe("SearchScreen", () => {
     expect(screen.getByText("P-10470")).toBeInTheDocument();
   });
 
+  it("constrains long patient IDs in result cards", () => {
+    render(
+      <SearchScreen
+        initialRecords={[
+          {
+            id: "p-long",
+            patientId: "P-12345678901234567890",
+            time: "Today, 10:55",
+            duration: "12:03",
+            doctorName: "Dr. Rao",
+            status: "transcribed",
+            recordedAt: "2026-04-23T05:25:00.000Z"
+          }
+        ]}
+      />
+    );
+
+    const patientId = screen.getByText("P-12345678901234567890");
+    expect(patientId).toHaveClass("truncate");
+    expect(patientId.parentElement).toHaveClass("w-[72px]", "overflow-hidden");
+  });
+
   it("filters demo records by normalized patient id", async () => {
     render(<SearchScreen initialRecords={records} />);
 

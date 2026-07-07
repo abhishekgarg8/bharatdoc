@@ -26,20 +26,20 @@ export function DashboardRecordCard({
   const isDeleting = deleteState === "deleting";
   const content = (
     <>
-      <div className="min-w-[68px] shrink-0 rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
+      <div className="w-[72px] shrink-0 overflow-hidden rounded-md border border-dashed border-ochre bg-paper-deep px-2 py-1.5 text-center">
         <div className="font-body text-[9px] font-bold uppercase tracking-[0.12em] text-ochre">Patient</div>
-        <div className="mt-0.5 font-mono text-[13px] font-bold text-ink">{record.patientId}</div>
+        <div className="mt-0.5 truncate font-mono text-[13px] font-bold text-ink">{record.patientId}</div>
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 font-body text-[13px] font-bold text-ink">
+        <div className="flex min-w-0 items-center gap-1.5 font-body text-[13px] font-bold text-ink">
           <span>{record.time}</span>
           {record.offline ? <WifiOff className="h-3 w-3 text-terracotta" aria-label="Stored offline" /> : null}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 font-body text-[11.5px] text-ink-muted">
-          <span>{record.duration}</span>
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 font-body text-[11.5px] text-ink-muted">
+          <span className="shrink-0">{record.duration}</span>
           <span className="h-0.5 w-0.5 rounded-full bg-ink-faint" />
-          <span>{record.doctorName}</span>
+          <span className="truncate">{record.doctorName}</span>
         </div>
         <div className="mt-2">
           {record.offline ? (
@@ -56,7 +56,7 @@ export function DashboardRecordCard({
 
   const deleteButton = canDelete ? (
     <button
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-stamp transition active:scale-[0.98] disabled:opacity-60"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-stamp transition active:scale-[0.98] disabled:opacity-60"
       type="button"
       aria-label={`Delete consultation ${record.patientId}`}
       disabled={isDeleting}
@@ -74,11 +74,11 @@ export function DashboardRecordCard({
       </p>
       {deleteError ? <p className="mt-2 font-body text-[11px] font-semibold text-stamp">{deleteError}</p> : null}
       <div className="mt-3 flex gap-2">
-        <BharatButton className="min-h-10 flex-1 px-3 py-2 text-xs" variant="ghost" disabled={isDeleting} onClick={onCancelDelete}>
+        <BharatButton className="min-h-11 flex-1 px-3 py-2 text-xs" variant="ghost" disabled={isDeleting} onClick={onCancelDelete}>
           Cancel
         </BharatButton>
         <BharatButton
-          className="min-h-10 flex-1 bg-stamp px-3 py-2 text-xs text-white"
+          className="min-h-11 flex-1 bg-stamp px-3 py-2 text-xs text-white"
           disabled={isDeleting}
           onClick={() => onConfirmDelete?.(record)}
         >
@@ -94,11 +94,11 @@ export function DashboardRecordCard({
         className="overflow-hidden rounded-[14px] border border-rule bg-paper shadow-[0_1px_0_#E5DAC5]"
         aria-label={`Local recording ${record.patientId} awaiting transcription`}
       >
-        <div className="flex items-center gap-3 p-4">
+        <div className="flex items-start gap-3 p-4">
           {content}
           <div className="flex shrink-0 items-center gap-2">
             <Link
-              className="rounded-full border border-rule bg-paper-deep px-3 py-1.5 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
+              className="inline-flex min-h-11 items-center rounded-full border border-rule bg-paper-deep px-3 py-1.5 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
               href="/recordings/new"
               aria-label={`Resume recording ${record.patientId}`}
             >

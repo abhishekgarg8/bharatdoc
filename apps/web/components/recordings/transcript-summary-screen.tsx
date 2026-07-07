@@ -342,7 +342,7 @@ export function TranscriptSummaryScreen({
           }}
         >
           <Link
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             href={backHref}
             aria-label={backLabel}
             onClick={(event) => {
@@ -386,7 +386,7 @@ export function TranscriptSummaryScreen({
           <div className="grid grid-cols-2 rounded-xl border border-rule bg-paper-deep p-1">
             <button
               className={cn(
-                "min-h-10 rounded-lg font-body text-sm font-bold transition",
+                "min-h-11 rounded-lg font-body text-sm font-bold transition",
                 activeTab === "transcript" ? "bg-paper text-ink shadow-[0_1px_0_#E5DAC5]" : "text-ink-muted"
               )}
               type="button"
@@ -396,7 +396,7 @@ export function TranscriptSummaryScreen({
             </button>
             <button
               className={cn(
-                "min-h-10 rounded-lg font-body text-sm font-bold transition",
+                "min-h-11 rounded-lg font-body text-sm font-bold transition",
                 activeTab === "summary" ? "bg-paper text-ink shadow-[0_1px_0_#E5DAC5]" : "text-ink-muted"
               )}
               type="button"
@@ -471,7 +471,7 @@ export function TranscriptSummaryScreen({
                     </div>
                   </div>
                   <BharatButton
-                    className="min-h-10 shrink-0 px-3 py-2"
+                    className="min-h-11 shrink-0 px-3 py-2"
                     variant="ghost"
                     icon={<FileCheck2 className="h-4 w-4" />}
                     disabled={generatingPdf || !canEditRecording}
@@ -494,7 +494,7 @@ export function TranscriptSummaryScreen({
                     </div>
                     {pdfUrl ? (
                       <a
-                        className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 font-body text-xs font-bold text-paper"
+                        className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-3 py-2 font-body text-xs font-bold text-paper"
                         href={pdfUrl}
                         target="_blank"
                         rel="noreferrer"
@@ -531,7 +531,7 @@ export function TranscriptSummaryScreen({
                   <p className="font-body text-xs font-semibold text-ink">This cannot be undone.</p>
                   <div className="mt-3 flex gap-2">
                     <BharatButton
-                      className="min-h-10 flex-1 px-3 py-2 text-xs"
+                      className="min-h-11 flex-1 px-3 py-2 text-xs"
                       variant="ghost"
                       disabled={deleting}
                       onClick={() => {
@@ -542,7 +542,7 @@ export function TranscriptSummaryScreen({
                       Cancel
                     </BharatButton>
                     <BharatButton
-                      className="min-h-10 flex-1 bg-stamp px-3 py-2 text-xs text-white"
+                      className="min-h-11 flex-1 bg-stamp px-3 py-2 text-xs text-white"
                       disabled={deleting}
                       onClick={() => void deleteCurrentRecording()}
                     >
@@ -552,7 +552,7 @@ export function TranscriptSummaryScreen({
                 </div>
               ) : (
                 <button
-                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-stamp/30 bg-paper-deep px-3 py-2 font-body text-xs font-bold text-stamp transition active:scale-[0.99]"
+                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-stamp/30 bg-paper-deep px-3 py-2 font-body text-xs font-bold text-stamp transition active:scale-[0.99]"
                   type="button"
                   onClick={() => {
                     setMessage(null);

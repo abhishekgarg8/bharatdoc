@@ -530,7 +530,7 @@ export function RecordingScreen({
           }}
         >
           <Link
-            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
+            className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
             href="/dashboard"
             aria-label="Back to dashboard"
           >

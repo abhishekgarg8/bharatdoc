@@ -15,7 +15,7 @@ interface BottomNavProps {
 
 export function BottomNav({ active, settingsBadgeCount = 0 }: BottomNavProps) {
   return (
-    <nav className="border-t border-rule bg-paper px-6 pb-3 pt-2 font-body" aria-label="Primary navigation">
+    <nav className="border-t border-rule bg-paper px-5 pb-[calc(0.75rem+var(--safe-area-bottom))] pt-2 font-body" aria-label="Primary navigation">
       <div className="flex items-center justify-around">
         {items.map((item) => {
           const Icon = item.icon;
