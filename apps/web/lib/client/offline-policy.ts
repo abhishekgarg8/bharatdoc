@@ -7,6 +7,7 @@ export const APP_SHELL_ROUTES = [
   "/settings/prompt",
   "/recordings/new",
   "/onboarding",
+  "/signup",
   "/pending-approval"
 ] as const;
 

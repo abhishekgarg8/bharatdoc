@@ -9,6 +9,8 @@ describe("offline policy", () => {
   it("recognizes app shell routes that may be cached by the PWA worker", () => {
     expect(isAppShellRoute("/dashboard")).toBe(true);
     expect(isAppShellRoute("/recordings/new?mockRecorder=1")).toBe(true);
+    expect(isAppShellRoute("/onboarding")).toBe(true);
+    expect(isAppShellRoute("/signup")).toBe(true);
     expect(isAppShellRoute("/api/recordings")).toBe(false);
     expect(isAppShellRoute("/recordings/p-10482")).toBe(false);
   });

@@ -49,7 +49,7 @@ export function SearchPageClient({
         if (allowDemoFallback) {
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }

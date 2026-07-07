@@ -81,7 +81,7 @@ export function PendingApprovalPageClient({
           setStatus(demoStatus);
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }
@@ -143,7 +143,7 @@ export function PendingApprovalPageClient({
         } else {
           await client.signOut().catch(() => undefined);
         }
-        navigate("/onboarding");
+        navigate("/signup");
       }}
     />
   );

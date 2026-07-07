@@ -28,7 +28,7 @@ export function PageError({
   actionLabel?: string;
 }) {
   const needsSignIn = /\bsign in\b/i.test(message);
-  const primaryHref = actionHref ?? (needsSignIn ? "/onboarding" : homeHref);
+  const primaryHref = actionHref ?? (needsSignIn ? "/signup" : homeHref);
   const primaryLabel = actionLabel ?? (needsSignIn ? "Sign in again" : "Dashboard");
 
   function goBack() {

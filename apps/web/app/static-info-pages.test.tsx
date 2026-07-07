@@ -18,6 +18,7 @@ describe("static information pages", () => {
     expect(screen.getByText(/Doctors should obtain patient consent/i)).toBeInTheDocument();
     expect(screen.getByText(/doctor remains responsible for the final clinical judgment/i)).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(12);
+    expect(screen.getByRole("link", { name: /log in/i })).toHaveAttribute("href", "/signup");
     expect(screen.getByRole("link", { name: /start using bharatdoc/i })).toHaveAttribute("href", "/onboarding");
   });
 

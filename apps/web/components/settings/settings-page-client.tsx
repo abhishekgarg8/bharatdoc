@@ -100,12 +100,12 @@ export function SettingsPageClient({
   async function signOutAndNavigate(options: { ignoreMissingAuthClient?: boolean } = {}) {
     if (options.ignoreMissingAuthClient) {
       await client.signOut().catch(() => undefined);
-      navigate("/onboarding");
+      navigate("/signup");
       return;
     }
 
     await client.signOut();
-    navigate("/onboarding");
+    navigate("/signup");
   }
 
   useEffect(() => {
@@ -122,7 +122,7 @@ export function SettingsPageClient({
         if (allowDemoFallback) {
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }

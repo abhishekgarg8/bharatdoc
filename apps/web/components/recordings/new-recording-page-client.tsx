@@ -48,7 +48,7 @@ export function NewRecordingPageClient({
       }
 
       if (!token && !allowDemoFallback) {
-        navigate("/onboarding");
+        navigate("/signup");
         return;
       }
 

@@ -43,7 +43,7 @@ export function LandingPage() {
               FAQs
             </Link>
             <Link
-              href="/onboarding"
+              href="/signup"
               className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink"
             >
               Log in

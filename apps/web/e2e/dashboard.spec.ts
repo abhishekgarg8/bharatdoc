@@ -70,9 +70,22 @@ test("root landing page renders and links to onboarding", async ({ page }) => {
     })
   ).toBeVisible();
   await expect(page.getByText("Turn every consultation into an AI-drafted, doctor-reviewed summary and Patient ID PDF.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "FAQs" })).toHaveAttribute("href", "/faqs");
+  await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/signup");
   await page.getByRole("link", { name: "Get started" }).first().click();
   await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("onboarding explainer is skippable and has three screens", async ({ page }) => {
+  await page.goto("/onboarding");
+
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Skip" })).toHaveAttribute("href", "/signup");
+  await expect(page.getByLabel(/show /i)).toHaveCount(3);
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm your email" })).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "Start recording and transcribing" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /get started/i })).toHaveAttribute("href", "/signup");
 });
 
 test("public FAQs page renders doctor adoption guidance", async ({ page }) => {
@@ -87,7 +100,7 @@ test("public FAQs page renders doctor adoption guidance", async ({ page }) => {
 });
 
 test("demo onboarding join flow reaches pending approval", async ({ page }) => {
-  await page.goto("/onboarding?demo=1");
+  await page.goto("/signup?demo=1");
 
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page.getByText("Profile details")).toBeVisible();
@@ -99,7 +112,7 @@ test("demo onboarding join flow reaches pending approval", async ({ page }) => {
 });
 
 test("onboarding specialization dropdown supports other text", async ({ page }) => {
-  await page.goto("/onboarding?demo=1");
+  await page.goto("/signup?demo=1");
 
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page.getByText("Profile details")).toBeVisible();
@@ -112,7 +125,7 @@ test("onboarding specialization dropdown supports other text", async ({ page }) 
 });
 
 test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
-  await page.goto("/onboarding?demo=1");
+  await page.goto("/signup?demo=1");
 
   await page.getByRole("button", { name: /create account/i }).click();
   await page.getByRole("button", { name: /^continue$/i }).click();
@@ -124,7 +137,7 @@ test("demo onboarding owner flow reaches dashboard", async ({ page }) => {
 });
 
 test("onboarding smoke renders email password entry", async ({ page }) => {
-  await page.goto("/onboarding");
+  await page.goto("/signup");
 
   await expect(page.getByText("Welcome to BharatDoc")).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
