@@ -9,3 +9,10 @@ Compacted public mobile nav, removed off-viewport CTA decoration, and made key t
 Made dashboard/search/settings long strings truncate safely and lifted the recording FAB above safe-area nav.
 Added responsive Playwright guards for mobile overflow and tap targets.
 Verified with lint, typecheck, focused Vitest, production build, Playwright checks, and screenshots in testing/issue-32-mobile-responsiveness.
+
+2026-07-07 - Issue #33: Added a skippable three-screen onboarding explainer at /onboarding.
+Moved the existing signup/login wizard to /signup and sent recovery/login flows there directly.
+Kept marketing Get started CTAs on /onboarding so first-time users see the explainer first.
+Covered the split routes with unit tests, Playwright checks, PWA shell routing, and production build.
+Merged PR #37, waited 3 minutes, then verified production login reached /dashboard with the test account.
+Saved local and production screenshots/videos in testing/issue-33-onboarding-explainer.
