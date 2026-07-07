@@ -127,7 +127,7 @@ describe("PendingApprovalPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
   });
 
   it("redirects missing-token users unless demo fallback is enabled", async () => {
@@ -136,7 +136,7 @@ describe("PendingApprovalPageClient", () => {
 
     render(<PendingApprovalPageClient authClient={authClient} onNavigate={navigate} />);
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/signup"));
   });
 
   it("signs out and redirects to onboarding when pending-status auth is expired", async () => {
@@ -149,7 +149,7 @@ describe("PendingApprovalPageClient", () => {
     render(<PendingApprovalPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
     expect(screen.queryByText("Unable to load approval status. Please sign in again.")).not.toBeInTheDocument();
   });
 
@@ -169,6 +169,6 @@ describe("PendingApprovalPageClient", () => {
     await screen.findByText(/Sunrise Hospital/);
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/signup"));
   });
 });

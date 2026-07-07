@@ -140,7 +140,7 @@ describe("DashboardPageClient", () => {
     render(<DashboardPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
     expect(screen.queryByText("Unable to load dashboard. Please sign in again.")).not.toBeInTheDocument();
   });
 

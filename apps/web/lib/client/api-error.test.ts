@@ -16,14 +16,14 @@ describe("client API error handling", () => {
     ).rejects.toBeInstanceOf(AuthSessionExpiredError);
   });
 
-  it("signs out and navigates to onboarding for expired sessions", async () => {
+  it("signs out and navigates to signup for expired sessions", async () => {
     const signOut = vi.fn(async () => undefined);
     const navigate = vi.fn();
 
     await expect(recoverExpiredSession(new AuthSessionExpiredError(), signOut, navigate)).resolves.toBe(true);
 
     expect(signOut).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
   });
 
   it("does not handle non-auth API errors", async () => {

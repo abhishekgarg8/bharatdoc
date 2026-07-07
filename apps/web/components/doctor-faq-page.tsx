@@ -99,7 +99,7 @@ export function DoctorFaqPage() {
             <Link href="/help-center" className="hidden text-sm text-ink-muted transition-colors hover:text-ink sm:inline">
               Help
             </Link>
-            <Link href="/onboarding" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
+            <Link href="/signup" className="inline-flex min-h-11 items-center text-sm text-ink-muted transition-colors hover:text-ink">
               Log in
             </Link>
             <Link

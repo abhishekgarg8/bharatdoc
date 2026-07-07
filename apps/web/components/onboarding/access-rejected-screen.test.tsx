@@ -10,7 +10,7 @@ describe("AccessRejectedScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /join a different hospital/i }));
 
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
   });
 
   it("signs out rejected doctors and returns to onboarding", async () => {
@@ -24,7 +24,7 @@ describe("AccessRejectedScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
   });
 
   it("still exits to onboarding when local Supabase browser config is unavailable", async () => {
@@ -39,6 +39,6 @@ describe("AccessRejectedScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/signup"));
   });
 });

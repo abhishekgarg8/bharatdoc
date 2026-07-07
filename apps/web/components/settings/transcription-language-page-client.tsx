@@ -45,7 +45,7 @@ export function TranscriptionLanguagePageClient({
         if (allowDemoFallback) {
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }

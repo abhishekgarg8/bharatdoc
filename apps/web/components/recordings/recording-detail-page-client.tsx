@@ -126,7 +126,7 @@ export function RecordingDetailPageClient({
           setRecording(findDemoRecordingDetail(recordingId));
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }

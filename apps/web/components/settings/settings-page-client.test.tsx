@@ -128,7 +128,7 @@ describe("SettingsPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
   });
 
   it("uses demo settings only when explicit demo fallback is enabled", async () => {
@@ -161,7 +161,7 @@ describe("SettingsPageClient", () => {
     await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/signup"));
   });
 
   it("shows an error instead of demo settings when authenticated loading fails", async () => {
@@ -193,7 +193,7 @@ describe("SettingsPageClient", () => {
     render(<SettingsPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
     expect(screen.queryByText("Unable to load settings. Please sign in again.")).not.toBeInTheDocument();
   });
 

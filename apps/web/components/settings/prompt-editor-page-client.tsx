@@ -45,7 +45,7 @@ export function PromptEditorPageClient({
         if (allowDemoFallback) {
           setLoading(false);
         } else {
-          navigate("/onboarding");
+          navigate("/signup");
         }
         return;
       }

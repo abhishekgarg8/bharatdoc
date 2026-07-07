@@ -53,7 +53,7 @@ export async function recoverExpiredSession(
   }
 
   await signOut().catch(() => undefined);
-  navigate("/onboarding");
+  navigate("/signup");
 
   return true;
 }

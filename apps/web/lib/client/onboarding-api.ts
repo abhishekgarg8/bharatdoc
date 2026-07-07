@@ -75,5 +75,5 @@ export function destinationForRegistration(result: RegisterResponse): string {
     return "/access-rejected";
   }
 
-  return "/onboarding";
+  return "/signup";
 }

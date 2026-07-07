@@ -111,7 +111,7 @@ describe("SearchPageClient", () => {
     render(<SearchPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
 
     await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/onboarding");
+    expect(navigate).toHaveBeenCalledWith("/signup");
     expect(screen.queryByText("Unable to load search records. Please sign in again.")).not.toBeInTheDocument();
   });
 

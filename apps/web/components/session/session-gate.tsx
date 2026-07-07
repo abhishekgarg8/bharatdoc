@@ -28,7 +28,7 @@ export function SessionGate({ authClient, onNavigate }: SessionGateProps) {
       }
 
       if (!idToken) {
-        navigate("/onboarding");
+        navigate("/signup");
         return;
       }
 
@@ -38,7 +38,7 @@ export function SessionGate({ authClient, onNavigate }: SessionGateProps) {
       } catch {
         if (isMounted) {
           setMessage("We could not load your profile. Please sign in again.");
-          navigate("/onboarding");
+          navigate("/signup");
         }
       }
     }

@@ -23,7 +23,7 @@ export function AccessRejectedScreen({ authClient, onNavigate }: AccessRejectedS
   const [error, setError] = useState<string | null>(null);
 
   function handleRetry() {
-    navigate("/onboarding");
+    navigate("/signup");
   }
 
   async function handleSignOut() {
@@ -32,10 +32,10 @@ export function AccessRejectedScreen({ authClient, onNavigate }: AccessRejectedS
 
     try {
       await auth.signOut();
-      navigate("/onboarding");
+      navigate("/signup");
     } catch (signOutError) {
       if (canContinueAfterSignOutError(signOutError)) {
-        navigate("/onboarding");
+        navigate("/signup");
       } else {
         setError(authErrorMessage(signOutError));
       }

@@ -20,7 +20,7 @@ describe("SessionGate", () => {
     render(<SessionGate authClient={authClient} onNavigate={navigate} />);
 
     expect(screen.getByText("Checking your session")).toBeInTheDocument();
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/signup"));
   });
 
   it("routes active users to dashboard after /api/me", async () => {

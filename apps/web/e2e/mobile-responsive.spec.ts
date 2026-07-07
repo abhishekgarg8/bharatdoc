@@ -11,7 +11,8 @@ const viewports = [
 const routes = [
   "/",
   "/faqs",
-  "/onboarding?demo=1",
+  "/onboarding",
+  "/signup?demo=1",
   "/h/pgimer?demo=1",
   "/dashboard?demo=1",
   "/search?demo=1",
