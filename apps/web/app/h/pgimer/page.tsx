@@ -5,7 +5,7 @@ export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Exclusive PGIMER AI Scribe Access | BharatDoc",
-  description: "A US-style AI scribe workflow opened for PGIMER doctors."
+  description: "AI scribe access exclusively for PGIMER doctors."
 };
 
 export default function PgimerOnboardingPage() {
@@ -16,9 +16,9 @@ export default function PgimerOnboardingPage() {
         name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
         address: "Sector-12, Chandigarh PIN-160012, India",
         welcomeBadge: "Exclusive hospital access",
-        welcomeTitle: "A US-style AI scribe workflow, opened for PGIMER",
+        welcomeTitle: "AI scribe exclusively for PGIMER Doctors",
         welcomeCopy:
-          "Advanced clinical documentation tools are usually reserved for large, well-funded health systems. This pilot brings that workflow to PGIMER doctors first."
+          "Advanced clinical documentation tools as used by large well-funded health systems in the US. This pilot brings that workflow to PGIMER doctors using AI now."
       }}
     />
   );

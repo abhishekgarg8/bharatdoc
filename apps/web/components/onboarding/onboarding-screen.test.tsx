@@ -17,9 +17,9 @@ const pgimerTarget = {
   name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
   address: "Sector-12, Chandigarh PIN-160012, India",
   welcomeBadge: "Exclusive hospital access",
-  welcomeTitle: "A US-style AI scribe workflow, opened for PGIMER",
+  welcomeTitle: "AI scribe exclusively for PGIMER Doctors",
   welcomeCopy:
-    "Advanced clinical documentation tools are usually reserved for large, well-funded health systems. This pilot brings that workflow to PGIMER doctors first."
+    "Advanced clinical documentation tools as used by large well-funded health systems in the US. This pilot brings that workflow to PGIMER doctors using AI now."
 };
 
 afterEach(() => {
@@ -230,7 +230,7 @@ describe("OnboardingScreen", () => {
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("Exclusive hospital access")).toBeInTheDocument();
-    expect(screen.getByText("A US-style AI scribe workflow, opened for PGIMER")).toBeInTheDocument();
+    expect(screen.getByText("AI scribe exclusively for PGIMER Doctors")).toBeInTheDocument();
     expect(screen.getByText(pgimerTarget.welcomeCopy)).toBeInTheDocument();
     expect(screen.queryByText("Powered by BharatDoc")).not.toBeInTheDocument();
 

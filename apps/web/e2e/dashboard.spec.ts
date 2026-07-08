@@ -150,8 +150,8 @@ test("PGIMER onboarding smoke renders branded locked join entry", async ({ page 
 
   await expect(page.getByRole("img")).toHaveCount(0);
   await expect(page.getByText("Exclusive hospital access")).toBeVisible();
-  await expect(page.getByText("A US-style AI scribe workflow, opened for PGIMER")).toBeVisible();
-  await expect(page.getByText(/Advanced clinical documentation tools are usually reserved/)).toBeVisible();
+  await expect(page.getByText("AI scribe exclusively for PGIMER Doctors")).toBeVisible();
+  await expect(page.getByText(/Advanced clinical documentation tools as used by large well-funded health systems in the US/)).toBeVisible();
   await expect(page.getByText("Powered by BharatDoc")).toHaveCount(0);
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page.getByText("Profile details")).toBeVisible();
