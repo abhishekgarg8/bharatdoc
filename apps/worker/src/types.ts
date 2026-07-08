@@ -50,6 +50,8 @@ export interface RecordingProcessingRepository {
     recordingId: string;
     doctorId: string;
     pdfStoragePath: string;
+    pdfGeneratedAt: string;
+    pdfVersion: string;
   }): Promise<Recording>;
 }
 

@@ -37,6 +37,8 @@ const recording: Recording = {
   transcript: "Patient reports fever.",
   summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "summary_ready",
   recorded_at: "2026-04-23T06:20:00.000Z",
   created_at: "2026-04-23T06:20:01.000Z"

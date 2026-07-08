@@ -183,7 +183,9 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
         .update({
           summary: input.summary,
           status: "summary_ready",
-          pdf_storage_path: null
+          pdf_storage_path: null,
+          pdf_generated_at: null,
+          pdf_version: null
         })
         .eq("id", input.recordingId)
         .eq("doctor_id", input.doctorId)

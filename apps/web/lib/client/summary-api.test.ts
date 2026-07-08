@@ -17,7 +17,9 @@ const apiRecording = {
   recorded_at: "2026-04-23T05:25:00.000Z",
   transcript: "Patient reports fever.",
   summary: "Chief Complaint: Fever",
-  pdf_storage_path: null,
+  has_pdf: false,
+  pdf_generated_at: null,
+  pdf_version: null,
   pdf_signed_url: null
 };
 
@@ -68,7 +70,9 @@ describe("summary client API", () => {
           ...apiRecording,
           summary: "Edited summary",
           status: "summary_ready",
-          pdf_storage_path: null,
+          has_pdf: false,
+          pdf_generated_at: null,
+          pdf_version: null,
           pdf_signed_url: null
         }
       })
@@ -77,7 +81,7 @@ describe("summary client API", () => {
     await expect(saveRecordingSummary("id-token", apiRecording.id, "Edited summary", fetcher)).resolves.toMatchObject({
       summary: "Edited summary",
       status: "summary_ready",
-      pdfStoragePath: null
+      hasPdf: false
     });
     expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}/summary`, {
       method: "PATCH",
@@ -93,17 +97,21 @@ describe("summary client API", () => {
     const fetcher = vi.fn(async () =>
       Response.json({
         recording_id: apiRecording.id,
-        pdf_storage_path: "clinic/doctor/recording.pdf",
         signed_url: "https://signed.example.com/recording.pdf",
-        status: "pdf_saved"
+        status: "pdf_saved",
+        has_pdf: true,
+        pdf_generated_at: "2026-04-23T05:30:00.000Z",
+        pdf_version: "v1"
       })
     ) as unknown as typeof fetch;
 
     await expect(generateRecordingPdf("id-token", apiRecording.id, fetcher)).resolves.toEqual({
       recording_id: apiRecording.id,
-      pdf_storage_path: "clinic/doctor/recording.pdf",
       signed_url: "https://signed.example.com/recording.pdf",
-      status: "pdf_saved"
+      status: "pdf_saved",
+      has_pdf: true,
+      pdf_generated_at: "2026-04-23T05:30:00.000Z",
+      pdf_version: "v1"
     });
     expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}/pdf`, {
       method: "POST",

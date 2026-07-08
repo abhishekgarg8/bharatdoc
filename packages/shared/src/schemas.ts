@@ -52,6 +52,8 @@ export const RecordingSchema = z.object({
   transcript: z.string().nullable(),
   summary: z.string().nullable(),
   pdf_storage_path: z.string().nullable(),
+  pdf_generated_at: z.string().datetime().nullable(),
+  pdf_version: z.string().nullable(),
   status: RecordingStatusSchema,
   recorded_at: z.string().datetime(),
   created_at: z.string().datetime()

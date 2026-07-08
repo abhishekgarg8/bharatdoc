@@ -18,6 +18,8 @@ const transcribedRecording: Recording = {
   transcript: "Updated transcript.",
   summary: null,
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "transcribed",
   recorded_at: "2026-04-23T06:20:00.000Z",
   created_at: "2026-04-23T06:20:01.000Z",
@@ -99,6 +101,8 @@ describe("createRecordingProcessingRepository", () => {
       transcript: "Updated transcript.",
       summary: null,
       pdf_storage_path: null,
+      pdf_generated_at: null,
+      pdf_version: null,
       status: "transcribed",
     });
     expect(query.eq).toHaveBeenNthCalledWith(1, "id", transcribedRecording.id);

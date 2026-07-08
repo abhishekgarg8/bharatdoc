@@ -30,6 +30,8 @@ const recording: Recording = {
   transcript: "Patient reports fever for two days.",
   summary: null,
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "transcribed",
   recorded_at: "2026-04-23T06:20:00.000Z",
   created_at: "2026-04-23T06:20:01.000Z"
@@ -53,11 +55,15 @@ function depsFor(recordingResult: Recording | null = recording, summary = "Chief
       ...(recordingResult ?? recording),
       summary: input.summary,
       status: "summary_ready" as const,
-      pdf_storage_path: null
+      pdf_storage_path: null,
+      pdf_generated_at: null,
+      pdf_version: null
     })),
     markRecordingPdfSaved: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       pdf_storage_path: input.pdfStoragePath,
+      pdf_generated_at: input.pdfGeneratedAt,
+      pdf_version: input.pdfVersion,
       status: "pdf_saved" as const
     }))
   };
@@ -170,7 +176,13 @@ describe("worker summary service", () => {
   });
 
   it("invalidates saved PDFs when regenerating a summary after PDF generation", async () => {
-    const pdfRecording: Recording = { ...recording, status: "pdf_saved", pdf_storage_path: "pdfs/p-10483.pdf" };
+    const pdfRecording: Recording = {
+      ...recording,
+      status: "pdf_saved",
+      pdf_storage_path: "pdfs/p-10483.pdf",
+      pdf_generated_at: "2026-04-23T09:00:00.000Z",
+      pdf_version: "v1"
+    };
     const deps = depsFor(pdfRecording, "Updated summary");
 
     await expect(

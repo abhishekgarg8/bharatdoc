@@ -22,7 +22,9 @@ const apiRecord: DashboardApiRecord = {
   doctor_name: "Dr. Aparna",
   status: "recorded",
   recorded_at: "2026-04-23T06:12:00.000Z",
-  pdf_storage_path: "pdfs/p-10482.pdf",
+  has_pdf: true,
+  pdf_generated_at: "2026-04-23T06:20:00.000Z",
+  pdf_version: "v1",
   pdf_signed_url: "https://signed.example.com/p-10482.pdf"
 };
 
@@ -60,7 +62,9 @@ describe("dashboard data helpers", () => {
       doctorName: "Dr. Aparna",
       status: "recorded",
       recordedAt: apiRecord.recorded_at,
-      pdfStoragePath: "pdfs/p-10482.pdf",
+      hasPdf: true,
+      pdfGeneratedAt: "2026-04-23T06:20:00.000Z",
+      pdfVersion: "v1",
       pdfSignedUrl: "https://signed.example.com/p-10482.pdf"
     });
     expect(record.time).toContain("Today");

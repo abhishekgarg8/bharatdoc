@@ -130,6 +130,8 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
           transcript: input.transcript,
           summary: null,
           pdf_storage_path: null,
+          pdf_generated_at: null,
+          pdf_version: null,
           status: "transcribed"
         })
         .eq("id", input.recordingId)
@@ -186,7 +188,9 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
         .update({
           summary: input.summary,
           status: "summary_ready",
-          pdf_storage_path: null
+          pdf_storage_path: null,
+          pdf_generated_at: null,
+          pdf_version: null
         })
         .eq("id", input.recordingId)
         .eq("doctor_id", input.doctorId)
@@ -205,6 +209,8 @@ export function createRecordingProcessingRepository(supabase: SupabaseClient): R
         .from("recordings")
         .update({
           pdf_storage_path: input.pdfStoragePath,
+          pdf_generated_at: input.pdfGeneratedAt,
+          pdf_version: input.pdfVersion,
           status: "pdf_saved"
         })
         .eq("id", input.recordingId)

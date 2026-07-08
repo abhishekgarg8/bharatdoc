@@ -25,7 +25,9 @@ export interface DashboardRecording {
   doctor_name: string;
   status: RecordingStatus;
   recorded_at: string;
-  pdf_storage_path: string | null;
+  has_pdf: boolean;
+  pdf_generated_at: string | null;
+  pdf_version: string | null;
   pdf_signed_url: string | null;
   can_edit: boolean;
 }
@@ -55,7 +57,9 @@ export interface RecordingDetail {
   recorded_at: string;
   transcript: string | null;
   summary: string | null;
-  pdf_storage_path: string | null;
+  has_pdf: boolean;
+  pdf_generated_at: string | null;
+  pdf_version: string | null;
   pdf_signed_url: string | null;
 }
 
@@ -124,6 +128,19 @@ function requireClinicId(doctor: Doctor): string {
 function normalizeOptionalText(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function pdfMetadataFor(recording: RecordingListItem): Pick<
+  DashboardRecording,
+  "has_pdf" | "pdf_generated_at" | "pdf_version"
+> {
+  const hasPdf = Boolean(recording.pdf_storage_path);
+
+  return {
+    has_pdf: hasPdf,
+    pdf_generated_at: hasPdf ? recording.pdf_generated_at : null,
+    pdf_version: hasPdf ? recording.pdf_version : null
+  };
 }
 
 function requireSearchPatientId(patientId: string | null | undefined): string {
@@ -200,7 +217,7 @@ export function toDashboardRecording(
     doctor_name: recording.doctor_name ?? fallbackDoctorName,
     status: recording.status,
     recorded_at: recording.recorded_at,
-    pdf_storage_path: recording.pdf_storage_path,
+    ...pdfMetadataFor(recording),
     pdf_signed_url: pdfSignedUrl,
     can_edit: currentDoctorId ? recording.doctor_id === currentDoctorId : true
   };
@@ -223,7 +240,7 @@ export function toRecordingDetail(
     recorded_at: recording.recorded_at,
     transcript: recording.transcript,
     summary: recording.summary,
-    pdf_storage_path: recording.pdf_storage_path,
+    ...pdfMetadataFor(recording),
     pdf_signed_url: pdfSignedUrl
   };
 }
