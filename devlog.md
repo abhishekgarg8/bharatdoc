@@ -16,3 +16,9 @@ Kept marketing Get started CTAs on /onboarding so first-time users see the expla
 Covered the split routes with unit tests, Playwright checks, PWA shell routing, and production build.
 Merged PR #37, waited 3 minutes, then verified production login reached /dashboard with the test account.
 Saved local and production screenshots/videos in testing/issue-33-onboarding-explainer.
+
+2026-07-08 - PGIMER onboarding copy annotation update.
+Changed the PGIMER hospital entry headline and body copy to the requested exclusive-doctor positioning.
+Kept the existing responsive layout/tokens and refreshed unit/E2E assertions for the new strings.
+Merged PR #40 after Vercel passed, waited 3 minutes, then verified production /h/pgimer and login to /dashboard.
+Saved verification screenshots in testing/pgimer-copy-annotation.
