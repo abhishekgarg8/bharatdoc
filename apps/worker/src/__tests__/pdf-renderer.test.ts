@@ -1,3 +1,7 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import { createSimplePdfRenderer } from "../pdf-renderer.js";
@@ -44,6 +48,20 @@ const recording: Recording = {
   created_at: "2026-04-23T06:20:01.000Z"
 };
 
+const hasPdfToText = spawnSync("pdftotext", ["-v"], { stdio: "ignore" }).status === 0;
+
+function extractPdfText(pdf: Buffer): string {
+  const directory = mkdtempSync(join(tmpdir(), "bharatdoc-pdf-"));
+  const pdfPath = join(directory, "summary.pdf");
+
+  try {
+    writeFileSync(pdfPath, pdf);
+    return execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+}
+
 describe("simple PDF renderer", () => {
   it("renders a valid PDF buffer with clinical context", async () => {
     const pdf = await createSimplePdfRenderer().render({
@@ -79,7 +97,7 @@ describe("simple PDF renderer", () => {
 
     expect(pdf.toString("ascii").startsWith("%PDF-")).toBe(true);
     expect(pdf.byteLength).toBeGreaterThan(1000);
-  });
+  }, 15_000);
 
   it("renders the PGIMER branded header for the PGIMER clinic code", async () => {
     const renderer = createSimplePdfRenderer();
@@ -104,7 +122,29 @@ describe("simple PDF renderer", () => {
     expect(pgimerPdf.toString("ascii").startsWith("%PDF-")).toBe(true);
     expect(pgimerPdf.toString("ascii")).toContain("%%EOF");
     expect(pgimerPdf.byteLength).toBeGreaterThan(defaultPdf.byteLength);
-  });
+  }, 15_000);
+
+  it.runIf(hasPdfToText)("renders structured summaries and formatted metadata as PDF text", async () => {
+    const pdf = await createSimplePdfRenderer().render({
+      clinic,
+      doctor,
+      recording: {
+        ...recording,
+        summary: "**Chief Complaint**: Fever\n\n## Plan\n- Fluids and paracetamol."
+      },
+      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+    });
+    const text = extractPdfText(pdf);
+
+    expect(text).toContain("Chief Complaint");
+    expect(text).toContain("Fever");
+    expect(text).toContain("Treatment / Prescription");
+    expect(text).toContain("Fluids and paracetamol.");
+    expect(text).toContain("Recorded: 23 Apr 2026");
+    expect(text).toContain("Generated: 23 Apr 2026");
+    expect(text).not.toContain("**Chief Complaint**");
+    expect(text).not.toContain("## Plan");
+  }, 25_000);
 
   it("keeps long summaries in the PDF instead of replacing them with a continuation note", async () => {
     const longSummary = Array.from(

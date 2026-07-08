@@ -1,6 +1,7 @@
 import {
   renderSummaryPrompt,
   requirePatientId,
+  sanitizeClinicalSummaryText,
   type Recording
 } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
@@ -63,7 +64,9 @@ export async function summarizeRecording(
     await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
   );
   const prompt = renderSummaryPrompt(auth.doctor.custom_prompt, recording.transcript!);
-  const summary = (await deps.summaryClient.summarize({ prompt, recording, doctor: auth.doctor })).trim();
+  const summary = sanitizeClinicalSummaryText(
+    await deps.summaryClient.summarize({ prompt, recording, doctor: auth.doctor })
+  );
 
   if (!summary) {
     throw new HttpError(502, "Summary provider returned an empty response.", "SUMMARY_EMPTY");

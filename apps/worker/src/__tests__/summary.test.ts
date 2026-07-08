@@ -75,7 +75,7 @@ function depsFor(recordingResult: Recording | null = recording, summary = "Chief
 }
 
 describe("worker summary service", () => {
-  it("renders the doctor's prompt, generates a summary, and marks the recording ready", async () => {
+  it("renders the doctor's prompt, normalizes the generated summary, and marks the recording ready", async () => {
     const deps = depsFor();
 
     await expect(
@@ -86,7 +86,7 @@ describe("worker summary service", () => {
       )
     ).resolves.toEqual({
       recording_id: recording.id,
-      summary: "Chief Complaint: Fever",
+      summary: "Chief Complaint\nFever",
       status: "summary_ready"
     });
 
@@ -99,7 +99,7 @@ describe("worker summary service", () => {
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever"
+      summary: "Chief Complaint\nFever"
     });
   });
 
@@ -173,6 +173,28 @@ describe("worker summary service", () => {
     ).rejects.toMatchObject({ code: "SUMMARY_EMPTY" });
 
     expect(deps.recordings.markRecordingSummarized).not.toHaveBeenCalled();
+  });
+
+  it("stores generated summaries without Markdown heading markers", async () => {
+    const deps = depsFor(recording, "**Chief Complaint**: Fever\n\n## Plan\n- Fluids and paracetamol.");
+
+    await expect(
+      summarizeRecording(
+        { doctor: activeDoctor, token: { uid: activeDoctor.firebase_uid } },
+        { recordingId: recording.id },
+        deps
+      )
+    ).resolves.toEqual({
+      recording_id: recording.id,
+      summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
+      status: "summary_ready"
+    });
+
+    expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol."
+    });
   });
 
   it("invalidates saved PDFs when regenerating a summary after PDF generation", async () => {
