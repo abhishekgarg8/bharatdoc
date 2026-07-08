@@ -12,6 +12,7 @@ import {
 } from "@/lib/client/dashboard-data";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
+import { DEMO_LOCAL_RECORDING_SCOPE } from "@/lib/client/local-recordings";
 import { deleteRecording } from "@/lib/client/summary-api";
 import type { Doctor } from "@bharatdoc/shared";
 
@@ -142,6 +143,8 @@ export function DashboardPageClient({
             clinicId: doctor.clinic_id
           }
         }
+      : allowDemoFallback
+        ? { localRecordingScope: DEMO_LOCAL_RECORDING_SCOPE }
       : {}),
     ...(doctor?.name ? { doctorName: doctor.name } : allowDemoFallback ? { doctorName: "Dr. Aparna Iyer" } : {}),
     ...(clinicName ? { clinicName } : {})

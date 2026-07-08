@@ -171,6 +171,9 @@ describe("RecordingDetailPageClient", () => {
     const repository = createMemoryLocalRecordingRepository([
       {
         id: "local-recording",
+        authUserId: activeDoctor.firebase_uid,
+        doctorId: activeDoctor.id,
+        clinicId: activeDoctor.clinic_id,
         patientId: "P-20001",
         label: null,
         durationSeconds: 180,
@@ -236,6 +239,92 @@ describe("RecordingDetailPageClient", () => {
       captureState: "transcribed",
       syncState: "transcribed",
       transcript: "Generated transcript from local audio."
+    });
+  });
+
+  it("does not retry transcription from foreign scoped local audio", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const repository = createMemoryLocalRecordingRepository([
+      {
+        id: "foreign-local-recording",
+        authUserId: "other-auth-user",
+        doctorId: "33333333-3333-4333-8333-333333333333",
+        clinicId: activeDoctor.clinic_id,
+        patientId: "P-FOREIGN",
+        label: null,
+        durationSeconds: 180,
+        recordedAt: "2026-04-23T06:12:00.000Z",
+        updatedAt: "2026-04-23T06:13:00.000Z",
+        audioBlob: new Blob(["foreign-audio"], { type: "audio/webm" }),
+        audioChunks: [],
+        audioMimeType: "audio/webm",
+        captureState: "stopped",
+        syncState: "synced",
+        serverRecordingId: apiRecording.id,
+        transcript: null,
+        error: null
+      }
+    ]);
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const url = _input.toString();
+
+      if (url === `/api/recordings/${apiRecording.id}`) {
+        return Response.json({
+          doctor: activeDoctor,
+          recording: {
+            ...apiRecording,
+            status: "recorded",
+            transcript: null
+          }
+        });
+      }
+
+      if (url === "https://worker.example.com/api/transcribe") {
+        expect(init?.headers).toEqual({
+          Authorization: "Bearer id-token",
+          "Content-Type": "application/json"
+        });
+        expect(init?.body).toBe(
+          JSON.stringify({
+            recording_id: apiRecording.id,
+            source: "stored_audio"
+          })
+        );
+
+        return Response.json({
+          recording_id: apiRecording.id,
+          transcript: "Generated transcript from stored audio.",
+          audio_storage_path: "hospital/doctor/recording.wav",
+          status: "transcribed"
+        });
+      }
+
+      return Response.json({ accepted: 1 }, { status: 202 });
+    }) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId={apiRecording.id}
+        authClient={authClient}
+        fetcher={fetcher}
+        localRepository={repository}
+      />
+    );
+
+    await screen.findByText("Transcript is not available yet.");
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+
+    await expect(screen.findByText("Generated transcript from stored audio.")).resolves.toBeInTheDocument();
+    await expect(repository.get("foreign-local-recording")).resolves.toMatchObject({
+      captureState: "stopped",
+      syncState: "synced",
+      transcript: null
     });
   });
 
@@ -368,6 +457,9 @@ describe("RecordingDetailPageClient", () => {
     const repository = createMemoryLocalRecordingRepository([
       {
         id: "local-recording",
+        authUserId: activeDoctor.firebase_uid,
+        doctorId: activeDoctor.id,
+        clinicId: activeDoctor.clinic_id,
         patientId: "P-20001",
         label: null,
         durationSeconds: 180,
@@ -419,5 +511,66 @@ describe("RecordingDetailPageClient", () => {
     );
     await expect(repository.list()).resolves.toHaveLength(0);
     expect(navigate).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("does not delete foreign scoped local artifacts when deleting a server recording", async () => {
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const navigate = vi.fn();
+    const repository = createMemoryLocalRecordingRepository([
+      {
+        id: "foreign-local-recording",
+        authUserId: "other-auth-user",
+        doctorId: "33333333-3333-4333-8333-333333333333",
+        clinicId: activeDoctor.clinic_id,
+        patientId: "P-FOREIGN",
+        label: null,
+        durationSeconds: 180,
+        recordedAt: "2026-04-23T06:12:00.000Z",
+        updatedAt: "2026-04-23T06:13:00.000Z",
+        audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+        audioChunks: [],
+        audioMimeType: "audio/webm",
+        captureState: "stopped",
+        syncState: "synced",
+        serverRecordingId: apiRecording.id,
+        transcript: null,
+        error: null
+      }
+    ]);
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const url = _input.toString();
+
+      if (url === `/api/recordings/${apiRecording.id}` && init?.method === "DELETE") {
+        return Response.json({ recording_id: apiRecording.id });
+      }
+
+      if (url === `/api/recordings/${apiRecording.id}`) {
+        return Response.json({ doctor: activeDoctor, recording: apiRecording });
+      }
+
+      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(
+      <RecordingDetailPageClient
+        recordingId={apiRecording.id}
+        authClient={authClient}
+        fetcher={fetcher}
+        localRepository={repository}
+        onNavigate={navigate}
+      />
+    );
+
+    await screen.findByRole("heading", { name: "P-20001" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete consultation" }));
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
+    await expect(repository.list()).resolves.toHaveLength(1);
   });
 });

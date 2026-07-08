@@ -152,6 +152,9 @@ describe("DashboardScreen", () => {
   it("merges local device recordings into the dashboard", async () => {
     const localRecording: LocalRecording = {
       id: "local-recording",
+      authUserId: "auth-user-1",
+      doctorId: "doctor-1",
+      clinicId: "clinic-1",
       patientId: "P-LOCAL",
       label: null,
       durationSeconds: 30,
@@ -168,7 +171,14 @@ describe("DashboardScreen", () => {
     };
     const localRepository = createMemoryLocalRecordingRepository([localRecording]);
 
-    render(<DashboardScreen records={[]} localRepository={localRepository} pendingApprovalsCount={0} />);
+    render(
+      <DashboardScreen
+        records={[]}
+        localRepository={localRepository}
+        localRecordingScope={{ authUserId: "auth-user-1", doctorId: "doctor-1", clinicId: "clinic-1" }}
+        pendingApprovalsCount={0}
+      />
+    );
 
     await expect(screen.findByText("P-LOCAL")).resolves.toBeInTheDocument();
     expect(screen.getByLabelText("Stored offline")).toBeInTheDocument();
@@ -182,6 +192,9 @@ describe("DashboardScreen", () => {
   it("deletes local device recordings from IndexedDB after confirmation", async () => {
     const localRecording: LocalRecording = {
       id: "local-recording",
+      authUserId: "auth-user-1",
+      doctorId: "doctor-1",
+      clinicId: "clinic-1",
       patientId: "P-LOCAL",
       label: null,
       durationSeconds: 30,
@@ -198,7 +211,14 @@ describe("DashboardScreen", () => {
     };
     const localRepository = createMemoryLocalRecordingRepository([localRecording]);
 
-    render(<DashboardScreen records={[]} localRepository={localRepository} pendingApprovalsCount={0} />);
+    render(
+      <DashboardScreen
+        records={[]}
+        localRepository={localRepository}
+        localRecordingScope={{ authUserId: "auth-user-1", doctorId: "doctor-1", clinicId: "clinic-1" }}
+        pendingApprovalsCount={0}
+      />
+    );
 
     await screen.findByText("P-LOCAL");
     fireEvent.click(screen.getByRole("button", { name: "Delete consultation P-LOCAL" }));
@@ -262,5 +282,63 @@ describe("DashboardScreen", () => {
     await expect(screen.findByText("P-MATCH")).resolves.toBeInTheDocument();
     expect(screen.queryByText("P-FOREIGN")).not.toBeInTheDocument();
     expect(screen.queryByText("P-LEGACY")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local recording recovery" })).toBeInTheDocument();
+  });
+
+  it("masks quarantined local recordings until the user confirms ownership", async () => {
+    const localRecording: LocalRecording = {
+      id: "legacy-local-recording",
+      authUserId: null,
+      doctorId: null,
+      clinicId: null,
+      patientId: "P-LEGACY",
+      label: "Legacy patient label",
+      durationSeconds: 30,
+      recordedAt: "2026-04-23T08:00:00.000Z",
+      updatedAt: "2026-04-23T08:00:00.000Z",
+      audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+      audioChunks: [new Blob(["audio"], { type: "audio/webm" })],
+      audioMimeType: "audio/webm",
+      captureState: "stopped",
+      syncState: "local",
+      serverRecordingId: null,
+      transcript: null,
+      error: null
+    };
+    const localRepository = createMemoryLocalRecordingRepository([localRecording]);
+
+    render(
+      <DashboardScreen
+        records={[]}
+        localRepository={localRepository}
+        localRecordingScope={{
+          authUserId: "auth-user-1",
+          doctorId: "doctor-1",
+          clinicId: "clinic-1"
+        }}
+        pendingApprovalsCount={0}
+      />
+    );
+
+    await expect(screen.findByLabelText("Local recording recovery")).resolves.toBeInTheDocument();
+    expect(screen.getByText("1 hidden local recording")).toBeInTheDocument();
+    expect(screen.getByText("Kept separate until you confirm ownership or delete safely.")).toBeInTheDocument();
+    expect(screen.queryByText("P-LEGACY")).not.toBeInTheDocument();
+    expect(screen.queryByText("Legacy patient label")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Review recovery" }));
+    expect(screen.getByText("Patient IDs stay hidden until you recover a recording to this account.")).toBeInTheDocument();
+    expect(screen.getByText("Older local recording")).toBeInTheDocument();
+    expect(screen.queryByText("P-LEGACY")).not.toBeInTheDocument();
+    expect(screen.queryByText("Legacy patient label")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm ownership of hidden local recording" }));
+    await expect(screen.findByText("P-LEGACY")).resolves.toBeInTheDocument();
+    expect(screen.queryByLabelText("Local recording recovery")).not.toBeInTheDocument();
+    await expect(localRepository.get("legacy-local-recording")).resolves.toMatchObject({
+      authUserId: "auth-user-1",
+      doctorId: "doctor-1",
+      clinicId: "clinic-1"
+    });
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 
-import { Mic, Search, Settings } from "lucide-react";
+import { ArchiveRestore, Mic, Search, Settings, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import { DashboardRecordCard } from "@/components/dashboard-record-card";
 import {
@@ -12,9 +13,13 @@ import {
 } from "@/lib/client/dashboard-data";
 import {
   createIndexedDbLocalRecordingRepository,
+  localRecordingMatchesScope,
   mapLocalRecordingsToDashboardRecords,
+  mapQuarantinedLocalRecordings,
+  recoverQuarantinedLocalRecordingForScope,
   type LocalRecordingScope,
-  type LocalRecordingRepository
+  type LocalRecordingRepository,
+  type QuarantinedLocalRecording
 } from "@/lib/client/local-recordings";
 
 interface DashboardScreenProps {
@@ -47,6 +52,12 @@ export function DashboardScreen({
   onDeleteRecording
 }: DashboardScreenProps) {
   const [localRecords, setLocalRecords] = useState<LocalDashboardRecord[]>([]);
+  const [quarantinedRecords, setQuarantinedRecords] = useState<QuarantinedLocalRecording[]>([]);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const repository = useMemo(
+    () => localRepository ?? createIndexedDbLocalRecordingRepository(),
+    [localRepository]
+  );
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -57,39 +68,43 @@ export function DashboardScreen({
   const pendingCount =
     pendingTranscriptionsCount ?? visibleRecords.filter((record) => record.status === "recorded").length;
 
+  const loadLocalRecordings = useCallback(async (shouldUpdate: () => boolean = () => true) => {
+    try {
+      const localRecordings = await repository.list();
+      const now = new Date();
+
+      if (shouldUpdate()) {
+        setLocalRecords(mapLocalRecordingsToDashboardRecords(localRecordings, now, localRecordingScope));
+        setQuarantinedRecords(mapQuarantinedLocalRecordings(localRecordings, now, localRecordingScope));
+      }
+    } catch {
+      if (shouldUpdate()) {
+        setLocalRecords([]);
+        setQuarantinedRecords([]);
+      }
+    }
+  }, [localRecordingScope, repository]);
+
   useEffect(() => {
     if (!localRepository && typeof indexedDB === "undefined") {
       return;
     }
 
-    const repository = localRepository ?? createIndexedDbLocalRecordingRepository();
     let isMounted = true;
 
-    async function loadLocalRecordings() {
-      try {
-        const nextRecords = mapLocalRecordingsToDashboardRecords(await repository.list(), new Date(), localRecordingScope);
-
-        if (isMounted) {
-          setLocalRecords(nextRecords);
-        }
-      } catch {
-        if (isMounted) {
-          setLocalRecords([]);
-        }
-      }
-    }
-
-    void loadLocalRecordings();
+    void loadLocalRecordings(() => isMounted);
 
     return () => {
       isMounted = false;
     };
-  }, [localRepository, localRecordingScope]);
+  }, [loadLocalRecordings, localRepository]);
 
   async function deleteLocalRecord(record: DashboardRecord): Promise<boolean> {
-    const repository = localRepository ?? createIndexedDbLocalRecordingRepository();
     const localRecording = (await repository.list()).find(
-      (item) => item.id === record.id || item.serverRecordingId === record.id
+      (item) =>
+        localRecordingScope &&
+        localRecordingMatchesScope(item, localRecordingScope) &&
+        (item.id === record.id || item.serverRecordingId === record.id)
     );
 
     if (!localRecording) {
@@ -103,6 +118,20 @@ export function DashboardScreen({
     await repository.remove(localRecording.id);
     setLocalRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id));
     return true;
+  }
+
+  async function recoverQuarantinedRecord(record: QuarantinedLocalRecording) {
+    if (!localRecordingScope) {
+      return;
+    }
+
+    await recoverQuarantinedLocalRecordingForScope(repository, record.id, localRecordingScope);
+    await loadLocalRecordings();
+  }
+
+  async function deleteQuarantinedRecord(record: QuarantinedLocalRecording) {
+    await repository.remove(record.id);
+    await loadLocalRecordings();
   }
 
   async function confirmDelete(record: DashboardRecord) {
@@ -180,6 +209,66 @@ export function DashboardScreen({
             {pluralize(visibleRecords.length, "record")} · {pluralize(pendingCount, "pending transcription")}
           </p>
         </div>
+
+        {quarantinedRecords.length > 0 ? (
+          <section
+            className="mx-4 mb-3 rounded-[14px] border border-ochre/40 bg-paper px-4 py-3"
+            aria-label="Local recording recovery"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ochre/10 text-ochre">
+                <ArchiveRestore className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-body text-sm font-bold text-ink">
+                  {pluralize(quarantinedRecords.length, "hidden local recording")}
+                </h3>
+                <p className="mt-1 font-body text-xs leading-relaxed text-ink-muted">
+                  Kept separate until you confirm ownership or delete safely.
+                </p>
+              </div>
+            </div>
+            <button
+              className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-rule bg-paper-deep px-3 py-2 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
+              type="button"
+              onClick={() => setShowRecovery((current) => !current)}
+            >
+              {showRecovery ? "Hide recovery" : "Review recovery"}
+            </button>
+            {showRecovery ? (
+              <div className="mt-3 space-y-2">
+                <p className="font-body text-[11px] leading-relaxed text-ink-muted">
+                  Patient IDs stay hidden until you recover a recording to this account.
+                </p>
+                {quarantinedRecords.map((record) => (
+                  <div key={record.id} className="rounded-lg border border-rule bg-paper-deep px-3 py-3">
+                    <p className="font-body text-xs font-semibold text-ink">Older local recording</p>
+                    <p className="mt-1 font-body text-[11px] text-ink-muted">
+                      {record.time} · {record.duration}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <BharatButton
+                        className="min-h-11 flex-1 px-3 py-2 text-xs"
+                        variant="ghost"
+                        onClick={() => void deleteQuarantinedRecord(record)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </BharatButton>
+                      <BharatButton
+                        className="min-h-11 flex-1 px-3 py-2 text-xs"
+                        aria-label="Confirm ownership of hidden local recording"
+                        onClick={() => void recoverQuarantinedRecord(record)}
+                      >
+                        Confirm ownership
+                      </BharatButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 pb-28">
           {visibleRecords.length === 0 ? (

@@ -8,7 +8,7 @@ import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-cli
 import { fetchDashboardSnapshot } from "@/lib/client/dashboard-data";
 import { useExplicitDemoMode, useExplicitMockRecorder } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
-import type { LocalRecordingScope } from "@/lib/client/local-recordings";
+import { DEMO_LOCAL_RECORDING_SCOPE, type LocalRecordingScope } from "@/lib/client/local-recordings";
 
 interface NewRecordingPageClientProps {
   authClient?: AuthClient;
@@ -34,7 +34,9 @@ export function NewRecordingPageClient({
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [clinicName, setClinicName] = useState(allowDemoFallback ? "Sunrise Hospital" : "Hospital");
-  const [localRecordingScope, setLocalRecordingScope] = useState<LocalRecordingScope | undefined>(undefined);
+  const [localRecordingScope, setLocalRecordingScope] = useState<LocalRecordingScope | undefined>(
+    allowDemoFallback ? DEMO_LOCAL_RECORDING_SCOPE : undefined
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

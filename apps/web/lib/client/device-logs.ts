@@ -123,6 +123,7 @@ export function appendDeviceLog(input: DeviceLogInput): DeviceLogEntry {
     ...input,
     event: input.event.slice(0, 120),
     message: input.message?.slice(0, 500) ?? null,
+    patientId: null,
     id: safeRandomId("log"),
     createdAt: new Date().toISOString(),
     deviceId: store.deviceId,

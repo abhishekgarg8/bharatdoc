@@ -20,6 +20,12 @@ export interface LocalRecordingScope {
   clinicId: string | null;
 }
 
+export const DEMO_LOCAL_RECORDING_SCOPE: LocalRecordingScope = {
+  authUserId: "demo-auth-user",
+  doctorId: "demo-doctor",
+  clinicId: "demo-clinic"
+};
+
 export interface LocalRecording {
   id: string;
   authUserId?: string | null;
@@ -91,6 +97,13 @@ export interface LocalRecordingRepository {
   markFailed(id: string, error: string): Promise<LocalRecording>;
 }
 
+export interface QuarantinedLocalRecording {
+  id: string;
+  time: string;
+  duration: string;
+  recordedAt: string;
+}
+
 interface BharatDocRecordingDb extends DBSchema {
   recordings: {
     key: string;
@@ -156,6 +169,14 @@ export function localRecordingMatchesScope(recording: LocalRecording, scope?: Lo
     recording.doctorId === scope.doctorId &&
     recording.clinicId === scope.clinicId
   );
+}
+
+function localRecordingHasVerifiedScope(recording: LocalRecording, scope?: LocalRecordingScope | null): boolean {
+  return Boolean(scope) && localRecordingMatchesScope(recording, scope);
+}
+
+export function isLegacyUnscopedLocalRecording(recording: LocalRecording): boolean {
+  return recording.authUserId == null && recording.doctorId == null && recording.clinicId == null;
 }
 
 function nextCaptureState(
@@ -402,6 +423,10 @@ function isDashboardVisibleRecording(recording: LocalRecording): boolean {
   return ["stopped", "transcribing", "transcribed", "failed"].includes(recording.captureState) && Boolean(localRecordingAudioBlob(recording));
 }
 
+function isQuarantinedRecoveryCandidate(recording: LocalRecording, scope?: LocalRecordingScope | null): boolean {
+  return Boolean(scope) && isLegacyUnscopedLocalRecording(recording) && isDashboardVisibleRecording(recording);
+}
+
 export function toLocalDashboardRecord(recording: LocalRecording, now = new Date()): LocalDashboardRecord {
   return {
     id: recording.serverRecordingId ?? recording.id,
@@ -421,7 +446,41 @@ export function mapLocalRecordingsToDashboardRecords(
   scope?: LocalRecordingScope | null
 ): LocalDashboardRecord[] {
   return sortByNewest(recordings)
-    .filter((recording) => localRecordingMatchesScope(recording, scope))
+    .filter((recording) => localRecordingHasVerifiedScope(recording, scope))
     .filter(isDashboardVisibleRecording)
     .map((recording) => toLocalDashboardRecord(recording, now));
+}
+
+export function mapQuarantinedLocalRecordings(
+  recordings: LocalRecording[],
+  now = new Date(),
+  scope?: LocalRecordingScope | null
+): QuarantinedLocalRecording[] {
+  return sortByNewest(recordings)
+    .filter((recording) => isQuarantinedRecoveryCandidate(recording, scope))
+    .map((recording) => ({
+      id: recording.id,
+      time: formatRecordedAt(recording.recordedAt, now),
+      duration: formatRecordingDuration(recording.durationSeconds),
+      recordedAt: recording.recordedAt
+    }));
+}
+
+export async function recoverQuarantinedLocalRecordingForScope(
+  repository: LocalRecordingRepository,
+  recordingId: string,
+  scope: LocalRecordingScope
+): Promise<LocalRecording> {
+  const recording = requireExisting(await repository.get(recordingId), recordingId);
+
+  if (!isQuarantinedRecoveryCandidate(recording, scope)) {
+    throw new Error("Only legacy unscoped local recordings can be recovered.");
+  }
+
+  return repository.save({
+    ...recording,
+    ...scopeFields(scope),
+    updatedAt: nowIso(),
+    error: null
+  });
 }
