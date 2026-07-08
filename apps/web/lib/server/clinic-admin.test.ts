@@ -196,6 +196,26 @@ describe("clinic admin approvals", () => {
     ).rejects.toMatchObject({ code: "JOIN_REQUEST_NOT_FOUND" });
   });
 
+  it("does not approve join requests outside the owner's clinic", async () => {
+    const repository = {
+      ...createRepository(),
+      findJoinRequestForClinic: vi.fn(async () => null)
+    };
+
+    await expect(
+      approveJoinRequestForOwner(
+        { uid: "firebase-owner", phoneNumber: "+919876543210" },
+        "99999999-9999-4999-8999-999999999999",
+        repository
+      )
+    ).rejects.toMatchObject({ code: "JOIN_REQUEST_NOT_FOUND" });
+    expect(repository.findJoinRequestForClinic).toHaveBeenCalledWith(
+      "99999999-9999-4999-8999-999999999999",
+      owner.clinic_id
+    );
+    expect(repository.approveJoinRequest).not.toHaveBeenCalled();
+  });
+
   it("removes active doctors from the clinic without allowing self-removal", async () => {
     const repository = createRepository();
 
@@ -232,6 +252,34 @@ describe("clinic admin approvals", () => {
       )
     ).resolves.toEqual({ ok: true });
     expect(repository.updateDoctorAccountStatus).toHaveBeenCalledWith(
+      "66666666-6666-4666-8666-666666666666",
+      owner.clinic_id,
+      "active"
+    );
+  });
+
+  it("passes owner clinic scope when removing and re-approving doctors", async () => {
+    const repository = createRepository();
+
+    await removeDoctorFromClinicForOwner(
+      { uid: "firebase-owner", phoneNumber: "+919876543210" },
+      "55555555-5555-4555-8555-555555555555",
+      repository
+    );
+    await reapproveDoctorForOwner(
+      { uid: "firebase-owner", phoneNumber: "+919876543210" },
+      "66666666-6666-4666-8666-666666666666",
+      repository
+    );
+
+    expect(repository.updateDoctorAccountStatus).toHaveBeenNthCalledWith(
+      1,
+      "55555555-5555-4555-8555-555555555555",
+      owner.clinic_id,
+      "rejected"
+    );
+    expect(repository.updateDoctorAccountStatus).toHaveBeenNthCalledWith(
+      2,
       "66666666-6666-4666-8666-666666666666",
       owner.clinic_id,
       "active"
