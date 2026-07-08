@@ -41,3 +41,9 @@ Scoped direct authenticated Supabase access for clinics, doctors, join requests,
 Documented trusted service-role bypasses and kept app-route cross-clinic guards covered with focused tests.
 Merged PR #50 after Vercel passed, waited 3 minutes, then verified production dashboard auth with the test account.
 Saved sanitized production evidence in testing/issue-43-production-rls-backstop.
+
+2026-07-08 - Issue #42: Rendered structured clinical summaries in web and PDF.
+Added shared summary parsing/sanitization so Markdown headings become stable clinical sections.
+Normalized generated/saved summaries before persistence, rendered section previews in web, and styled sections/timestamps in PDFs.
+Merged PR #52 after Vercel passed, waited 3 minutes, then verified production login/dashboard with the test account.
+Saved sanitized production evidence in testing/issue-42-production-structured-summaries.
