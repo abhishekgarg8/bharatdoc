@@ -38,7 +38,9 @@ const apiRecording = {
   recorded_at: "2026-04-23T06:12:00.000Z",
   transcript: "Patient reports fever.",
   summary: null,
-  pdf_storage_path: null,
+  has_pdf: false,
+  pdf_generated_at: null,
+  pdf_version: null,
   pdf_signed_url: null
 };
 

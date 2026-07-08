@@ -38,6 +38,8 @@ const recording: Recording = {
   transcript: null,
   summary: null,
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "recorded",
   recorded_at: "2026-04-23T06:20:00.000Z",
   created_at: "2026-04-23T06:20:01.000Z",
@@ -74,10 +76,14 @@ function depsFor(
       summary: input.summary,
       status: "summary_ready" as const,
       pdf_storage_path: null,
+      pdf_generated_at: null,
+      pdf_version: null,
     })),
     markRecordingPdfSaved: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       pdf_storage_path: input.pdfStoragePath,
+      pdf_generated_at: input.pdfGeneratedAt,
+      pdf_version: input.pdfVersion,
       status: "pdf_saved" as const,
     })),
   };
@@ -305,6 +311,9 @@ describe("transcribeRecording", () => {
         summary: "Original summary.",
         pdf_storage_path:
           status === "pdf_saved" ? "clinic/doctor/original.pdf" : null,
+        pdf_generated_at:
+          status === "pdf_saved" ? "2026-04-23T09:00:00.000Z" : null,
+        pdf_version: status === "pdf_saved" ? "v1" : null,
         status,
       });
 

@@ -13,7 +13,9 @@ export interface RecordingDetailRecord {
   recordedAt: string;
   transcript: string | null;
   summary: string | null;
-  pdfStoragePath: string | null;
+  hasPdf: boolean;
+  pdfGeneratedAt: string | null;
+  pdfVersion: string | null;
   pdfSignedUrl: string | null;
 }
 
@@ -28,7 +30,9 @@ export interface RecordingDetailApiRecord {
   recorded_at: string;
   transcript: string | null;
   summary: string | null;
-  pdf_storage_path: string | null;
+  has_pdf?: boolean;
+  pdf_generated_at?: string | null;
+  pdf_version?: string | null;
   pdf_signed_url: string | null;
 }
 
@@ -61,7 +65,9 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     transcript:
       "Doctor: What brings you in today?\nPatient: I have had fever for two days and a mild cough.\nDoctor: Any breathlessness or chest pain?\nPatient: No, only weakness.\nDoctor: Please take fluids and paracetamol. Come back if fever continues beyond two days.",
     summary: null,
-    pdfStoragePath: null,
+    hasPdf: false,
+    pdfGeneratedAt: null,
+    pdfVersion: null,
     pdfSignedUrl: null
   },
   {
@@ -77,7 +83,9 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     transcript:
       "Patient reports acidity after meals and irregular sleep. Doctor advised meal timing changes and antacid trial.",
     summary: "Chief Complaint\nAcidity after meals.\n\nPlan\nMeal timing changes and antacid trial.",
-    pdfStoragePath: null,
+    hasPdf: false,
+    pdfGeneratedAt: null,
+    pdfVersion: null,
     pdfSignedUrl: null
   },
   {
@@ -92,7 +100,9 @@ export const demoRecordingDetails: RecordingDetailRecord[] = [
     recordedAt: "2026-04-22T12:50:00.000Z",
     transcript: "Patient reports recurring headache and eye strain after screen use.",
     summary: "Chief Complaint\nRecurring headache and eye strain.\n\nPlan\nHydration, reduced screen exposure, and eye check-up.",
-    pdfStoragePath: "demo/p-10470.pdf",
+    hasPdf: true,
+    pdfGeneratedAt: "2026-04-22T12:50:00.000Z",
+    pdfVersion: "v1",
     pdfSignedUrl: demoPdfSignedUrl
   }
 ];
@@ -110,7 +120,9 @@ export function mapApiRecordingToDetail(recording: RecordingDetailApiRecord, now
     recordedAt: recording.recorded_at,
     transcript: recording.transcript,
     summary: recording.summary,
-    pdfStoragePath: recording.pdf_storage_path,
+    hasPdf: recording.has_pdf ?? Boolean(recording.pdf_signed_url || recording.status === "pdf_saved"),
+    pdfGeneratedAt: recording.pdf_generated_at ?? null,
+    pdfVersion: recording.pdf_version ?? null,
     pdfSignedUrl: recording.pdf_signed_url
   };
 }

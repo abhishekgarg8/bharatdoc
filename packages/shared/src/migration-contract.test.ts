@@ -53,6 +53,13 @@ const pgimerAutoApprovalMigration = readFileSync(
   ),
   "utf8",
 );
+const pdfMetadataMigration = readFileSync(
+  resolve(
+    dirname,
+    "../../../supabase/migrations/202607080002_add_pdf_metadata.sql",
+  ),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -183,6 +190,12 @@ describe("initial Supabase migration contract", () => {
     expect(pgimerAutoApprovalMigration).toContain(
       "grant execute on function public.create_doctor_join_request(text, text, text, text, text, uuid, boolean) to service_role",
     );
+  });
+
+  it("adds user-facing PDF metadata columns without exposing storage paths", () => {
+    expect(pdfMetadataMigration).toContain("add column if not exists pdf_generated_at timestamptz");
+    expect(pdfMetadataMigration).toContain("add column if not exists pdf_version text");
+    expect(pdfMetadataMigration).toContain("where pdf_storage_path is not null");
   });
 
   it("adds private diagnostic logs and richer transcription attempt metadata", () => {

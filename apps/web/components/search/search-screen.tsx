@@ -31,7 +31,7 @@ function demoSearch(records: DashboardRecord[], query: string): DashboardRecord[
 }
 
 function SearchResultCard({ record, returnTo }: { record: DashboardRecord; returnTo: string }) {
-  const hasPdf = Boolean(record.pdfSignedUrl || record.pdfStoragePath || record.status === "pdf_saved");
+  const hasPdf = Boolean(record.hasPdf || record.pdfSignedUrl || record.status === "pdf_saved");
   const recordingHref = `/recordings/${record.id}?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (

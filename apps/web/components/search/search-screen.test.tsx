@@ -120,7 +120,9 @@ describe("SearchScreen", () => {
             doctor_name: "Dr. Rao",
             status: "pdf_saved",
             recorded_at: "2026-04-22T12:50:00.000Z",
-            pdf_storage_path: "pdfs/p-10470.pdf",
+            has_pdf: true,
+            pdf_generated_at: "2026-04-22T12:55:00.000Z",
+            pdf_version: "v1",
             pdf_signed_url: "https://signed.example.com/p-10470.pdf"
           }
         ]

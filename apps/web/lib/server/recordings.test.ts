@@ -47,6 +47,8 @@ const recording: RecordingListItem = {
   transcript: "Patient reports fever for two days.",
   summary: null,
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "transcribed",
   recorded_at: "2026-04-23T06:12:00.000Z",
   created_at: "2026-04-23T06:12:01.000Z",
@@ -77,7 +79,9 @@ function createRepository(doctor: Doctor | null = activeDoctor): RecordingsRepos
       ...recording,
       summary: input.summary,
       status: "summary_ready" as const,
-      pdf_storage_path: null
+      pdf_storage_path: null,
+      pdf_generated_at: null,
+      pdf_version: null
     })),
     deleteRecordingForDoctor: vi.fn(async () => recording),
     removeRecordingStorageObjects: vi.fn(async () => undefined),
@@ -101,7 +105,9 @@ describe("recordings service", () => {
         doctor_name: "Dr. Aparna Iyer",
         status: "transcribed",
         recorded_at: "2026-04-23T06:12:00.000Z",
-        pdf_storage_path: null,
+        has_pdf: false,
+        pdf_generated_at: null,
+        pdf_version: null,
         pdf_signed_url: null,
         can_edit: true
       }
@@ -220,7 +226,9 @@ describe("recordings service", () => {
         ...recording,
         label: "Follow-up",
         status: "pdf_saved",
-        pdf_storage_path: "pdfs/p-10482.pdf"
+        pdf_storage_path: "pdfs/p-10482.pdf",
+        pdf_generated_at: "2026-04-23T06:20:00.000Z",
+        pdf_version: "v1"
       }
     ]);
 
@@ -234,7 +242,9 @@ describe("recordings service", () => {
       {
         label: "Follow-up",
         clinic_name: "Sunrise Hospital",
-        pdf_storage_path: "pdfs/p-10482.pdf",
+        has_pdf: true,
+        pdf_generated_at: "2026-04-23T06:20:00.000Z",
+        pdf_version: "v1",
         pdf_signed_url: "https://signed.example.com/recording.pdf"
       }
     ]);
@@ -266,7 +276,9 @@ describe("recordings service", () => {
       recorded_at: "2026-04-23T06:12:00.000Z",
       transcript: "Patient reports fever for two days.",
       summary: null,
-      pdf_storage_path: null,
+      has_pdf: false,
+      pdf_generated_at: null,
+      pdf_version: null,
       pdf_signed_url: null
     });
     expect(repository.findRecordingForClinic).toHaveBeenCalledWith(recording.id, activeDoctor.clinic_id);
@@ -277,15 +289,24 @@ describe("recordings service", () => {
     vi.mocked(repository.findRecordingForClinic).mockResolvedValueOnce({
       ...recording,
       status: "pdf_saved",
-      pdf_storage_path: "clinic/doctor/recording.pdf"
+      pdf_storage_path: "clinic/doctor/recording.pdf",
+      pdf_generated_at: "2026-04-23T06:20:00.000Z",
+      pdf_version: "v1"
     });
 
-    await expect(
-      getRecordingDetailForDoctor({ uid: "firebase-doctor", phoneNumber: "+919876543210" }, recording.id, repository)
-    ).resolves.toMatchObject({
-      pdf_storage_path: "clinic/doctor/recording.pdf",
+    const detail = await getRecordingDetailForDoctor(
+      { uid: "firebase-doctor", phoneNumber: "+919876543210" },
+      recording.id,
+      repository
+    );
+
+    expect(detail).toMatchObject({
+      has_pdf: true,
+      pdf_generated_at: "2026-04-23T06:20:00.000Z",
+      pdf_version: "v1",
       pdf_signed_url: "https://signed.example.com/recording.pdf"
     });
+    expect(detail).not.toHaveProperty("pdf_storage_path");
     expect(repository.createPdfSignedUrl).toHaveBeenCalledWith("clinic/doctor/recording.pdf");
   });
 
@@ -332,7 +353,9 @@ describe("recordings service", () => {
     vi.mocked(repository.findRecordingForDoctor).mockResolvedValueOnce({
       ...recording,
       status: "pdf_saved",
-      pdf_storage_path: "pdfs/p-10482.pdf"
+      pdf_storage_path: "pdfs/p-10482.pdf",
+      pdf_generated_at: "2026-04-23T06:20:00.000Z",
+      pdf_version: "v1"
     });
 
     await expect(
@@ -344,7 +367,9 @@ describe("recordings service", () => {
       )
     ).resolves.toMatchObject({
       status: "summary_ready",
-      pdf_storage_path: null
+      has_pdf: false,
+      pdf_generated_at: null,
+      pdf_version: null
     });
 
     expect(repository.updateRecordingSummary).toHaveBeenCalledWith(
@@ -372,7 +397,9 @@ describe("recordings service", () => {
     vi.mocked(repository.deleteRecordingForDoctor).mockResolvedValueOnce({
       ...recording,
       audio_storage_path: "clinic/doctor/recording.webm",
-      pdf_storage_path: "clinic/doctor/recording.pdf"
+      pdf_storage_path: "clinic/doctor/recording.pdf",
+      pdf_generated_at: "2026-04-23T06:20:00.000Z",
+      pdf_version: "v1"
     });
 
     await expect(

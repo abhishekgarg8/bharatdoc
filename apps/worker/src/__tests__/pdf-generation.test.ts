@@ -38,6 +38,8 @@ const recording: Recording = {
   transcript: "Patient reports fever for two days.",
   summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
   pdf_storage_path: null,
+  pdf_generated_at: null,
+  pdf_version: null,
   status: "summary_ready",
   recorded_at: "2026-04-23T06:20:00.000Z",
   created_at: "2026-04-23T06:20:01.000Z"
@@ -61,11 +63,15 @@ function depsFor(recordingResult: Recording | null = recording, clinicResult: Cl
       ...(recordingResult ?? recording),
       summary: input.summary,
       status: "summary_ready" as const,
-      pdf_storage_path: null
+      pdf_storage_path: null,
+      pdf_generated_at: null,
+      pdf_version: null
     })),
     markRecordingPdfSaved: vi.fn(async (input) => ({
       ...(recordingResult ?? recording),
       pdf_storage_path: input.pdfStoragePath,
+      pdf_generated_at: input.pdfGeneratedAt,
+      pdf_version: input.pdfVersion,
       status: "pdf_saved" as const
     }))
   };
@@ -97,7 +103,9 @@ describe("worker PDF generation service", () => {
       recording_id: recording.id,
       pdf_storage_path: "clinic/doctor/recording.pdf",
       signed_url: "https://signed.example.com/recording.pdf",
-      status: "pdf_saved"
+      status: "pdf_saved",
+      pdf_generated_at: "2026-04-23T09:00:00.000Z",
+      pdf_version: "v1"
     });
 
     expect(deps.recordings.findRecordingForDoctor).toHaveBeenCalledWith(recording.id, activeDoctor.id);
@@ -117,7 +125,9 @@ describe("worker PDF generation service", () => {
     expect(deps.recordings.markRecordingPdfSaved).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      pdfStoragePath: "clinic/doctor/recording.pdf"
+      pdfStoragePath: "clinic/doctor/recording.pdf",
+      pdfGeneratedAt: "2026-04-23T09:00:00.000Z",
+      pdfVersion: "v1"
     });
   });
 

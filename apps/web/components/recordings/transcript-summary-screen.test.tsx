@@ -15,7 +15,9 @@ const recording: RecordingDetailRecord = {
   recordedAt: "2026-04-23T05:25:00.000Z",
   transcript: "Patient reports fever for two days.\n\nDoctor advised fluids and paracetamol.",
   summary: null,
-  pdfStoragePath: null,
+  hasPdf: false,
+  pdfGeneratedAt: null,
+  pdfVersion: null,
   pdfSignedUrl: null
 };
 
@@ -131,7 +133,9 @@ describe("TranscriptSummaryScreen", () => {
       ...recording,
       summary,
       status: "summary_ready" as const,
-      pdfStoragePath: null
+      hasPdf: false,
+      pdfGeneratedAt: null,
+      pdfVersion: null
     }));
 
     render(
@@ -140,7 +144,9 @@ describe("TranscriptSummaryScreen", () => {
           ...recording,
           summary: "Initial summary",
           status: "pdf_saved",
-          pdfStoragePath: "clinic/doctor/old.pdf",
+          hasPdf: true,
+          pdfGeneratedAt: "2026-04-23T05:30:00.000Z",
+          pdfVersion: "v1",
           pdfSignedUrl: "https://signed.example.com/old.pdf"
         }}
         onSaveSummary={save}
@@ -167,13 +173,17 @@ describe("TranscriptSummaryScreen", () => {
           ...recording,
           summary: "Initial summary",
           status: "pdf_saved",
-          pdfStoragePath: "clinic/doctor/recording.pdf",
+          hasPdf: true,
+          pdfGeneratedAt: "2026-04-23T05:30:00.000Z",
+          pdfVersion: "v1",
           pdfSignedUrl: "https://signed.example.com/recording.pdf"
         }}
       />
     );
 
     expect(screen.getByText("PDF generated")).toBeInTheDocument();
+    expect(screen.getByText(/Generated/)).toBeInTheDocument();
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
     expect(screen.queryByText("clinic/doctor/recording.pdf")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute(
       "href",
@@ -193,9 +203,11 @@ describe("TranscriptSummaryScreen", () => {
     });
     const generatePdf = vi.fn(async () => ({
       recording_id: recording.id,
-      pdf_storage_path: "clinic/doctor/recording.pdf",
       signed_url: "https://signed.example.com/recording.pdf",
-      status: "pdf_saved" as const
+      status: "pdf_saved" as const,
+      has_pdf: true as const,
+      pdf_generated_at: "2026-04-23T05:30:00.000Z",
+      pdf_version: "v1"
     }));
 
     render(
@@ -231,6 +243,8 @@ describe("TranscriptSummaryScreen", () => {
     expect(generatePdf).toHaveBeenCalledWith(recording.id);
     expect(screen.getByLabelText("PDF saved")).toBeInTheDocument();
     expect(screen.getByText("PDF generated")).toBeInTheDocument();
+    expect(screen.getByText(/Generated/)).toBeInTheDocument();
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
     expect(screen.queryByText("clinic/doctor/recording.pdf")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute(
       "href",

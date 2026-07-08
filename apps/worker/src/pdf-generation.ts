@@ -12,6 +12,8 @@ export interface PdfResponse {
   pdf_storage_path: string;
   signed_url: string;
   status: "pdf_saved";
+  pdf_generated_at: string;
+  pdf_version: string;
 }
 
 function requireClinicId(clinicId: string | null): string {
@@ -78,14 +80,17 @@ export async function generateRecordingPdf(
     deps.clinics.findClinicById(clinicId)
   ]);
   const pdfReadyRecording = requirePdfReadyRecording(recording);
+  const generatedAt = input.generatedAt ?? new Date();
   const pdf = requireRenderedPdf(
     await deps.pdfRenderer.render({
       clinic: requireClinic(clinic),
       doctor: auth.doctor,
       recording: pdfReadyRecording,
-      generatedAt: input.generatedAt ?? new Date()
+      generatedAt
     })
   );
+  const pdfGeneratedAt = generatedAt.toISOString();
+  const pdfVersion = "v1";
   const pdfStoragePath = await deps.pdfStorage.uploadRecordingPdf({
     pdf,
     clinicId,
@@ -96,13 +101,17 @@ export async function generateRecordingPdf(
   await deps.recordings.markRecordingPdfSaved({
     recordingId: pdfReadyRecording.id,
     doctorId: auth.doctor.id,
-    pdfStoragePath
+    pdfStoragePath,
+    pdfGeneratedAt,
+    pdfVersion
   });
 
   return {
     recording_id: pdfReadyRecording.id,
     pdf_storage_path: pdfStoragePath,
     signed_url: await deps.pdfStorage.createSignedUrl(pdfStoragePath),
-    status: "pdf_saved"
+    status: "pdf_saved",
+    pdf_generated_at: pdfGeneratedAt,
+    pdf_version: pdfVersion
   };
 }

@@ -23,7 +23,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       workerBaseUrl: getWebEnv().RAILWAY_WORKER_URL
     });
 
-    return Response.json(result);
+    return Response.json({
+      recording_id: result.recording_id,
+      signed_url: result.signed_url,
+      status: result.status,
+      has_pdf: true,
+      pdf_generated_at: result.pdf_generated_at,
+      pdf_version: result.pdf_version
+    });
   } catch (error) {
     return errorResponse(error, request);
   }

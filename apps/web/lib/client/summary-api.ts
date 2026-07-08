@@ -24,9 +24,11 @@ export interface WorkerSummaryResponse {
 
 export interface WorkerPdfResponse {
   recording_id: string;
-  pdf_storage_path: string;
   signed_url: string;
   status: "pdf_saved";
+  has_pdf: true;
+  pdf_generated_at: string;
+  pdf_version: string;
 }
 
 export interface DeleteRecordingResponse {

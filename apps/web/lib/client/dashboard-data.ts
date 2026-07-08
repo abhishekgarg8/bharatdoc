@@ -11,7 +11,9 @@ export interface DashboardRecord {
   doctorName: string;
   status: RecordingStatus;
   recordedAt?: string;
-  pdfStoragePath?: string | null;
+  hasPdf?: boolean;
+  pdfGeneratedAt?: string | null;
+  pdfVersion?: string | null;
   pdfSignedUrl?: string | null;
   canEdit?: boolean;
   offline?: boolean;
@@ -26,7 +28,9 @@ export interface DashboardApiRecord {
   doctor_name: string;
   status: RecordingStatus;
   recorded_at: string;
-  pdf_storage_path?: string | null;
+  has_pdf?: boolean;
+  pdf_generated_at?: string | null;
+  pdf_version?: string | null;
   pdf_signed_url?: string | null;
   can_edit?: boolean;
 }
@@ -173,7 +177,9 @@ export function mapApiRecordingToDashboardRecord(record: DashboardApiRecord, now
     doctorName: record.doctor_name,
     status: record.status,
     recordedAt: record.recorded_at,
-    pdfStoragePath: record.pdf_storage_path ?? null,
+    hasPdf: record.has_pdf ?? Boolean(record.pdf_signed_url || record.status === "pdf_saved"),
+    pdfGeneratedAt: record.pdf_generated_at ?? null,
+    pdfVersion: record.pdf_version ?? null,
     pdfSignedUrl: record.pdf_signed_url ?? null,
     canEdit: record.can_edit ?? true
   };

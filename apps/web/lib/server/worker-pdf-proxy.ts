@@ -5,6 +5,8 @@ export interface WorkerPdfResponse {
   pdf_storage_path: string;
   signed_url: string;
   status: "pdf_saved";
+  pdf_generated_at: string;
+  pdf_version: string;
 }
 
 export interface ProxyPdfRequestInput {

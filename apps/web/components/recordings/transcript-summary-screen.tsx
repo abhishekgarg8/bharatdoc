@@ -42,6 +42,26 @@ function linesFor(text: string | null): string[] {
   return text?.trim().split(/\n{2,}/).filter(Boolean) ?? [];
 }
 
+function formatPdfGeneratedAt(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 function scrollElementIntoContainer(element: HTMLElement | null, container: HTMLElement | null) {
   if (!element || !container) {
     return;
@@ -80,7 +100,9 @@ export function TranscriptSummaryScreen({
   const [summary, setSummary] = useState(recording.summary ?? "");
   const [status, setStatus] = useState(recording.status);
   const [savedSummary, setSavedSummary] = useState(recording.summary ?? "");
-  const [pdfStoragePath, setPdfStoragePath] = useState(recording.pdfStoragePath);
+  const [hasPdf, setHasPdf] = useState(recording.hasPdf);
+  const [pdfGeneratedAt, setPdfGeneratedAt] = useState<string | null>(recording.pdfGeneratedAt);
+  const [pdfVersion, setPdfVersion] = useState<string | null>(recording.pdfVersion);
   const [pdfUrl, setPdfUrl] = useState<string | null>(recording.pdfSignedUrl);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,6 +118,7 @@ export function TranscriptSummaryScreen({
   const hasTranscript = Boolean(transcript.trim());
   const canEditRecording = recording.canEdit;
   const canSave = summary.trim() !== savedSummary.trim();
+  const generatedAtLabel = formatPdfGeneratedAt(pdfGeneratedAt);
 
   function guardEditable(): boolean {
     if (canEditRecording) {
@@ -200,7 +223,9 @@ export function TranscriptSummaryScreen({
       setSummary(result.summary);
       setSavedSummary(result.summary);
       setStatus(result.status);
-      setPdfStoragePath(null);
+      setHasPdf(false);
+      setPdfGeneratedAt(null);
+      setPdfVersion(null);
       setPdfUrl(null);
       setActiveTab("summary");
       setMessage("Summary generated.");
@@ -244,14 +269,18 @@ export function TranscriptSummaryScreen({
               ...recording,
               summary,
               status: "summary_ready" as const,
-              pdfStoragePath: null,
+              hasPdf: false,
+              pdfGeneratedAt: null,
+              pdfVersion: null,
               pdfSignedUrl: null
             };
 
       setSummary(updated.summary ?? summary);
       setSavedSummary(updated.summary ?? summary);
       setStatus(updated.status);
-      setPdfStoragePath(updated.pdfStoragePath ?? null);
+      setHasPdf(updated.hasPdf);
+      setPdfGeneratedAt(updated.pdfGeneratedAt);
+      setPdfVersion(updated.pdfVersion);
       setPdfUrl(null);
       setMessage("Summary saved.");
     } catch {
@@ -288,12 +317,16 @@ export function TranscriptSummaryScreen({
           ? await generateRecordingPdf(idToken, recording.id, fetcher)
           : {
               recording_id: recording.id,
-              pdf_storage_path: `demo/${recording.id}.pdf`,
               signed_url: demoPdfSignedUrl,
-              status: "pdf_saved" as const
+              status: "pdf_saved" as const,
+              has_pdf: true as const,
+              pdf_generated_at: new Date().toISOString(),
+              pdf_version: "v1"
             };
 
-      setPdfStoragePath(result.pdf_storage_path);
+      setHasPdf(result.has_pdf);
+      setPdfGeneratedAt(result.pdf_generated_at);
+      setPdfVersion(result.pdf_version);
       setPdfUrl(result.signed_url);
       setStatus(result.status);
       setMessage("PDF generated.");
@@ -466,7 +499,7 @@ export function TranscriptSummaryScreen({
                         PDF
                       </h2>
 	                      <p className="mt-0.5 truncate font-mono text-[11px] text-ink-muted">
-	                        {pdfStoragePath ? "PDF generated" : "Not generated"}
+	                        {hasPdf ? "PDF generated" : "Not generated"}
 	                      </p>
                     </div>
                   </div>
@@ -481,11 +514,15 @@ export function TranscriptSummaryScreen({
                   </BharatButton>
                 </div>
 
-                {pdfStoragePath ? (
+                {hasPdf ? (
                   <div className="mt-3 rounded-lg border border-rule bg-paper-deep px-3 py-3">
                     <div className="font-display text-xl italic leading-none text-ink">Clinical Summary</div>
                     <div className="mt-2 font-body text-xs text-ink-muted">
                       {recording.patientId} · {recording.doctorName}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 font-body text-[11px] font-semibold text-ink-muted">
+                      <span>{generatedAtLabel ? `Generated ${generatedAtLabel}` : "PDF generated"}</span>
+                      {pdfVersion ? <span>Version {pdfVersion.replace(/^v/i, "")}</span> : null}
                     </div>
                     <div className="mt-3 space-y-1 font-body text-[12px] leading-relaxed text-ink-soft">
                       {summaryBlocks.slice(0, 3).map((block, index) => (
