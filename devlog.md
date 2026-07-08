@@ -22,3 +22,9 @@ Changed the PGIMER hospital entry headline and body copy to the requested exclus
 Kept the existing responsive layout/tokens and refreshed unit/E2E assertions for the new strings.
 Merged PR #40 after Vercel passed, waited 3 minutes, then verified production /h/pgimer and login to /dashboard.
 Saved verification screenshots in testing/pgimer-copy-annotation.
+
+2026-07-08 - Issue #45: Hid internal PDF storage paths from doctor UI.
+Added persisted PDF metadata and returned `has_pdf`, generated timestamp/version, and signed URL instead of object keys.
+Kept raw storage paths only in server/worker internals for signing/deletion and covered absence in focused tests.
+Merged PR #46 after Vercel passed, waited 3 minutes, then verified production login and a saved-PDF detail panel.
+Saved masked production evidence in testing/issue-45-hide-pdf-paths.
