@@ -16,10 +16,10 @@ const pgimerTarget = {
   clinicCode: "PGIMER",
   name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
   address: "Sector-12, Chandigarh PIN-160012, India",
-  headerImageSrc: "/images/pgimer-header.png",
-  headerImageAlt: "Postgraduate Institute of Medical Education and Research Chandigarh",
-  welcomeTitle: "AI Scribe for PGIMER",
-  welcomeCopy: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs."
+  welcomeBadge: "Exclusive hospital access",
+  welcomeTitle: "A US-style AI scribe workflow, opened for PGIMER",
+  welcomeCopy:
+    "Advanced clinical documentation tools are usually reserved for large, well-funded health systems. This pilot brings that workflow to PGIMER doctors first."
 };
 
 afterEach(() => {
@@ -228,10 +228,11 @@ describe("OnboardingScreen", () => {
 
     render(<OnboardingScreen authClient={authClient} brandedJoinTarget={pgimerTarget} onNavigate={navigate} />);
 
-    expect(screen.getByAltText(pgimerTarget.headerImageAlt)).toHaveAttribute("src", "/images/pgimer-header.png");
-    expect(screen.getByText("AI Scribe for PGIMER")).toBeInTheDocument();
-    expect(screen.getByText("Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs.")).toBeInTheDocument();
-    expect(screen.getAllByText("Powered by BharatDoc")).toHaveLength(1);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("Exclusive hospital access")).toBeInTheDocument();
+    expect(screen.getByText("A US-style AI scribe workflow, opened for PGIMER")).toBeInTheDocument();
+    expect(screen.getByText(pgimerTarget.welcomeCopy)).toBeInTheDocument();
+    expect(screen.queryByText("Powered by BharatDoc")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "doctor@pgimer.edu.in" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "bharatdoc123" } });
