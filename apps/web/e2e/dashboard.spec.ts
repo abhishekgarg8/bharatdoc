@@ -148,11 +148,13 @@ test("onboarding smoke renders email password entry", async ({ page }) => {
 test("PGIMER onboarding smoke renders branded locked join entry", async ({ page }) => {
   await page.goto("/h/pgimer?demo=1");
 
-  await expect(page.getByRole("img", { name: "Postgraduate Institute of Medical Education and Research Chandigarh" })).toBeVisible();
-  await expect(page.getByText("AI Scribe for PGIMER")).toBeVisible();
-  await expect(page.getByText("Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs.")).toBeVisible();
-  await expect(page.getByText("Powered by BharatDoc")).toHaveCount(1);
+  await expect(page.getByRole("img")).toHaveCount(0);
+  await expect(page.getByText("Exclusive hospital access")).toBeVisible();
+  await expect(page.getByText("A US-style AI scribe workflow, opened for PGIMER")).toBeVisible();
+  await expect(page.getByText(/Advanced clinical documentation tools are usually reserved/)).toBeVisible();
+  await expect(page.getByText("Powered by BharatDoc")).toHaveCount(0);
   await page.getByRole("button", { name: /create account/i }).click();
+  await expect(page.getByText("Profile details")).toBeVisible();
   await page.getByRole("button", { name: /^continue$/i }).click();
   await expect(page.getByText("PGIMER pilot workspace", { exact: true })).toBeVisible();
   await expect(page.getByText("New PGIMER doctors join this hospital workspace after signup.")).toBeVisible();

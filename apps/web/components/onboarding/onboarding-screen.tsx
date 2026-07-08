@@ -52,8 +52,7 @@ interface OnboardingScreenProps {
     clinicCode: string;
     name: string;
     address?: string;
-    headerImageSrc: string;
-    headerImageAlt: string;
+    welcomeBadge: string;
     welcomeTitle: string;
     welcomeCopy: string;
   };
@@ -355,17 +354,14 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
   return (
     <OnboardingShell>
       <section className="flex flex-1 flex-col px-7 py-10">
-        {brandedJoinTarget ? (
-          <img
-            alt={brandedJoinTarget.headerImageAlt}
-            className="w-full rounded-xl border border-rule bg-white object-contain p-2 shadow-[0_3px_14px_rgba(28,23,18,0.06)]"
-            src={brandedJoinTarget.headerImageSrc}
-          />
-        ) : (
-          <LogoMark />
-        )}
+        {brandedJoinTarget ? null : <LogoMark />}
 
-        <div className="mt-10">
+        <div className={brandedJoinTarget ? "mt-2" : "mt-10"}>
+          {brandedJoinTarget ? (
+            <p className="mb-4 font-body text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta">
+              {brandedJoinTarget.welcomeBadge}
+            </p>
+          ) : null}
           <h1 className="font-display text-[40px] italic leading-none tracking-normal text-ink">
             {brandedJoinTarget?.welcomeTitle ?? "Welcome to BharatDoc"}
           </h1>
@@ -373,11 +369,6 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
             {brandedJoinTarget?.welcomeCopy ??
               "Record consultations. Get AI-drafted clinical summaries. Save to PDF in one tap."}
           </p>
-          {brandedJoinTarget ? (
-            <p className="mt-3 font-body text-[11px] font-bold uppercase tracking-[0.14em] text-terracotta">
-              Powered by BharatDoc
-            </p>
-          ) : null}
         </div>
 
         {authMode === "login" && step === "credentials" ? null : <StepIndicator step={step} />}

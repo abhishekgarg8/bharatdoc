@@ -4,8 +4,8 @@ import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "AI Scribe for PGIMER | BharatDoc",
-  description: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs for PGIMER."
+  title: "Exclusive PGIMER AI Scribe Access | BharatDoc",
+  description: "A US-style AI scribe workflow opened for PGIMER doctors."
 };
 
 export default function PgimerOnboardingPage() {
@@ -15,10 +15,10 @@ export default function PgimerOnboardingPage() {
         clinicCode: "PGIMER",
         name: "Postgraduate Institute of Medical Education & Research, Chandigarh",
         address: "Sector-12, Chandigarh PIN-160012, India",
-        headerImageSrc: "/images/pgimer-header.png",
-        headerImageAlt: "Postgraduate Institute of Medical Education and Research Chandigarh",
-        welcomeTitle: "AI Scribe for PGIMER",
-        welcomeCopy: "Record consultations and create doctor-reviewed clinical notes and Patient ID PDFs."
+        welcomeBadge: "Exclusive hospital access",
+        welcomeTitle: "A US-style AI scribe workflow, opened for PGIMER",
+        welcomeCopy:
+          "Advanced clinical documentation tools are usually reserved for large, well-funded health systems. This pilot brings that workflow to PGIMER doctors first."
       }}
     />
   );
