@@ -19,7 +19,9 @@ import {
 } from "@/lib/client/transcription-api";
 import {
   createIndexedDbLocalRecordingRepository,
+  localRecordingMatchesScope,
   localRecordingAudioBlob,
+  type LocalRecordingScope,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
 
@@ -108,6 +110,7 @@ export function RecordingDetailPageClient({
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
+  const [localRecordingScope, setLocalRecordingScope] = useState<LocalRecordingScope | null>(null);
   const [recording, setRecording] = useState<RecordingDetailRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -151,6 +154,11 @@ export function RecordingDetailPageClient({
         }
 
         if (isMounted) {
+          setLocalRecordingScope({
+            authUserId: bootstrap.doctor.firebase_uid,
+            doctorId: bootstrap.doctor.id,
+            clinicId: bootstrap.doctor.clinic_id
+          });
           setRecording(bootstrap.recording);
         }
       } catch (loadError) {
@@ -190,7 +198,10 @@ export function RecordingDetailPageClient({
     }
 
     const localRecording = (await repository.list()).find(
-      (item) => item.serverRecordingId === recordingIdToTranscribe || item.id === recordingIdToTranscribe
+      (item) =>
+        localRecordingScope &&
+        localRecordingMatchesScope(item, localRecordingScope) &&
+        (item.serverRecordingId === recordingIdToTranscribe || item.id === recordingIdToTranscribe)
     );
     const audioBlob = localRecording ? localRecordingAudioBlob(localRecording) : null;
     const audioMimeType = localRecording?.audioMimeType ?? null;
@@ -209,7 +220,10 @@ export function RecordingDetailPageClient({
   async function removeMatchingLocalRecording(recordingIdToDelete: string): Promise<void> {
     const localRecordings = await repository.list();
     const matchingRecordings = localRecordings.filter(
-      (item) => item.id === recordingIdToDelete || item.serverRecordingId === recordingIdToDelete
+      (item) =>
+        localRecordingScope &&
+        localRecordingMatchesScope(item, localRecordingScope) &&
+        (item.id === recordingIdToDelete || item.serverRecordingId === recordingIdToDelete)
     );
 
     await Promise.all(matchingRecordings.map((item) => repository.remove(item.id)));

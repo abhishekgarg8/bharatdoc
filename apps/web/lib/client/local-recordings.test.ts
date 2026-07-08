@@ -3,6 +3,8 @@ import {
   createMemoryLocalRecordingRepository,
   localRecordingAudioBlob,
   mapLocalRecordingsToDashboardRecords,
+  mapQuarantinedLocalRecordings,
+  recoverQuarantinedLocalRecordingForScope,
   toLocalDashboardRecord,
   type LocalRecording
 } from "@/lib/client/local-recordings";
@@ -30,6 +32,7 @@ const baseRecording: LocalRecording = {
   transcript: null,
   error: null
 };
+const baseScope = { authUserId: "auth-user-1", doctorId: "doctor-1", clinicId: "clinic-1" };
 
 describe("local recording repository", () => {
   it("creates normalized drafts and tracks persisted capture state", async () => {
@@ -176,7 +179,8 @@ describe("local recording repository", () => {
         },
         baseRecording
       ],
-      new Date("2026-04-23T09:00:00.000Z")
+      new Date("2026-04-23T09:00:00.000Z"),
+      baseScope
     );
 
     expect(records.map((record) => record.id)).toEqual(["local-recording"]);
@@ -210,6 +214,70 @@ describe("local recording repository", () => {
     );
 
     expect(records.map((record) => record.patientId)).toEqual(["P-10482"]);
+  });
+
+  it("quarantines visible local recordings without a complete matching authenticated scope", () => {
+    const recordings = [
+      baseRecording,
+      {
+        ...baseRecording,
+        id: "wrong-doctor",
+        doctorId: "doctor-2",
+        patientId: "P-WRONG-DOCTOR"
+      },
+      {
+        ...baseRecording,
+        id: "legacy-unscoped",
+        authUserId: null,
+        doctorId: null,
+        clinicId: null,
+        patientId: "P-LEGACY"
+      },
+      {
+        ...baseRecording,
+        id: "missing-clinic",
+        clinicId: null,
+        patientId: "P-MISSING-CLINIC"
+      }
+    ];
+    expect(mapLocalRecordingsToDashboardRecords(recordings, new Date("2026-04-23T09:00:00.000Z"), baseScope).map((record) => record.id)).toEqual([
+      "local-recording"
+    ]);
+    const quarantined = mapQuarantinedLocalRecordings(recordings, new Date("2026-04-23T09:00:00.000Z"), baseScope);
+
+    expect(quarantined.map((record) => record.id)).toEqual(["legacy-unscoped"]);
+    expect(quarantined[0]).toMatchObject({ duration: "2:05", recordedAt: "2026-04-23T06:12:00.000Z" });
+    expect(JSON.stringify(quarantined)).not.toContain("P-LEGACY");
+    expect(JSON.stringify(quarantined)).not.toContain("P-WRONG-DOCTOR");
+    expect(JSON.stringify(quarantined)).not.toContain("P-MISSING-CLINIC");
+  });
+
+  it("recovers legacy unscoped recordings into the authenticated scope", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      baseRecording,
+      {
+        ...baseRecording,
+        id: "legacy-unscoped",
+        authUserId: null,
+        doctorId: null,
+        clinicId: null,
+        patientId: "P-LEGACY"
+      },
+      {
+        ...baseRecording,
+        id: "foreign-scoped",
+        authUserId: "auth-user-2",
+        doctorId: "doctor-2",
+        patientId: "P-FOREIGN"
+      }
+    ]);
+    await expect(recoverQuarantinedLocalRecordingForScope(repository, "legacy-unscoped", baseScope)).resolves.toMatchObject(baseScope);
+    await expect(recoverQuarantinedLocalRecordingForScope(repository, "foreign-scoped", baseScope)).rejects.toThrow(
+      "Only legacy unscoped local recordings can be recovered."
+    );
+    await expect(recoverQuarantinedLocalRecordingForScope(repository, baseRecording.id, baseScope)).rejects.toThrow(
+      "Only legacy unscoped local recordings can be recovered."
+    );
   });
 
   it("recovers interrupted recordings only for the matching authenticated scope", async () => {
@@ -260,7 +328,8 @@ describe("local recording repository", () => {
           recordedAt: "2026-04-23T07:12:00.000Z"
         }
       ],
-      new Date("2026-04-23T09:00:00.000Z")
+      new Date("2026-04-23T09:00:00.000Z"),
+      baseScope
     );
 
     expect(records.map((record) => record.id)).toEqual(["newer", "local-recording"]);

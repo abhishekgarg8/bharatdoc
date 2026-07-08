@@ -39,6 +39,7 @@ describe("device logs", () => {
     });
 
     expect(listDeviceLogs()).toHaveLength(2);
+    expect(first.patientId).toBeNull();
     expect(second.deviceId).toBe(first.deviceId);
     expect(second.sessionId).toBe(first.sessionId);
   });
