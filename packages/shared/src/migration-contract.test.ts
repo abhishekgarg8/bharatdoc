@@ -60,6 +60,13 @@ const pdfMetadataMigration = readFileSync(
   ),
   "utf8",
 );
+const phiRlsPoliciesMigration = readFileSync(
+  resolve(
+    dirname,
+    "../../../supabase/migrations/202607080003_add_phi_rls_policies.sql",
+  ),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -196,6 +203,53 @@ describe("initial Supabase migration contract", () => {
     expect(pdfMetadataMigration).toContain("add column if not exists pdf_generated_at timestamptz");
     expect(pdfMetadataMigration).toContain("add column if not exists pdf_version text");
     expect(pdfMetadataMigration).toContain("where pdf_storage_path is not null");
+  });
+
+  it("adds RLS helper functions for authenticated doctor and clinic scope", () => {
+    for (const helper of [
+      "public.current_authenticated_doctor_id",
+      "public.current_authenticated_doctor_clinic_id",
+      "public.current_active_doctor_id",
+      "public.current_active_doctor_clinic_id",
+      "public.current_active_owner_clinic_id",
+    ]) {
+      expect(phiRlsPoliciesMigration).toContain(`create or replace function ${helper}()`);
+      expect(phiRlsPoliciesMigration).toContain(`grant execute on function ${helper}() to authenticated`);
+    }
+
+    expect(phiRlsPoliciesMigration).toContain("where firebase_uid = auth.uid()::text");
+    expect(phiRlsPoliciesMigration).toContain("security definer");
+    expect(phiRlsPoliciesMigration).toContain("set search_path = public, pg_temp");
+  });
+
+  it("adds clinic-scoped and owner-only PHI RLS policies", () => {
+    for (const policy of [
+      "clinics_select_active_members",
+      "clinics_update_active_owners",
+      "doctors_select_own_or_clinic_members",
+      "clinic_join_requests_select_own_or_owner",
+      "clinic_join_requests_insert_own_pending",
+      "clinic_join_requests_update_active_owners",
+      "recordings_select_active_clinic_members",
+      "recordings_insert_own_active_clinic",
+      "recordings_update_own_records",
+      "recordings_delete_own_records",
+    ]) {
+      expect(phiRlsPoliciesMigration).toContain(`create policy ${policy}`);
+    }
+
+    expect(phiRlsPoliciesMigration).toContain("clinic_id = public.current_active_doctor_clinic_id()");
+    expect(phiRlsPoliciesMigration).toContain("clinic_id = public.current_authenticated_doctor_clinic_id()");
+    expect(phiRlsPoliciesMigration).toContain("clinic_id = public.current_active_owner_clinic_id()");
+    expect(phiRlsPoliciesMigration).toContain("doctor_id = public.current_active_doctor_id()");
+    expect(phiRlsPoliciesMigration).toContain("status = 'pending'");
+    expect(phiRlsPoliciesMigration).toContain("No direct authenticated UPDATE policy is granted on public.doctors");
+    expect(phiRlsPoliciesMigration).not.toContain("create policy doctors_update");
+  });
+
+  it("documents that trusted service-role workflows intentionally bypass RLS", () => {
+    expect(phiRlsPoliciesMigration).toContain("service_role clients");
+    expect(phiRlsPoliciesMigration).toContain("service_role bypasses RLS");
   });
 
   it("adds private diagnostic logs and richer transcription attempt metadata", () => {
