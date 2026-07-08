@@ -28,3 +28,10 @@ Added persisted PDF metadata and returned `has_pdf`, generated timestamp/version
 Kept raw storage paths only in server/worker internals for signing/deletion and covered absence in focused tests.
 Merged PR #46 after Vercel passed, waited 3 minutes, then verified production login and a saved-PDF detail panel.
 Saved masked production evidence in testing/issue-45-hide-pdf-paths.
+
+2026-07-08 - Issue #44: Quarantined legacy unscoped local recordings.
+Scoped dashboard/detail local recording reads to the active auth user, doctor, and clinic.
+Added hidden local recovery UI for all-null legacy IndexedDB records with Patient IDs/labels masked until ownership confirmation.
+Kept foreign/partial scoped local records out of normal UI and recovery, and stripped Patient IDs from queued device logs.
+Merged PR #48 after Vercel passed, waited 3 minutes, then verified production with the test account.
+Saved production recovery-card evidence in testing/issue-44-production-quarantine.
