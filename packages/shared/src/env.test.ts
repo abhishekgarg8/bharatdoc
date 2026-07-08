@@ -11,13 +11,49 @@ describe("environment validation", () => {
         NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
         RAILWAY_WORKER_URL: "https://worker.example.com",
         SUPABASE_URL: "https://supabase.example.com",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role"
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        RESEND_API_KEY: "re_test",
+        RESEND_FROM_EMAIL: "hello@send.example.com",
+        RESEND_FROM_NAME: "BharatDoc",
+        RESEND_SENDING_DOMAIN: "send.example.com"
       })
     ).toMatchObject({
       NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
       NEXT_PUBLIC_SITE_URL: "https://bharatdoc-web.vercel.app/",
-      NEXT_PUBLIC_ENABLE_DEMO_MODE: "false"
+      NEXT_PUBLIC_ENABLE_DEMO_MODE: "false",
+      RESEND_FROM_EMAIL: "hello@send.example.com",
+      RESEND_SENDING_DOMAIN: "send.example.com"
     });
+  });
+
+  it("defaults the Resend sender name before email delivery is configured", () => {
+    expect(
+      parseWebEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
+        RAILWAY_WORKER_URL: "https://worker.example.com",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role"
+      })
+    ).toMatchObject({
+      RESEND_FROM_NAME: "BharatDoc"
+    });
+  });
+
+  it("rejects a Resend sender outside the verified sending domain", () => {
+    expect(() =>
+      parseWebEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example.com",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+        NEXT_PUBLIC_RAILWAY_WORKER_URL: "https://worker.example.com",
+        RAILWAY_WORKER_URL: "https://worker.example.com",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        RESEND_FROM_EMAIL: "hello@example.com",
+        RESEND_SENDING_DOMAIN: "send.example.com"
+      })
+    ).toThrow();
   });
 
   it("accepts explicit local demo mode only as a boolean-like flag", () => {

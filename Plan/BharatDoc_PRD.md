@@ -669,6 +669,12 @@ NEXT_PUBLIC_ENABLE_DEMO_MODE=false
 # Railway worker base URLs
 NEXT_PUBLIC_RAILWAY_WORKER_URL=
 RAILWAY_WORKER_URL=
+
+# Resend email delivery (server-side only, never NEXT_PUBLIC)
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+RESEND_FROM_NAME=BharatDoc
+RESEND_SENDING_DOMAIN=
 ```
 
 #### `.env` — Railway Backend Worker (server-side only, never exposed)
@@ -699,6 +705,10 @@ WORKER_CORS_ORIGINS=
 | `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys → Create new secret key |
 | `RAILWAY_WORKER_URL` | Railway | Railway dashboard → your worker service → Settings → Public URL |
 | `WORKER_CORS_ORIGINS` | Railway | Comma-separated allowed browser origins, including production Vercel URL and local dev URLs |
+| `RESEND_API_KEY` | Resend | Dashboard → API Keys → Create API Key with sending access scoped to the verified sending domain |
+| `RESEND_FROM_EMAIL` | Resend | Verified sender address, for example `hello@send.yourdomain.com` |
+| `RESEND_FROM_NAME` | Resend | Sender display name, usually `BharatDoc` |
+| `RESEND_SENDING_DOMAIN` | Resend/DNS | Verified sending domain, for example `send.yourdomain.com` |
 
 ---
 
