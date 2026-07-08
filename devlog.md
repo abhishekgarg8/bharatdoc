@@ -35,3 +35,9 @@ Added hidden local recovery UI for all-null legacy IndexedDB records with Patien
 Kept foreign/partial scoped local records out of normal UI and recovery, and stripped Patient IDs from queued device logs.
 Merged PR #48 after Vercel passed, waited 3 minutes, then verified production with the test account.
 Saved production recovery-card evidence in testing/issue-44-production-quarantine.
+
+2026-07-08 - Issue #43: Added database-level PHI RLS backstop policies.
+Scoped direct authenticated Supabase access for clinics, doctors, join requests, and recordings by doctor/clinic/owner context.
+Documented trusted service-role bypasses and kept app-route cross-clinic guards covered with focused tests.
+Merged PR #50 after Vercel passed, waited 3 minutes, then verified production dashboard auth with the test account.
+Saved sanitized production evidence in testing/issue-43-production-rls-backstop.
