@@ -1,5 +1,6 @@
 export * from "./access.js";
 export * from "./auth.js";
+export * from "./clinical-summary.js";
 export * from "./clinic-code.js";
 export * from "./constants.js";
 export * from "./env.js";

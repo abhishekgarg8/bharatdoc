@@ -551,7 +551,7 @@ describe("worker app", () => {
       .expect(({ body }) => {
         expect(body).toEqual({
           recording_id: recording.id,
-          summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+          summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
           status: "summary_ready",
         });
       });
@@ -564,7 +564,7 @@ describe("worker app", () => {
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever\nPlan: Fluids and paracetamol.",
+      summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
     });
   });
 

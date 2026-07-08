@@ -53,7 +53,7 @@ describe("TranscriptSummaryScreen", () => {
   it("generates summaries and switches to the editable summary view", async () => {
     const generate = vi.fn(async () => ({
       recording_id: recording.id,
-      summary: "Chief Complaint\nFever for two days.",
+      summary: "**Chief Complaint**: Fever for two days.",
       status: "summary_ready" as const
     }));
 
@@ -65,8 +65,32 @@ describe("TranscriptSummaryScreen", () => {
       expect(screen.getByRole("textbox", { name: "Summary" })).toHaveValue("Chief Complaint\nFever for two days.");
     });
     expect(generate).toHaveBeenCalledWith(recording.id);
+    expect(screen.getByRole("heading", { name: "Chief Complaint" })).toBeInTheDocument();
+    expect(screen.queryByText("**Chief Complaint**: Fever for two days.")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Summary ready")).toBeInTheDocument();
     expect(screen.getByText("Summary generated.")).toBeInTheDocument();
+  });
+
+  it("renders saved Markdown summaries as structured clinical sections", () => {
+    render(
+      <TranscriptSummaryScreen
+        recording={{
+          ...recording,
+          summary: "**Chief Complaint**: Fever\n\n## Plan\n- Fluids and paracetamol.",
+          status: "summary_ready"
+        }}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Chief Complaint" })).toBeInTheDocument();
+    expect(screen.getByText("Fever")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Treatment / Prescription" })).toBeInTheDocument();
+    expect(screen.getByText("Fluids and paracetamol.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Summary" })).toHaveValue(
+      "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol."
+    );
+    expect(screen.queryByText("**Chief Complaint**: Fever")).not.toBeInTheDocument();
+    expect(screen.queryByText("## Plan")).not.toBeInTheDocument();
   });
 
   it("generates a missing transcript before summary generation", async () => {

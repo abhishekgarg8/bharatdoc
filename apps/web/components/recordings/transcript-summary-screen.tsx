@@ -3,6 +3,7 @@
 import { ArrowLeft, Download, FileCheck2, FileText, Save, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
+import { parseClinicalSummary, sanitizeClinicalSummaryText } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
 import { StatusTick } from "@/components/status-tick";
 import {
@@ -97,9 +98,10 @@ export function TranscriptSummaryScreen({
 }: TranscriptSummaryScreenProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>(recording.summary ? "summary" : "transcript");
   const [transcript, setTranscript] = useState(recording.transcript ?? "");
-  const [summary, setSummary] = useState(recording.summary ?? "");
+  const initialSummary = sanitizeClinicalSummaryText(recording.summary ?? "");
+  const [summary, setSummary] = useState(initialSummary);
   const [status, setStatus] = useState(recording.status);
-  const [savedSummary, setSavedSummary] = useState(recording.summary ?? "");
+  const [savedSummary, setSavedSummary] = useState(initialSummary);
   const [hasPdf, setHasPdf] = useState(recording.hasPdf);
   const [pdfGeneratedAt, setPdfGeneratedAt] = useState<string | null>(recording.pdfGeneratedAt);
   const [pdfVersion, setPdfVersion] = useState<string | null>(recording.pdfVersion);
@@ -115,6 +117,7 @@ export function TranscriptSummaryScreen({
   const pdfPanelRef = useRef<HTMLDivElement>(null);
   const transcriptBlocks = useMemo(() => linesFor(transcript), [transcript]);
   const summaryBlocks = useMemo(() => linesFor(summary), [summary]);
+  const summarySections = useMemo(() => parseClinicalSummary(summary), [summary]);
   const hasTranscript = Boolean(transcript.trim());
   const canEditRecording = recording.canEdit;
   const canSave = summary.trim() !== savedSummary.trim();
@@ -220,8 +223,9 @@ export function TranscriptSummaryScreen({
               status: "summary_ready" as const
             };
 
-      setSummary(result.summary);
-      setSavedSummary(result.summary);
+      const cleanSummary = sanitizeClinicalSummaryText(result.summary);
+      setSummary(cleanSummary);
+      setSavedSummary(cleanSummary);
       setStatus(result.status);
       setHasPdf(false);
       setPdfGeneratedAt(null);
@@ -261,13 +265,14 @@ export function TranscriptSummaryScreen({
     setSaving(true);
 
     try {
+      const cleanSummary = sanitizeClinicalSummaryText(summary);
       const updated = onSaveSummary
-        ? await onSaveSummary(recording.id, summary)
+        ? await onSaveSummary(recording.id, cleanSummary)
         : idToken
-          ? await saveRecordingSummary(idToken, recording.id, summary, fetcher)
+          ? await saveRecordingSummary(idToken, recording.id, cleanSummary, fetcher)
           : {
               ...recording,
-              summary,
+              summary: cleanSummary,
               status: "summary_ready" as const,
               hasPdf: false,
               pdfGeneratedAt: null,
@@ -275,8 +280,9 @@ export function TranscriptSummaryScreen({
               pdfSignedUrl: null
             };
 
-      setSummary(updated.summary ?? summary);
-      setSavedSummary(updated.summary ?? summary);
+      const updatedSummary = sanitizeClinicalSummaryText(updated.summary ?? cleanSummary);
+      setSummary(updatedSummary);
+      setSavedSummary(updatedSummary);
       setStatus(updated.status);
       setHasPdf(updated.hasPdf);
       setPdfGeneratedAt(updated.pdfGeneratedAt);
@@ -475,6 +481,22 @@ export function TranscriptSummaryScreen({
                 <Sparkles className="h-4 w-4" />
                 Summary
               </label>
+              {summarySections.length > 0 ? (
+                <div className="mb-3 space-y-3 rounded-xl border border-rule bg-paper px-3.5 py-3">
+                  {summarySections.map((section) => (
+                    <section key={section.title}>
+                      <h2 className="font-body text-[12px] font-bold uppercase tracking-[0.12em] text-terracotta">
+                        {section.title}
+                      </h2>
+                      <div className="mt-1 space-y-1 font-body text-[13px] leading-relaxed text-ink-soft">
+                        {linesFor(section.body).map((block, index) => (
+                          <p key={`${section.title}-${index}-${block.slice(0, 18)}`}>{block}</p>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : null}
               <textarea
                 id="recording-summary"
                 className={cn(

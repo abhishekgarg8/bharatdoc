@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import React from "react";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { parseClinicalSummary } from "@bharatdoc/shared";
 import type { PdfRenderer } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -83,6 +84,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginBottom: 8
   },
+  sectionBody: {
+    borderLeftColor: "#E3D7C3",
+    borderLeftWidth: 2,
+    paddingLeft: 10
+  },
   footer: {
     borderTopColor: "#E3D7C3",
     borderTopWidth: 1,
@@ -113,6 +119,11 @@ function summaryParagraphs(summary: string): string[] {
   return paragraphs.length > 0 ? paragraphs : ["No summary text was provided."];
 }
 
+function formattedTimestamp(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : formattedGeneratedAt(date);
+}
+
 function pgimerHeaderAssetCandidates(): string[] {
   return [
     join(process.cwd(), "assets", "pgimer-pdf-header.png"),
@@ -141,12 +152,21 @@ function pdfDocument(input: Parameters<PdfRenderer["render"]>[0]) {
   const generatedAt = formattedGeneratedAt(input.generatedAt);
   const patientId = input.recording.patient_id ?? "Unassigned";
   const summary = input.recording.summary ?? "";
+  const sections = parseClinicalSummary(summary);
   const pgimerHeaderSrc = isPgimerClinic(input.clinic.clinic_code) ? getPgimerHeaderDataUri() : null;
   const h = React.createElement;
 
   return h(
     Document,
-    null,
+    {
+      author: input.doctor.name,
+      creationDate: input.generatedAt,
+      creator: "BharatDoc",
+      keywords: `patient:${patientId},recorded:${formattedTimestamp(input.recording.recorded_at)},generated:${generatedAt}`,
+      producer: "BharatDoc",
+      subject: `Recorded ${formattedTimestamp(input.recording.recorded_at)} | Generated ${generatedAt}`,
+      title: `Clinical Summary - Patient ${patientId}`
+    },
     h(
       Page,
       { size: "A4", style: styles.page, wrap: true },
@@ -158,14 +178,23 @@ function pdfDocument(input: Parameters<PdfRenderer["render"]>[0]) {
           ],
       h(Text, { style: styles.title }, `Clinical Summary - Patient ${patientId}`),
       h(Text, { style: styles.meta }, `Doctor: ${input.doctor.name} (${input.doctor.specialization})`),
-      h(Text, { style: styles.meta }, `Recorded: ${input.recording.recorded_at}`),
+      h(Text, { style: styles.meta }, `Recorded: ${formattedTimestamp(input.recording.recorded_at)}`),
       h(Text, { style: styles.meta }, `Generated: ${generatedAt}`),
-      h(View, { wrap: true }, [
-        h(Text, { key: "summary-title", style: styles.sectionTitle }, "Summary"),
-        ...summaryParagraphs(summary).map((paragraph, index) =>
-          h(Text, { key: `summary-${index}`, style: styles.paragraph }, paragraph)
-        )
-      ]),
+      sections.length > 0
+        ? sections.map((section) =>
+            h(View, { key: section.title }, [
+              h(Text, { key: `${section.title}-title`, style: styles.sectionTitle }, section.title),
+              ...summaryParagraphs(section.body).map((paragraph, index) =>
+                h(Text, { key: `${section.title}-${index}`, style: [styles.paragraph, styles.sectionBody] }, paragraph)
+              )
+            ])
+          )
+        : h(View, { wrap: true }, [
+            h(Text, { key: "summary-title", style: styles.sectionTitle }, "Summary"),
+            ...summaryParagraphs(summary).map((paragraph, index) =>
+              h(Text, { key: `summary-${index}`, style: styles.paragraph }, paragraph)
+            )
+          ]),
       h(Text, { fixed: true, style: styles.footer }, "Powered by BharatDoc | AI-assisted - verify before clinical use")
     )
   );
