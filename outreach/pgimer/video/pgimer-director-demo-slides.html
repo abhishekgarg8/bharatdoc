@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PGIMER Director Demo Slides</title>
+    <style>
+      :root {
+        --ink: #241c16;
+        --muted: #6f6257;
+        --paper: #fbf6ec;
+        --deep: #f2e7d6;
+        --terracotta: #b9472b;
+        --sage: #527a62;
+        --blue: #245b7a;
+        --rule: #dfd1bd;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .slide {
+        width: 1280px;
+        height: 720px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 48px;
+        align-items: center;
+        padding: 72px;
+        border-bottom: 1px solid var(--rule);
+        background: var(--paper);
+      }
+
+      .slide.hero {
+        background:
+          linear-gradient(90deg, rgba(251, 246, 236, 0.98), rgba(251, 246, 236, 0.76) 45%, rgba(251, 246, 236, 0.12)),
+          url("../assets/pgimer-opd-ai-scribe-hero.png") center / cover no-repeat;
+        grid-template-columns: 0.62fr 0.38fr;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-style: italic;
+        line-height: 0.98;
+      }
+
+      h1 {
+        font-size: 74px;
+        max-width: 9ch;
+      }
+
+      h2 {
+        font-size: 58px;
+      }
+
+      p {
+        margin: 24px 0 0;
+        color: var(--muted);
+        font-size: 27px;
+        line-height: 1.32;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--terracotta);
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .phone {
+        width: 330px;
+        min-height: 560px;
+        justify-self: center;
+        border: 12px solid #211b17;
+        border-radius: 42px;
+        background: #fffaf1;
+        padding: 28px;
+        box-shadow: 0 24px 70px rgba(36, 28, 22, 0.22);
+      }
+
+      .bar {
+        height: 10px;
+        width: 88px;
+        margin: 0 auto 28px;
+        border-radius: 999px;
+        background: #211b17;
+      }
+
+      .tag {
+        display: inline-flex;
+        margin-bottom: 14px;
+        border-radius: 999px;
+        background: var(--deep);
+        color: var(--terracotta);
+        padding: 8px 12px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .screen-title {
+        margin: 0 0 18px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 34px;
+        font-style: italic;
+      }
+
+      .field {
+        margin-top: 14px;
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        background: var(--deep);
+        padding: 16px;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .button {
+        margin-top: 18px;
+        border-radius: 999px;
+        background: var(--terracotta);
+        color: #fff;
+        padding: 18px;
+        text-align: center;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .summary {
+        display: grid;
+        gap: 12px;
+      }
+
+      .section {
+        border-left: 4px solid var(--terracotta);
+        background: rgba(255, 255, 255, 0.48);
+        padding: 12px 16px;
+        font-size: 18px;
+      }
+
+      .flow {
+        display: grid;
+        gap: 14px;
+      }
+
+      .step {
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        background: #fffaf1;
+        padding: 18px;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+      }
+
+      .metric {
+        min-height: 120px;
+        border-radius: 16px;
+        background: var(--deep);
+        padding: 22px;
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--blue);
+        font-size: 38px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .caption {
+        position: absolute;
+        left: 72px;
+        right: 72px;
+        bottom: 36px;
+        border-radius: 18px;
+        background: rgba(36, 28, 22, 0.88);
+        color: #fff;
+        padding: 18px 22px;
+        font-size: 25px;
+        line-height: 1.25;
+      }
+
+      .frame {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+      }
+
+      .wide {
+        grid-column: 1 / -1;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="frame">
+      <div class="slide hero">
+        <div>
+          <div class="eyebrow">PGIMER Chandigarh pilot proposal</div>
+          <h1>Doctor-reviewed AI documentation</h1>
+          <p>For faster, cleaner clinical notes in high-volume OPDs.</p>
+        </div>
+      </div>
+      <div class="caption">PGIMER handles complex, high-volume care. Documentation should support doctors, not slow them down.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Controlled pilot</div>
+          <h2>Start narrow. Prove value. Then expand.</h2>
+          <p>One to three OPD teams, 10 to 20 doctors or residents, 30 days, subject to PGIMER approvals, no HIS integration.</p>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><strong>30</strong><span>days</span></div>
+          <div class="metric"><strong>1-3</strong><span>OPD teams</span></div>
+          <div class="metric"><strong>10-20</strong><span>clinicians</span></div>
+          <div class="metric"><strong>0</strong><span>HIS changes</span></div>
+        </div>
+      </div>
+      <div class="caption">Start narrow: 1 to 3 OPD teams, 10 to 20 doctors or residents, subject to PGIMER approvals, no HIS integration.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Step 1</div>
+          <h2>Capture the consultation</h2>
+          <p>A doctor records consultation audio using a PGIMER-approved consent and data-handling process.</p>
+        </div>
+        <div class="phone">
+          <div class="bar"></div>
+          <span class="tag">New consultation</span>
+          <div class="screen-title">Recording</div>
+          <div class="field">Patient ID: PGI-2048</div>
+          <div class="field">Status: Online · Audio stays on device until transcription</div>
+          <div class="button">Start recording</div>
+        </div>
+      </div>
+      <div class="caption">A doctor records the consultation using a PGIMER-approved consent and data-handling process.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Step 2</div>
+          <h2>Draft structured sections</h2>
+          <p>BharatDoc converts the consultation into reviewable clinical sections.</p>
+        </div>
+        <div class="summary">
+          <div class="section"><strong>Chief complaint</strong><br />Fever and cough for two days.</div>
+          <div class="section"><strong>History</strong><br />No breathlessness reported. Appetite reduced.</div>
+          <div class="section"><strong>Plan</strong><br />Fluids, paracetamol, follow-up if symptoms worsen.</div>
+        </div>
+      </div>
+      <div class="caption">BharatDoc drafts history, findings, assessment, treatment, and follow-up sections from the consultation.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Step 3</div>
+          <h2>AI drafts. Doctors decide.</h2>
+          <p>No note is finalized until the clinician reviews, edits, and saves it.</p>
+        </div>
+        <div class="phone">
+          <div class="bar"></div>
+          <span class="tag">Doctor review</span>
+          <div class="screen-title">Clinical Summary</div>
+          <div class="field">Edited by clinician before saving</div>
+          <div class="field">AI-assisted - verify before clinical use</div>
+          <div class="button">Save reviewed summary</div>
+        </div>
+      </div>
+      <div class="caption">AI drafts. Doctors decide. No note is finalized until the clinician reviews and edits it.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Governance</div>
+          <h2>Transparent flow for review</h2>
+          <p>Designed for clinical, IT/security, legal/data-protection, IEC/ethics, and administration review before deployment.</p>
+        </div>
+        <div class="flow">
+          <div class="step">Consent workflow</div>
+          <div class="step">Secure capture</div>
+          <div class="step">AI draft</div>
+          <div class="step">Doctor approval</div>
+          <div class="step">Approved identifier PDF + audit trail</div>
+        </div>
+      </div>
+      <div class="caption">The final PGIMER-approved identifier PDF is generated with an AI-assisted disclaimer and auditable workflow.</div>
+    </section>
+
+    <section class="frame">
+      <div class="slide">
+        <div>
+          <div class="eyebrow">Pilot dashboard</div>
+          <h2>Measure what matters</h2>
+          <p>PGIMER can decide based on evidence from real clinical workflows.</p>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><strong>Time</strong><span>recording stop to reviewed note</span></div>
+          <div class="metric"><strong>Quality</strong><span>doctor edit rate by section</span></div>
+          <div class="metric"><strong>Reliability</strong><span>transcription success by device</span></div>
+          <div class="metric"><strong>Adoption</strong><span>PDFs generated per doctor</span></div>
+        </div>
+      </div>
+      <div class="caption">PGIMER can measure time saved, note quality, edit rate, transcription success, and doctor satisfaction.</div>
+    </section>
+  </body>
+</html>
