@@ -47,7 +47,7 @@ Expected result: signup is submitted and the script stops when the app asks for 
 
 ## Email Confirmation
 
-Find the latest Supabase/BharatDoc confirmation email in Gmail, copy the confirmation URL, then resume:
+Find the latest Supabase/BharatDoc confirmation email in Gmail, copy the confirmation URL, then resume. The hosted Supabase Confirm signup template must use `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email`, and the project redirect allowlist must include the exact app callback URL.
 
 ```bash
 REAL_E2E_BASE_URL=http://127.0.0.1:3000 \

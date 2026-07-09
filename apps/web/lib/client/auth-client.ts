@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
   signInWithPassword(credentials: PasswordCredentials): Promise<string>;
+  recoverSessionFromUrl?: (callbackUrl: string) => Promise<string>;
   resetPasswordForEmail?: (email: string) => Promise<void>;
   getCurrentIdToken(): Promise<string | null>;
   signOut(): Promise<void>;
@@ -16,6 +17,8 @@ let browserClient: SupabaseClient | null = null;
 
 const defaultSiteUrl = "https://bharatdoc-web.vercel.app/";
 const sessionLookupTimeoutMs = 5000;
+type VerifyTokenHashParams = Extract<Parameters<SupabaseClient["auth"]["verifyOtp"]>[0], { token_hash: string }>;
+type SupportedEmailOtpType = VerifyTokenHashParams["type"];
 
 export function getAuthRedirectUrl(): string {
   const configuredUrl =
@@ -32,7 +35,12 @@ export function getAuthRedirectUrl(): string {
     url = `https://${url}`;
   }
 
-  return url.endsWith("/") ? url : `${url}/`;
+  const parsed = new URL(url);
+  return `${parsed.protocol}//${parsed.host}/`;
+}
+
+export function getAuthCallbackUrl(): string {
+  return new URL("/auth/callback", getAuthRedirectUrl()).toString();
 }
 
 function getSupabaseBrowserClient(): SupabaseClient {
@@ -151,6 +159,58 @@ async function getSessionWithTimeout(supabase: SupabaseClient) {
   }
 }
 
+async function getAccessTokenFromSession(supabase: SupabaseClient): Promise<string | null> {
+  const result = await getSessionWithTimeout(supabase);
+
+  if (!result || result.error) {
+    return null;
+  }
+
+  return result.data.session?.access_token ?? null;
+}
+
+function parseCallbackParams(callbackUrl: string) {
+  const url = new URL(callbackUrl, getAuthRedirectUrl());
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const param = (name: string) => url.searchParams.get(name) ?? hashParams.get(name);
+
+  return {
+    accessToken: param("access_token"),
+    code: param("code"),
+    error: param("error_description") ?? param("error"),
+    refreshToken: param("refresh_token"),
+    tokenHash: param("token_hash"),
+    type: param("type")
+  };
+}
+
+function callbackLinkError(): Error {
+  return new Error(
+    "This confirmation link is invalid, expired, or already used. Log in if your email is already confirmed, or request a new signup email."
+  );
+}
+
+async function recoverExistingOrThrow(supabase: SupabaseClient): Promise<string> {
+  const token = await getAccessTokenFromSession(supabase);
+
+  if (token) {
+    return token;
+  }
+
+  throw callbackLinkError();
+}
+
+function isSupportedOtpType(type: string | null): type is SupportedEmailOtpType {
+  return (
+    type === "email" ||
+    type === "signup" ||
+    type === "invite" ||
+    type === "magiclink" ||
+    type === "recovery" ||
+    type === "email_change"
+  );
+}
+
 export function createSupabaseAuthClient(): AuthClient {
   return {
     async signUpWithPassword(credentials: PasswordCredentials): Promise<string> {
@@ -160,7 +220,7 @@ export function createSupabaseAuthClient(): AuthClient {
         email: parsed.email,
         password: parsed.password,
         options: {
-          emailRedirectTo: getAuthRedirectUrl(),
+          emailRedirectTo: getAuthCallbackUrl(),
           data: {
             email: parsed.email
           }
@@ -203,6 +263,39 @@ export function createSupabaseAuthClient(): AuthClient {
       return data.session.access_token;
     },
 
+    async recoverSessionFromUrl(callbackUrl: string): Promise<string> {
+      const supabase = getSupabaseBrowserClient();
+      const params = parseCallbackParams(callbackUrl);
+
+      if (params.error) {
+        return recoverExistingOrThrow(supabase);
+      }
+
+      if (params.code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
+        return error ? recoverExistingOrThrow(supabase) : data.session?.access_token ?? recoverExistingOrThrow(supabase);
+      }
+
+      if (params.accessToken && params.refreshToken) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: params.accessToken,
+          refresh_token: params.refreshToken
+        });
+        return error ? recoverExistingOrThrow(supabase) : data.session?.access_token ?? params.accessToken;
+      }
+
+      if (params.tokenHash && isSupportedOtpType(params.type)) {
+        const otpParams: VerifyTokenHashParams = {
+          token_hash: params.tokenHash,
+          type: params.type
+        };
+        const { data, error } = await supabase.auth.verifyOtp(otpParams);
+        return error ? recoverExistingOrThrow(supabase) : data.session?.access_token ?? recoverExistingOrThrow(supabase);
+      }
+
+      return recoverExistingOrThrow(supabase);
+    },
+
     async resetPasswordForEmail(email: string): Promise<void> {
       const parsedEmail = normalizeEmail(email);
       const { error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(parsedEmail, {
@@ -223,19 +316,7 @@ export function createSupabaseAuthClient(): AuthClient {
         return null;
       }
 
-      const result = await getSessionWithTimeout(supabase);
-
-      if (!result) {
-        return null;
-      }
-
-      const { data, error } = result;
-
-      if (error) {
-        return null;
-      }
-
-      return data.session?.access_token ?? null;
+      return getAccessTokenFromSession(supabase);
     },
 
     async signOut(): Promise<void> {

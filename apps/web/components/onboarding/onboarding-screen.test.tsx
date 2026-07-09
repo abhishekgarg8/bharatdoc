@@ -24,6 +24,7 @@ const pgimerTarget = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("OnboardingScreen", () => {
@@ -71,6 +72,33 @@ describe("OnboardingScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /hide password/i }));
     expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
+  it("resumes profile setup when an email confirmation callback leaves a browser session", async () => {
+    window.history.pushState(null, "", "/signup?confirmed=1");
+    const authClient = {
+      ...createAuthClient(),
+      getCurrentIdToken: vi.fn(async () => "verified-id-token")
+    };
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    expect(await screen.findByText("Profile details")).toBeInTheDocument();
+    expect(screen.getByText("Email confirmed. Finish your profile to continue.")).toBeInTheDocument();
+    expect(authClient.getCurrentIdToken).toHaveBeenCalled();
+  });
+
+  it("asks the user to sign in after email confirmation when no browser session exists", async () => {
+    window.history.pushState(null, "", "/signup?confirmed=1");
+    const authClient = {
+      ...createAuthClient(),
+      getCurrentIdToken: vi.fn(async () => null)
+    };
+
+    render(<OnboardingScreen authClient={authClient} />);
+
+    expect(await screen.findByText("Email confirmed. Sign in to continue.")).toBeInTheDocument();
+    expect(screen.getByText("Sign in")).toBeInTheDocument();
   });
 
   it("sends forgot-password email only from the login mode", async () => {

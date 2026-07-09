@@ -3,6 +3,7 @@ import { PasswordCredentialsSchema } from "@bharatdoc/shared";
 import {
   authErrorMessage,
   createSupabaseAuthClient,
+  getAuthCallbackUrl,
   getAuthRedirectUrl,
   signupErrorMessage
 } from "@/lib/client/auth-client";
@@ -11,24 +12,33 @@ const supabaseMocks = vi.hoisted(() => {
   const signUp = vi.fn();
   const signInWithPassword = vi.fn();
   const resetPasswordForEmail = vi.fn();
+  const exchangeCodeForSession = vi.fn();
+  const setSession = vi.fn();
+  const verifyOtp = vi.fn();
   const getSession = vi.fn();
   const signOut = vi.fn();
   const createClient = vi.fn(() => ({
     auth: {
+      exchangeCodeForSession,
       getSession,
+      setSession,
       signUp,
       signInWithPassword,
       resetPasswordForEmail,
+      verifyOtp,
       signOut
     }
   }));
 
   return {
     createClient,
+    exchangeCodeForSession,
     getSession,
+    setSession,
     signUp,
     signInWithPassword,
     resetPasswordForEmail,
+    verifyOtp,
     signOut
   };
 });
@@ -40,10 +50,13 @@ vi.mock("@supabase/supabase-js", () => ({
 afterEach(() => {
   vi.useRealTimers();
   supabaseMocks.createClient.mockClear();
+  supabaseMocks.exchangeCodeForSession.mockReset();
   supabaseMocks.getSession.mockReset();
+  supabaseMocks.setSession.mockReset();
   supabaseMocks.signUp.mockReset();
   supabaseMocks.signInWithPassword.mockReset();
   supabaseMocks.resetPasswordForEmail.mockReset();
+  supabaseMocks.verifyOtp.mockReset();
   supabaseMocks.signOut.mockReset();
   vi.unstubAllEnvs();
 });
@@ -79,7 +92,7 @@ describe("Supabase auth client", () => {
       email: "doctor@example.com",
       password: "bharatdoc123",
       options: {
-        emailRedirectTo: "https://bharatdoc-web.vercel.app/",
+        emailRedirectTo: "https://bharatdoc-web.vercel.app/auth/callback",
         data: {
           email: "doctor@example.com"
         }
@@ -137,16 +150,25 @@ describe("Supabase auth client", () => {
     );
   });
 
-  it("uses configured production site URL for Supabase email redirects", () => {
+  it("uses configured production URLs for Supabase email redirects", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://bharatdoc-web.vercel.app");
 
     expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
+    expect(getAuthCallbackUrl()).toBe("https://bharatdoc-web.vercel.app/auth/callback");
   });
 
   it("normalizes Vercel deployment URLs for Supabase email redirects", () => {
     vi.stubEnv("NEXT_PUBLIC_VERCEL_URL", "bharatdoc-web.vercel.app");
 
     expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
+    expect(getAuthCallbackUrl()).toBe("https://bharatdoc-web.vercel.app/auth/callback");
+  });
+
+  it("normalizes configured site URLs to the origin before appending the callback path", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://bharatdoc-web.vercel.app/ignored/path?next=https://evil.test");
+
+    expect(getAuthRedirectUrl()).toBe("https://bharatdoc-web.vercel.app/");
+    expect(getAuthCallbackUrl()).toBe("https://bharatdoc-web.vercel.app/auth/callback");
   });
 
   it("sends password reset links through Supabase with the production redirect", async () => {
@@ -159,6 +181,95 @@ describe("Supabase auth client", () => {
     expect(supabaseMocks.resetPasswordForEmail).toHaveBeenCalledWith("doctor@example.com", {
       redirectTo: "https://bharatdoc-web.vercel.app/"
     });
+  });
+
+  it("exchanges Supabase callback codes for a session token", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.exchangeCodeForSession.mockResolvedValue({
+      data: { session: { access_token: "confirmed-token" } },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=auth-code")
+    ).resolves.toBe("confirmed-token");
+
+    expect(supabaseMocks.exchangeCodeForSession).toHaveBeenCalledWith("auth-code");
+  });
+
+  it("recovers hash token callbacks without leaking them through app redirects", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.setSession.mockResolvedValue({
+      data: { session: { access_token: "hash-token" } },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().recoverSessionFromUrl?.(
+        "https://bharatdoc.test/auth/callback#access_token=hash-token&refresh_token=refresh-token&type=signup"
+      )
+    ).resolves.toBe("hash-token");
+
+    expect(supabaseMocks.setSession).toHaveBeenCalledWith({
+      access_token: "hash-token",
+      refresh_token: "refresh-token"
+    });
+  });
+
+  it("uses TokenHash callbacks when the confirmation template is configured that way", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.verifyOtp.mockResolvedValue({
+      data: { session: { access_token: "otp-token" } },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().recoverSessionFromUrl?.(
+        "https://bharatdoc.test/auth/callback?token_hash=token-hash&type=email"
+      )
+    ).resolves.toBe("otp-token");
+
+    expect(supabaseMocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "token-hash",
+      type: "email"
+    });
+  });
+
+  it("falls back to an existing session when a callback link was already consumed", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: "invalid flow state" }
+    });
+    supabaseMocks.getSession.mockResolvedValue({
+      data: { session: { access_token: "existing-token" } },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=used-code")
+    ).resolves.toBe("existing-token");
+  });
+
+  it("shows a safe recovery error when no callback exchange or session is available", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: "expired" }
+    });
+    supabaseMocks.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null
+    });
+
+    await expect(
+      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=expired-code")
+    ).rejects.toThrow("This confirmation link is invalid, expired, or already used.");
   });
 
   it("returns the current access token from the persisted Supabase session", async () => {

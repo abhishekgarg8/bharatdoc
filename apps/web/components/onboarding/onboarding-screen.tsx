@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, Check, ChevronLeft, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 import { normalizeEmail, type RegistrationInput } from "@bharatdoc/shared";
 import { BharatButton } from "@/components/bharat-button";
@@ -140,6 +140,40 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
           clinic_address: brandedJoinTarget.address ?? null
         }
       : null);
+
+  useEffect(() => {
+    if (effectiveDemoMode || idToken || typeof window === "undefined") {
+      return;
+    }
+
+    if (new URLSearchParams(window.location.search).get("confirmed") !== "1") {
+      return;
+    }
+
+    let isMounted = true;
+
+    auth.getCurrentIdToken()
+      .then((token) => {
+        if (!isMounted) {
+          return;
+        }
+
+        if (token) {
+          setIdToken(token);
+          setStep("profile");
+          setResetMessage("Email confirmed. Finish your profile to continue.");
+          return;
+        }
+
+        setAuthMode("login");
+        setResetMessage("Email confirmed. Sign in to continue.");
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [auth, effectiveDemoMode, idToken]);
 
   async function handleCredentials() {
     setIsBusy(true);

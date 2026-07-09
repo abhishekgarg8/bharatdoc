@@ -144,7 +144,8 @@
             <tr>
               <td align="center" style="padding: 30px 34px 24px">
                 <a
-                  href="{{ .ConfirmationURL }}"
+                  href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email"
+                  rel="noreferrer noopener"
                   style="
                     display: inline-block;
                     background: #c84a2c;
@@ -216,7 +217,7 @@
                     color: #9b4b36;
                   "
                 >
-                  {{ .ConfirmationURL }}
+                  {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email
                 </p>
               </td>
             </tr>
