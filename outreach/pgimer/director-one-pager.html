@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BharatDoc PGIMER Pilot One-Pager</title>
+    <style>
+      :root {
+        --ink: #241c16;
+        --muted: #6f6257;
+        --rule: #dfd1bd;
+        --paper: #fbf6ec;
+        --deep: #f2e7d6;
+        --terracotta: #b9472b;
+        --sage: #527a62;
+        --blue: #245b7a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #e9decd;
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .page {
+        width: 210mm;
+        height: 297mm;
+        margin: 0 auto;
+        background: var(--paper);
+        padding: 8mm;
+        overflow: hidden;
+      }
+
+      .hero {
+        position: relative;
+        min-height: 68mm;
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid var(--rule);
+      }
+
+      .hero img {
+        width: 100%;
+        height: 68mm;
+        object-fit: cover;
+        display: block;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(251, 246, 236, 0.98), rgba(251, 246, 236, 0.78) 42%, rgba(251, 246, 236, 0.08));
+      }
+
+      .hero-copy {
+        position: absolute;
+        z-index: 1;
+        inset: 0 auto 0 0;
+        width: 55%;
+        padding: 8mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 4mm;
+        color: var(--terracotta);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 12ch;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 29px;
+        font-style: italic;
+        line-height: 0.98;
+      }
+
+      .subhead {
+        max-width: 62ch;
+        margin: 4mm 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .intro {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 5mm;
+        margin-top: 5mm;
+      }
+
+      h2 {
+        margin: 0 0 2mm;
+        color: var(--terracotta);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      p,
+      li {
+        font-size: 10.5px;
+        line-height: 1.35;
+      }
+
+      p {
+        margin: 0 0 2mm;
+      }
+
+      .panel {
+        border: 1px solid var(--rule);
+        background: rgba(255, 255, 255, 0.38);
+        border-radius: 8px;
+        padding: 3.5mm;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2.5mm;
+        margin-top: 4mm;
+      }
+
+      .metric {
+        border-left: 3px solid var(--sage);
+        background: var(--deep);
+        padding: 2.5mm;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 9px;
+        line-height: 1.35;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4mm;
+        margin-top: 4mm;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 5mm;
+      }
+
+      .steps li {
+        margin-bottom: 2mm;
+      }
+
+      .safety li {
+        margin-bottom: 2mm;
+      }
+
+      .ask {
+        display: grid;
+        grid-template-columns: 1fr 0.95fr;
+        gap: 4mm;
+        align-items: stretch;
+        margin-top: 4mm;
+      }
+
+      .cta {
+        background: var(--terracotta);
+        color: #fff;
+        border-radius: 8px;
+        padding: 3.5mm;
+      }
+
+      .cta h2 {
+        color: #fff;
+      }
+
+      .cta p {
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 8mm;
+        margin-top: 3mm;
+        border-top: 1px solid var(--rule);
+        padding-top: 2.5mm;
+        color: var(--muted);
+        font-size: 9px;
+        line-height: 1.4;
+      }
+
+      .data-note {
+        margin: 2mm 0 0;
+        border-top: 1px solid var(--rule);
+        padding-top: 2mm;
+        color: var(--muted);
+        font-size: 8.5px;
+        line-height: 1.3;
+      }
+
+      .note {
+        color: var(--blue);
+        font-weight: 700;
+      }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      @media print {
+        body {
+          background: var(--paper);
+        }
+
+        .page {
+          margin: 0;
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <img src="assets/pgimer-opd-ai-scribe-hero.png" alt="Indian doctors reviewing a mobile clinical note in a busy outpatient setting" />
+        <div class="hero-copy">
+          <p class="eyebrow">Proposed 30-day controlled pilot for PGIMER, Chandigarh</p>
+          <h1>Doctor-reviewed AI documentation for high-volume OPDs</h1>
+          <p class="subhead">
+            BharatDoc helps doctors record a consultation, review an AI-drafted clinical note, edit it, and save a PGIMER-approved patient-identifier PDF without changing PGIMER's HIS workflow.
+          </p>
+        </div>
+      </section>
+
+      <section class="intro">
+        <div>
+          <h2>Why this matters at PGIMER</h2>
+          <p>
+            PGIMER's OPDs combine high patient volume, teaching responsibilities, multilingual consultations, and heavy documentation pressure. BharatDoc is designed to measure whether reviewed notes can be completed with less documentation effort while keeping the doctor fully accountable for the final clinical record.
+          </p>
+          <p class="note">
+            The pilot is documentation support only: no autonomous diagnosis, no prescribing, and no EHR writeback.
+          </p>
+        </div>
+        <aside class="panel">
+          <h2>What the pilot tests</h2>
+          <ol class="steps">
+            <li>Can reviewed notes be completed with less documentation effort?</li>
+            <li>Do transcripts handle Indian OPD speech well enough?</li>
+            <li>Are AI summaries clinically acceptable after doctor review and correction?</li>
+            <li>Can PGIMER evaluate the workflow without system integration risk?</li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="metrics">
+        <div class="metric">
+          <strong>30 days</strong>
+          <span>Controlled pilot, not public rollout</span>
+        </div>
+        <div class="metric">
+          <strong>10-20</strong>
+          <span>Doctors/residents across 1-3 OPD teams</span>
+        </div>
+        <div class="metric">
+          <strong>100-300</strong>
+          <span>Consultations measured for quality and workflow impact</span>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <h2>Doctor workflow</h2>
+          <ol class="steps">
+            <li>Open BharatDoc on phone or browser.</li>
+            <li>Record consultation audio with consent process defined by PGIMER.</li>
+            <li>Generate transcript and structured clinical summary.</li>
+            <li>Doctor reviews and edits the note.</li>
+            <li>Save a PGIMER-approved patient-identifier PDF for later lookup.</li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h2>Governance and approvals</h2>
+          <ul class="safety">
+            <li>Doctor remains final reviewer before saving.</li>
+            <li>AI-assisted disclaimer appears on generated PDFs.</li>
+            <li>No integration with PGIMER HIS during pilot.</li>
+            <li>Role-based clinic access and owner approval.</li>
+            <li>Pilot launch subject to PGIMER IEC/IRB, IT/security, data-protection, department, and patient-consent approvals.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="ask">
+        <div class="panel">
+          <h2>Success measures</h2>
+          <ul>
+            <li>Median time from recording stop to reviewed note.</li>
+            <li>Transcription success rate by device and language.</li>
+            <li>Doctor edit rate by summary section.</li>
+            <li>PDFs generated per participating doctor.</li>
+            <li>Doctor satisfaction and clinical-quality feedback.</li>
+          </ul>
+        </div>
+        <div class="cta">
+          <h2>Request</h2>
+          <p>
+            We request a 20-minute meeting with the Director's nominated clinical, IT/security, legal/data-protection, IEC/ethics, and administration representatives to review feasibility and approvals for a controlled OPD pilot.
+          </p>
+          <p>
+            Suggested next step: live 5-minute demo using a deidentified sample consultation.
+          </p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div>BharatDoc pilot proposal for PGIMER, Chandigarh</div>
+        <div>Contact: [Founder name] · [Email] · [Phone] · Demo video: <strong>pgimer-director-demo.mp4</strong></div>
+      </footer>
+      <p class="data-note">
+        Phase-one exclusions: no emergency care, no autonomous diagnosis, no prescribing, no HIS/EHR writeback, and no high-risk medico-legal use unless PGIMER approves.
+        <br />
+        Data handling for pilot approval: audio, transcripts, summaries, PDFs, processor access, encryption, retention/deletion, audit logs, and incident handling to be documented and approved by PGIMER before launch.
+      </p>
+    </main>
+  </body>
+</html>
