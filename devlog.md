@@ -47,3 +47,8 @@ Added shared summary parsing/sanitization so Markdown headings become stable cli
 Normalized generated/saved summaries before persistence, rendered section previews in web, and styled sections/timestamps in PDFs.
 Merged PR #52 after Vercel passed, waited 3 minutes, then verified production login/dashboard with the test account.
 Saved sanitized production evidence in testing/issue-42-production-structured-summaries.
+
+2026-07-09 - Issue #29: Added Supabase email-confirmation callback flow.
+Signup confirmations now redirect to /auth/callback, recover code/hash/token_hash sessions, scrub URL auth material, and route through dashboard/onboarding/approval gates.
+Updated Supabase redirect/template repo config and docs for token_hash confirmation links without open redirects.
+Covered valid, expired, already-used, missing-profile, and template cases with focused tests plus browser evidence in testing/issue-29-auth-callback.

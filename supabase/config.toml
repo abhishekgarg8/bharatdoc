@@ -108,6 +108,7 @@ enabled = true
 site_url = "https://bharatdoc-web.vercel.app/"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
+  "https://bharatdoc-web.vercel.app/auth/callback",
   "https://bharatdoc-web.vercel.app/**",
   "http://localhost:3000/**",
   "http://127.0.0.1:3000/**",
