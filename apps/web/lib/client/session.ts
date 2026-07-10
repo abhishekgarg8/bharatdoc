@@ -2,12 +2,11 @@
 
 import type { Doctor } from "@bharatdoc/shared";
 import { parseJsonOrThrow } from "@/lib/client/api-error";
+import type { AuthenticatedBootstrap } from "@/lib/client/authenticated-app";
 
-export interface MeResponse {
-  doctor: Doctor;
-}
+export type MeResponse = AuthenticatedBootstrap;
 
-export function destinationForDoctorStatus(status: MeResponse["doctor"]["account_status"]): string {
+export function destinationForDoctorStatus(status: MeResponse["doctor"]["accountStatus"]): string {
   if (status === "active") {
     return "/dashboard";
   }

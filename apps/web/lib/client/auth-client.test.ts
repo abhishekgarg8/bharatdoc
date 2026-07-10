@@ -1,12 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PasswordCredentialsSchema } from "@bharatdoc/shared";
-import {
-  authErrorMessage,
-  createSupabaseAuthClient,
-  getAuthCallbackUrl,
-  getAuthRedirectUrl,
-  signupErrorMessage
-} from "@/lib/client/auth-client";
+import { authErrorMessage, createSupabaseAuthClient, getAuthCallbackUrl, getAuthRedirectUrl, signupErrorMessage } from "@/lib/client/auth-client";
 import { readSearchNavigationState, saveSearchNavigationState } from "@/lib/client/search-navigation-state";
 
 const supabaseMocks = vi.hoisted(() => {
@@ -18,6 +12,12 @@ const supabaseMocks = vi.hoisted(() => {
   const verifyOtp = vi.fn();
   const getSession = vi.fn();
   const signOut = vi.fn();
+  const unsubscribe = vi.fn();
+  let authStateListener: ((event: string, session: { access_token: string } | null) => void) | undefined;
+  const onAuthStateChange = vi.fn((listener: typeof authStateListener) => {
+    authStateListener = listener;
+    return { data: { subscription: { unsubscribe } } };
+  });
   const createClient = vi.fn(() => ({
     auth: {
       exchangeCodeForSession,
@@ -27,7 +27,8 @@ const supabaseMocks = vi.hoisted(() => {
       signInWithPassword,
       resetPasswordForEmail,
       verifyOtp,
-      signOut
+      signOut,
+      onAuthStateChange
     }
   }));
 
@@ -40,7 +41,12 @@ const supabaseMocks = vi.hoisted(() => {
     signInWithPassword,
     resetPasswordForEmail,
     verifyOtp,
-    signOut
+    signOut,
+    onAuthStateChange,
+    unsubscribe,
+    emitAuthStateChange(event: string, session: { access_token: string } | null) {
+      authStateListener?.(event, session);
+    }
   };
 });
 
@@ -59,6 +65,8 @@ afterEach(() => {
   supabaseMocks.resetPasswordForEmail.mockReset();
   supabaseMocks.verifyOtp.mockReset();
   supabaseMocks.signOut.mockReset();
+  supabaseMocks.onAuthStateChange.mockClear();
+  supabaseMocks.unsubscribe.mockReset();
   vi.unstubAllEnvs();
 });
 
@@ -78,17 +86,13 @@ describe("Supabase auth client", () => {
       })
     ).resolves.toBe("access-token");
 
-    expect(supabaseMocks.createClient).toHaveBeenCalledWith(
-      "https://supabase.test",
-      "anon-key",
-      {
-        auth: {
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-          persistSession: true
-        }
+    expect(supabaseMocks.createClient).toHaveBeenCalledWith("https://supabase.test", "anon-key", {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        persistSession: true
       }
-    );
+    });
     expect(supabaseMocks.signUp).toHaveBeenCalledWith({
       email: "doctor@example.com",
       password: "bharatdoc123",
@@ -101,11 +105,31 @@ describe("Supabase auth client", () => {
     });
   });
 
+  it("forwards auth token changes and signed-out state, then unsubscribes", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    const listener = vi.fn();
+
+    const unsubscribe = createSupabaseAuthClient().subscribeToTokenChanges?.(listener);
+    supabaseMocks.emitAuthStateChange("TOKEN_REFRESHED", {
+      access_token: "refreshed-token"
+    });
+    supabaseMocks.emitAuthStateChange("SIGNED_OUT", null);
+
+    expect(listener.mock.calls).toEqual([["refreshed-token"], [null]]);
+    unsubscribe?.();
+    expect(supabaseMocks.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("clears scoped patient search state when signing out", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     supabaseMocks.signOut.mockResolvedValue({ error: null });
-    const scope = { authUserId: "auth-a", doctorId: "doctor-a", clinicId: "clinic-a" };
+    const scope = {
+      authUserId: "auth-a",
+      doctorId: "doctor-a",
+      clinicId: "clinic-a"
+    };
     saveSearchNavigationState(scope, { query: "P-SECRET", records: [] });
 
     await createSupabaseAuthClient().signOut();
@@ -135,7 +159,10 @@ describe("Supabase auth client", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
     supabaseMocks.signUp.mockResolvedValue({
       data: { session: null },
-      error: { message: "User already registered", code: "user_already_exists" }
+      error: {
+        message: "User already registered",
+        code: "user_already_exists"
+      }
     });
 
     await expect(
@@ -147,21 +174,18 @@ describe("Supabase auth client", () => {
   });
 
   it("maps provider signup failures to actionable recovery messages", () => {
-    expect(signupErrorMessage({ message: "over_email_send_rate_limit", status: 429 })).toBe(
-      "Too many signup attempts. Wait a few minutes, then try again. Reference: AUTH_SIGNUP_RATE_LIMIT."
-    );
+    expect(
+      signupErrorMessage({
+        message: "over_email_send_rate_limit",
+        status: 429
+      })
+    ).toBe("Too many signup attempts. Wait a few minutes, then try again. Reference: AUTH_SIGNUP_RATE_LIMIT.");
     expect(signupErrorMessage(new Error("Error sending confirmation email through SMTP provider"))).toBe(
       "BharatDoc could not send the confirmation email. Try again later or contact support. Reference: AUTH_SIGNUP_EMAIL_DELIVERY."
     );
-    expect(signupErrorMessage({ message: "Signups not allowed for this project" })).toBe(
-      "Account creation is temporarily disabled. Contact BharatDoc support. Reference: AUTH_SIGNUP_DISABLED."
-    );
-    expect(signupErrorMessage({ message: "captcha verification failed" })).toBe(
-      "Complete the security check and try again. Reference: AUTH_SIGNUP_CAPTCHA."
-    );
-    expect(signupErrorMessage({ message: "unexpected auth gateway failure" })).toBe(
-      "Unable to create account. Try again later or contact support. Reference: AUTH_SIGNUP_UNKNOWN."
-    );
+    expect(signupErrorMessage({ message: "Signups not allowed for this project" })).toBe("Account creation is temporarily disabled. Contact BharatDoc support. Reference: AUTH_SIGNUP_DISABLED.");
+    expect(signupErrorMessage({ message: "captcha verification failed" })).toBe("Complete the security check and try again. Reference: AUTH_SIGNUP_CAPTCHA.");
+    expect(signupErrorMessage({ message: "unexpected auth gateway failure" })).toBe("Unable to create account. Try again later or contact support. Reference: AUTH_SIGNUP_UNKNOWN.");
   });
 
   it("uses configured production URLs for Supabase email redirects", () => {
@@ -188,7 +212,10 @@ describe("Supabase auth client", () => {
   it("sends password reset links through Supabase with the production redirect", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
-    supabaseMocks.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+    supabaseMocks.resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: null
+    });
 
     await expect(createSupabaseAuthClient().resetPasswordForEmail?.("Doctor@Example.com")).resolves.toBeUndefined();
 
@@ -205,9 +232,7 @@ describe("Supabase auth client", () => {
       error: null
     });
 
-    await expect(
-      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=auth-code")
-    ).resolves.toBe("confirmed-token");
+    await expect(createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=auth-code")).resolves.toBe("confirmed-token");
 
     expect(supabaseMocks.exchangeCodeForSession).toHaveBeenCalledWith("auth-code");
   });
@@ -220,11 +245,9 @@ describe("Supabase auth client", () => {
       error: null
     });
 
-    await expect(
-      createSupabaseAuthClient().recoverSessionFromUrl?.(
-        "https://bharatdoc.test/auth/callback#access_token=hash-token&refresh_token=refresh-token&type=signup"
-      )
-    ).resolves.toBe("hash-token");
+    await expect(createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback#access_token=hash-token&refresh_token=refresh-token&type=signup")).resolves.toBe(
+      "hash-token"
+    );
 
     expect(supabaseMocks.setSession).toHaveBeenCalledWith({
       access_token: "hash-token",
@@ -240,11 +263,7 @@ describe("Supabase auth client", () => {
       error: null
     });
 
-    await expect(
-      createSupabaseAuthClient().recoverSessionFromUrl?.(
-        "https://bharatdoc.test/auth/callback?token_hash=token-hash&type=email"
-      )
-    ).resolves.toBe("otp-token");
+    await expect(createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?token_hash=token-hash&type=email")).resolves.toBe("otp-token");
 
     expect(supabaseMocks.verifyOtp).toHaveBeenCalledWith({
       token_hash: "token-hash",
@@ -264,9 +283,7 @@ describe("Supabase auth client", () => {
       error: null
     });
 
-    await expect(
-      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=used-code")
-    ).resolves.toBe("existing-token");
+    await expect(createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=used-code")).resolves.toBe("existing-token");
   });
 
   it("shows a safe recovery error when no callback exchange or session is available", async () => {
@@ -281,9 +298,9 @@ describe("Supabase auth client", () => {
       error: null
     });
 
-    await expect(
-      createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=expired-code")
-    ).rejects.toThrow("This confirmation link is invalid, expired, or already used.");
+    await expect(createSupabaseAuthClient().recoverSessionFromUrl?.("https://bharatdoc.test/auth/callback?code=expired-code")).rejects.toThrow(
+      "This confirmation link is invalid, expired, or already used."
+    );
   });
 
   it("returns the current access token from the persisted Supabase session", async () => {
@@ -316,9 +333,7 @@ describe("Supabase auth client", () => {
 
   it("falls back to readable auth errors", () => {
     expect(authErrorMessage(new Error("Invalid login credentials"))).toBe("Invalid login credentials");
-    expect(authErrorMessage(new TypeError("Failed to fetch"))).toBe(
-      "Unable to reach authentication service. Check your connection and try again."
-    );
+    expect(authErrorMessage(new TypeError("Failed to fetch"))).toBe("Unable to reach authentication service. Check your connection and try again.");
     expect(authErrorMessage("nope")).toBe("Authentication failed. Please try again.");
   });
 

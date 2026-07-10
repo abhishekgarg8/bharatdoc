@@ -30,7 +30,7 @@ describe("SessionGate", () => {
       signOut: vi.fn(),
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ doctor: { account_status: "active" } })));
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ doctor: { accountStatus: "active" }, clinic: null })));
     const navigate = vi.fn();
 
     render(<SessionGate authClient={authClient} onNavigate={navigate} />);

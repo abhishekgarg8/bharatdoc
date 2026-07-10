@@ -19,13 +19,15 @@ export function PageError({
   message,
   homeHref = "/dashboard",
   actionHref,
-  actionLabel
+  actionLabel,
+  onRetry
 }: {
   title?: string;
   message: string;
   homeHref?: string;
   actionHref?: string;
   actionLabel?: string;
+  onRetry?: () => void;
 }) {
   const needsSignIn = /\bsign in\b/i.test(message);
   const primaryHref = actionHref ?? (needsSignIn ? "/signup" : homeHref);
@@ -76,13 +78,23 @@ export function PageError({
               <ArrowLeft className="h-4 w-4" />
               Back
             </button>
-            <Link
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-terracotta px-3 py-3 font-body text-sm font-bold text-white shadow-warm transition active:scale-[0.99]"
-              href={primaryHref}
-            >
-              <Home className="h-4 w-4" />
-              {primaryLabel}
-            </Link>
+            {onRetry ? (
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-terracotta px-3 py-3 font-body text-sm font-bold text-white shadow-warm transition active:scale-[0.99]"
+                type="button"
+                onClick={onRetry}
+              >
+                Retry
+              </button>
+            ) : (
+              <Link
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-terracotta px-3 py-3 font-body text-sm font-bold text-white shadow-warm transition active:scale-[0.99]"
+                href={primaryHref}
+              >
+                <Home className="h-4 w-4" />
+                {primaryLabel}
+              </Link>
+            )}
           </div>
         </section>
       </div>

@@ -125,11 +125,8 @@ describe("patient search API privacy", () => {
   });
 
   it("deliberately rejects GET without authenticating or reading query identifiers", async () => {
-    const response = await GET(
-      new Request(
-        "https://bharatdoc.example/api/patients/search?patient_id=P-SECRET",
-      ),
-    );
+    expect(GET).toHaveLength(0);
+    const response = await GET();
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("POST");
     expect(response.headers.get("cache-control")).toBe("private, no-store");

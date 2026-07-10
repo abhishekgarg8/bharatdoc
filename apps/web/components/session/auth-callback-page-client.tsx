@@ -43,7 +43,7 @@ export function AuthCallbackPageClient({
 
         try {
           const me = await fetchDoctor(idToken);
-          destination = destinationForDoctorStatus(me.doctor.account_status);
+          destination = destinationForDoctorStatus(me.doctor.accountStatus);
         } catch (profileError) {
           if (profileError instanceof ApiResponseError && profileError.code === "PROFILE_NOT_FOUND") {
             destination = "/signup?confirmed=1";

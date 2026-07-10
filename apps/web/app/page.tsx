@@ -12,7 +12,7 @@ export default function HomePage() {
       if (!idToken) return;
       try {
         const me = await fetchCurrentDoctor(idToken);
-        window.location.assign(destinationForDoctorStatus(me.doctor.account_status));
+        window.location.assign(destinationForDoctorStatus(me.doctor.accountStatus));
       } catch {
         // silently stay on landing page
       }

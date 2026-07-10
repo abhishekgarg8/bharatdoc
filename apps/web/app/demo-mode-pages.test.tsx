@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DashboardPage from "@/app/dashboard/page";
+import DashboardPage from "@/app/(authenticated)/dashboard/page";
 import PgimerOnboardingPage from "@/app/h/pgimer/page";
 import OnboardingPage from "@/app/onboarding/page";
 import SignupPage from "@/app/signup/page";
