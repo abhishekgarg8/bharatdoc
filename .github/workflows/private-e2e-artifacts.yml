@@ -1,0 +1,78 @@
+name: Private E2E artifacts
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:artifacts
+      - name: Reject newly tracked raw or unredacted artifacts
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/scan-artifacts.mjs --base "$BASE_SHA"
+
+  production-e2e:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    environment: production-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: artifact-policy
+    concurrency:
+      group: production-e2e
+      cancel-in-progress: false
+    env:
+      ARTIFACT_REDACTION_KEY: ${{ secrets.ARTIFACT_REDACTION_KEY }}
+      E2E_ARTIFACT_DIR: .artifacts/private-e2e
+      REAL_E2E_AUDIO_FILE: test/audio/qa-consultation.wav
+      REAL_E2E_BASE_URL: ${{ vars.REAL_E2E_BASE_URL }}
+      REAL_E2E_EMAIL: ${{ secrets.REAL_E2E_EMAIL }}
+      REAL_E2E_PASSWORD: ${{ secrets.REAL_E2E_PASSWORD }}
+      REAL_E2E_PHASE: resume
+      REAL_E2E_RUN_APP_FLOW: 1
+      NEXT_PUBLIC_RAILWAY_WORKER_URL: ${{ vars.NEXT_PUBLIC_RAILWAY_WORKER_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+    steps:
+      - name: Require access-controlled repository storage
+        env:
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+        run: test "$REPOSITORY_VISIBILITY" = private
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: node scripts/real-account-browser-e2e.mjs
+      - name: Upload access-controlled evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-e2e-${{ github.run_id }}
+          path: .artifacts/private-e2e/
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: true

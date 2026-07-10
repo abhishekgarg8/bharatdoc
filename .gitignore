@@ -15,6 +15,9 @@ apps/web/test-results/
 apps/web/playwright-report/
 output/playwright/
 test/.browser-*/
+.artifacts/private-e2e/
+test/runs/
+test/screenshots/
 apps/web/public/sw.js
 apps/web/public/workbox-*.js
 

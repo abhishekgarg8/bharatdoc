@@ -1,7 +1,0 @@
-Using current Supabase anon key for project jtezgoegatwbvdqeogiy in child process only.
-screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner/01-onboarding-entry.png
-screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner/02-signup-filled.png
-screenshot /Users/abhishekgarg/Desktop/BharatDoc/test/runs/20260517184256/screenshots/browser-owner/03-after-signup-submit.png
-locator.fill: Timeout 30000ms exceeded.
-Call log:
-[2m  - waiting for getByLabel('Full name')[22m

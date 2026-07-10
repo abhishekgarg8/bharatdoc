@@ -1,9 +1,15 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { rmSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertPrivateArtifactRoot,
+  createArtifactRedactor,
+  writePrivateArtifact,
+} from "./artifact-redaction.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -14,10 +20,30 @@ const { createClient } = require("@supabase/supabase-js");
 const baseUrl = trimTrailingSlash(
   process.env.REAL_E2E_BASE_URL ?? "http://127.0.0.1:3000",
 );
-const outputDir = path.resolve(
+const redactor = createArtifactRedactor();
+const artifactRoot = assertPrivateArtifactRoot(
   projectRoot,
-  process.env.REAL_E2E_OUTPUT_DIR ??
-    `output/playwright/real-account-${new Date().toISOString().slice(0, 10)}`,
+  path.resolve(
+    projectRoot,
+    process.env.E2E_ARTIFACT_DIR ?? ".artifacts/private-e2e",
+  ),
+);
+const outputDir = path.join(
+  artifactRoot,
+  redactor.filename(
+    `real-account-${process.env.GITHUB_RUN_ID ?? new Date().toISOString().slice(0, 10)}`,
+  ),
+);
+const screenshotSensitiveValues = new Set(
+  [
+    process.env.REAL_E2E_EMAIL,
+    process.env.REAL_E2E_DOCTOR_NAME,
+    process.env.REAL_E2E_CLINIC_NAME,
+    process.env.REAL_E2E_CLINIC_ADDRESS,
+    process.env.REAL_E2E_PATIENT_ID,
+  ]
+    .map((value) => value?.trim())
+    .filter(Boolean),
 );
 const phase = process.env.REAL_E2E_PHASE ?? "signup";
 const shouldCreateAccount = process.env.REAL_E2E_CREATE_ACCOUNT === "1";
@@ -54,8 +80,22 @@ function workerUrlFor(pathname) {
 }
 
 async function screenshot(page, name) {
-  const filePath = path.join(outputDir, `${name}.png`);
-  await page.screenshot({ path: filePath, fullPage: true });
+  const mask = [
+    page.locator("input, textarea, [contenteditable='true'], a[href*='?']"),
+    page.locator("[class*='font-mono']"),
+    page.locator(
+      "[data-testid='transcript-summary-scroll-container'] section p",
+    ),
+  ];
+  for (const value of screenshotSensitiveValues)
+    mask.push(page.getByText(value, { exact: false }));
+  const filePath = await writePrivateArtifact({
+    root: outputDir,
+    relativePath: `screenshots/${name}.png`,
+    value: await page.screenshot({ fullPage: true, mask }),
+    redactor,
+    binary: true,
+  });
   console.log(`screenshot ${filePath}`);
 }
 
@@ -97,7 +137,7 @@ async function createSpeechAudio() {
   }
 
   process.on("exit", () => {
-    spawnSync("rm", ["-rf", tempDir]);
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   return wavPath;
@@ -366,6 +406,8 @@ async function createOwnerProfile(page) {
     `Real E2E Clinic ${Date.now().toString().slice(-5)}`;
   const clinicAddress =
     process.env.REAL_E2E_CLINIC_ADDRESS ?? "24 Baner Road, Pune 411045";
+  for (const value of [profileName, clinicName, clinicAddress])
+    screenshotSensitiveValues.add(value);
 
   await page.getByLabel("Full name").fill(profileName);
   await page.getByLabel("Specialization").fill(specialization);
@@ -389,6 +431,7 @@ async function runCoreAppFlow(page, audioPath) {
     `P-E2E-${Date.now().toString().slice(-6)}`;
   const email = requiredEnv("REAL_E2E_EMAIL");
   const password = requiredEnv("REAL_E2E_PASSWORD");
+  screenshotSensitiveValues.add(patientId);
 
   await page.goto(urlFor("/settings"), { waitUntil: "networkidle" });
   await page
@@ -454,7 +497,25 @@ async function runCoreAppFlow(page, audioPath) {
 }
 
 async function main() {
-  await mkdir(outputDir, { recursive: true });
+  await mkdir(outputDir, { recursive: true, mode: 0o700 });
+  await chmod(outputDir, 0o700);
+  await writePrivateArtifact({
+    root: outputDir,
+    relativePath: "run-metadata.json",
+    redactor,
+    value: {
+      run_id: process.env.GITHUB_RUN_ID ?? "local",
+      commit:
+        process.env.GITHUB_SHA ??
+        spawnSync("git", ["rev-parse", "HEAD"], {
+          encoding: "utf8",
+          cwd: projectRoot,
+        }).stdout.trim(),
+      base_url: baseUrl,
+      phase,
+      created_at: new Date().toISOString(),
+    },
+  });
 
   const email = process.env.REAL_E2E_EMAIL?.trim();
   const password = process.env.REAL_E2E_PASSWORD?.trim();
@@ -553,6 +614,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(
+    process.env.GITHUB_ACTIONS === "true"
+      ? "Real browser E2E failed; inspect the access-controlled artifact bundle."
+      : redactor.text(error instanceof Error ? error.message : error),
+  );
   process.exit(1);
 });
