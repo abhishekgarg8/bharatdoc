@@ -420,7 +420,7 @@ export function localRecordingStatus(recording: LocalRecording): RecordingStatus
 }
 
 function isDashboardVisibleRecording(recording: LocalRecording): boolean {
-  return ["stopped", "transcribing", "transcribed", "failed"].includes(recording.captureState) && Boolean(localRecordingAudioBlob(recording));
+  return ["recording", "paused", "stopped", "transcribing", "transcribed", "failed"].includes(recording.captureState) && Boolean(localRecordingAudioBlob(recording));
 }
 
 function isQuarantinedRecoveryCandidate(recording: LocalRecording, scope?: LocalRecordingScope | null): boolean {
@@ -430,6 +430,9 @@ function isQuarantinedRecoveryCandidate(recording: LocalRecording, scope?: Local
 export function toLocalDashboardRecord(recording: LocalRecording, now = new Date()): LocalDashboardRecord {
   return {
     id: recording.serverRecordingId ?? recording.id,
+    localRecordingId: recording.id,
+    localCaptureState: recording.captureState,
+    localSyncState: recording.syncState,
     patientId: recording.patientId ?? recording.label ?? "Unassigned",
     time: formatRecordedAt(recording.recordedAt, now),
     duration: formatRecordingDuration(recording.durationSeconds),

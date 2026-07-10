@@ -6,7 +6,12 @@ import { PageError, PageLoading } from "@/components/session/page-loading";
 import { recoverExpiredSession } from "@/lib/client/api-error";
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { fetchDashboardSnapshot } from "@/lib/client/dashboard-data";
-import { useExplicitDemoMode, useExplicitMockRecorder } from "@/lib/client/demo-mode";
+import { useExplicitDemoMode, useExplicitLocalRecordingId, useExplicitMockRecorder } from "@/lib/client/demo-mode";
+import {
+  cacheLocalRecordingContext,
+  localRecordingContextMatchesToken,
+  readCachedLocalRecordingContext
+} from "@/lib/client/local-recording-context";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
 import { DEMO_LOCAL_RECORDING_SCOPE, type LocalRecordingScope } from "@/lib/client/local-recordings";
 
@@ -16,6 +21,7 @@ interface NewRecordingPageClientProps {
   demoOnMissingToken?: boolean;
   useDemoRecorder?: boolean;
   onNavigate?: (href: string) => void;
+  localRecordingId?: string;
 }
 
 export function NewRecordingPageClient({
@@ -23,12 +29,15 @@ export function NewRecordingPageClient({
   fetcher = fetch,
   demoOnMissingToken,
   useDemoRecorder,
-  onNavigate
+  onNavigate,
+  localRecordingId
 }: NewRecordingPageClientProps) {
   const client = useMemo(() => authClient ?? createSupabaseAuthClient(), [authClient]);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
   const queryDemoMode = useExplicitDemoMode();
   const queryMockRecorder = useExplicitMockRecorder();
+  const queryLocalRecordingId = useExplicitLocalRecordingId();
+  const exactLocalRecordingId = localRecordingId ?? queryLocalRecordingId;
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const shouldUseDemoRecorder = useDemoRecorder ?? (allowDemoFallback && queryMockRecorder);
   const [loading, setLoading] = useState(true);
@@ -72,12 +81,20 @@ export function NewRecordingPageClient({
             return;
           }
 
-          setClinicName(snapshot.clinic?.name ?? "Hospital");
-          setLocalRecordingScope({
-            authUserId: snapshot.doctor.firebase_uid,
-            doctorId: snapshot.doctor.id,
-            clinicId: snapshot.doctor.clinic_id
-          });
+          const context = {
+            clinicName: snapshot.clinic?.name ?? "Hospital",
+            scope: {
+              authUserId: snapshot.doctor.firebase_uid,
+              doctorId: snapshot.doctor.id,
+              clinicId: snapshot.doctor.clinic_id
+            }
+          };
+          if (!localRecordingContextMatchesToken(context, token)) {
+            throw new Error("Dashboard scope did not match the authenticated account.");
+          }
+          cacheLocalRecordingContext(context, token);
+          setClinicName(context.clinicName);
+          setLocalRecordingScope(context.scope);
         }
 
         setIdToken(token ?? undefined);
@@ -88,7 +105,14 @@ export function NewRecordingPageClient({
         }
 
         if (isMounted && !allowDemoFallback) {
-          setError("Unable to prepare recorder. Please sign in again.");
+          const cachedContext = token ? readCachedLocalRecordingContext(token) : null;
+          if (cachedContext) {
+            setClinicName(cachedContext.clinicName);
+            setLocalRecordingScope(cachedContext.scope);
+            setIdToken(token ?? undefined);
+          } else {
+            setError("Unable to prepare recorder. Please sign in again.");
+          }
         }
       } finally {
         if (isMounted && !didRedirect) {
@@ -117,8 +141,10 @@ export function NewRecordingPageClient({
     clinicName,
     useDemoRecorder: shouldUseDemoRecorder,
     ...(localRecordingScope ? { localRecordingScope } : {}),
-    ...(idToken ? { idToken } : {})
+    ...(idToken ? { idToken } : {}),
+    ...(exactLocalRecordingId ? { localRecordingId: exactLocalRecordingId } : {}),
+    dashboardHref: allowDemoFallback ? "/dashboard?demo=1" : "/dashboard"
   };
 
-  return <RecordingScreen {...recordingProps} />;
+  return <RecordingScreen key={exactLocalRecordingId ?? "new-recording"} {...recordingProps} />;
 }

@@ -40,7 +40,8 @@ test("recording detail smoke generates and edits a summary", async ({ page }) =>
   await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
 });
 
-test("local recording flow records, transcribes, and returns to dashboard", async ({ page }) => {
+test("local recording flow saves for later, reloads, reopens, and transcribes the exact recording", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto("/recordings/new?mockRecorder=1&demo=1");
 
   await expect(page.getByRole("heading", { name: "Recording" })).toBeVisible();
@@ -50,14 +51,24 @@ test("local recording flow records, transcribes, and returns to dashboard", asyn
   await expect(page.getByText("Recording started.")).toBeVisible();
   await page.getByRole("button", { name: /stop/i }).click();
   await expect(page.getByText("Recording saved on this device.")).toBeVisible();
+  await page.getByRole("link", { name: "Later" }).click({ noWaitAfter: true });
+  await expect(page.getByText("P-10500")).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/dashboard\?demo=1$/);
+  await expect(page.getByLabel("Local recording P-10500: Awaiting transcription")).toBeVisible();
+  const reopen = page.getByRole("link", { name: "Transcribe recording P-10500" });
+  await expect(reopen).toHaveAttribute("href", /\/recordings\/new\?local_recording_id=.+&demo=1/);
+  await reopen.click({ noWaitAfter: true });
+  await expect(page.getByText("Local recording ready to transcribe.")).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL(/local_recording_id=.+&demo=1/);
+  await page.reload();
+  await expect(page.getByLabel("Patient ID")).toHaveValue("P-10500");
+  await page.getByLabel("Label").fill("Reopened fever review");
+  await page.getByLabel("Label").blur();
+  await page.reload();
+  await expect(page.getByLabel("Label")).toHaveValue("Reopened fever review");
   await page.getByRole("button", { name: /transcribe/i }).click();
   await expect(page.getByText("Transcript ready.")).toBeVisible();
   await expect(page.getByText(/mild cough/)).toBeVisible();
-  await page.goto("/dashboard?demo=1");
-  await expect(page.getByText("P-10500")).toBeVisible();
-  await expect(page.getByLabel("Local recording P-10500 awaiting transcription")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Resume recording P-10500" })).toHaveAttribute("href", "/recordings/new");
-  await expect(page.getByRole("link", { name: "Open recording P-10500" })).toHaveCount(0);
 });
 
 test("root landing page renders and links to onboarding", async ({ page }) => {

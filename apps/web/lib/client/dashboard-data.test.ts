@@ -100,7 +100,10 @@ describe("dashboard data helpers", () => {
         doctorName: "You",
         status: "recorded",
         recordedAt: "2026-04-23T04:31:00.000Z",
-        offline: true
+        offline: true,
+        localRecordingId: "local-same-record",
+        localCaptureState: "stopped",
+        localSyncState: "synced"
       }
     ];
 

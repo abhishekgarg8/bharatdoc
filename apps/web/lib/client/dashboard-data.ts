@@ -1,4 +1,5 @@
-import type { Doctor, RecordingStatus } from "@bharatdoc/shared";
+import type { Doctor, LocalRecordingCaptureState, RecordingStatus } from "@bharatdoc/shared";
+import type { LocalRecordingSyncState } from "@/lib/client/local-recordings";
 import { parseJsonOrThrow } from "@/lib/client/api-error";
 
 export interface DashboardRecord {
@@ -17,6 +18,9 @@ export interface DashboardRecord {
   pdfSignedUrl?: string | null;
   canEdit?: boolean;
   offline?: boolean;
+  localRecordingId?: string;
+  localCaptureState?: LocalRecordingCaptureState;
+  localSyncState?: LocalRecordingSyncState;
 }
 
 export interface DashboardApiRecord {
@@ -73,6 +77,9 @@ export interface CreateRecordingMetadataResponse {
 export interface LocalDashboardRecord extends DashboardRecord {
   recordedAt: string;
   offline: true;
+  localRecordingId: string;
+  localCaptureState: LocalRecordingCaptureState;
+  localSyncState: LocalRecordingSyncState;
 }
 
 export const demoDashboardRecords: DashboardRecord[] = [

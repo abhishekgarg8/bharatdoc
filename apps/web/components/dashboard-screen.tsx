@@ -30,6 +30,7 @@ interface DashboardScreenProps {
   localRecordingScope?: LocalRecordingScope;
   pendingApprovalsCount?: number;
   pendingTranscriptionsCount?: number;
+  demoMode?: boolean;
   onDeleteRecording?: (record: DashboardRecord) => Promise<void>;
 }
 
@@ -49,6 +50,7 @@ export function DashboardScreen({
   localRecordingScope,
   pendingApprovalsCount = 0,
   pendingTranscriptionsCount,
+  demoMode = false,
   onDeleteRecording
 }: DashboardScreenProps) {
   const [localRecords, setLocalRecords] = useState<LocalDashboardRecord[]>([]);
@@ -283,6 +285,7 @@ export function DashboardScreen({
               <DashboardRecordCard
                 key={record.id}
                 record={record}
+                demoMode={demoMode}
                 deleteState={
                   deletingRecordId === record.id
                     ? "deleting"

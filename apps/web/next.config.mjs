@@ -16,11 +16,18 @@ const withPWA = withPWAInit({
       options: {
         cacheName: "bharatdoc-app-shell",
         networkTimeoutSeconds: 3,
+        matchOptions: {
+          ignoreSearch: true
+        },
         expiration: {
           maxEntries: 24,
           maxAgeSeconds: 60 * 60 * 24
         }
       }
+    },
+    {
+      urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+      handler: "NetworkOnly"
     },
     {
       urlPattern: ({ url }) => url.pathname.startsWith("/_next/static/"),

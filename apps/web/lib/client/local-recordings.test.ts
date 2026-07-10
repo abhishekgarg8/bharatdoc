@@ -160,6 +160,8 @@ describe("local recording repository", () => {
 
     expect(dashboardRecord).toMatchObject({
       id: "local-recording",
+      localRecordingId: "local-recording",
+      localCaptureState: "stopped",
       patientId: "P-10482",
       duration: "2:05",
       doctorName: "You",
@@ -183,7 +185,7 @@ describe("local recording repository", () => {
       baseScope
     );
 
-    expect(records.map((record) => record.id)).toEqual(["local-recording"]);
+    expect(records.map((record) => record.id)).toEqual(["in-progress", "local-recording"]);
   });
 
   it("filters local dashboard records by authenticated doctor scope", () => {

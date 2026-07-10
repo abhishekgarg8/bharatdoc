@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPageClient } from "@/components/dashboard-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
+import { cacheLocalRecordingContext } from "@/lib/client/local-recording-context";
 import type { Doctor } from "@bharatdoc/shared";
 
 const activeDoctor: Doctor = {
@@ -29,13 +30,20 @@ const apiRecord = {
   recorded_at: "2026-04-23T06:12:00.000Z"
 };
 
+function tokenFor(sub: string): string {
+  return `header.${btoa(JSON.stringify({ sub })).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_")}.signature`;
+}
+
 describe("DashboardPageClient", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("loads authenticated doctor context and dashboard records", async () => {
+    const idToken = tokenFor(activeDoctor.firebase_uid);
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
+      getCurrentIdToken: vi.fn(async () => idToken)
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
@@ -63,7 +71,7 @@ describe("DashboardPageClient", () => {
     expect(screen.getByText("Care Hospital")).toBeInTheDocument();
     expect(screen.getByText("P-20001")).toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
-      headers: { Authorization: "Bearer id-token" }
+      headers: { Authorization: `Bearer ${idToken}` }
     });
     expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
@@ -74,7 +82,7 @@ describe("DashboardPageClient", () => {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
+      getCurrentIdToken: vi.fn(async () => tokenFor(activeDoctor.firebase_uid))
     };
     const fetcher = vi.fn(async () =>
       Response.json({
@@ -123,6 +131,36 @@ describe("DashboardPageClient", () => {
 
     await expect(screen.findByText("Unable to load dashboard. Please sign in again.")).resolves.toBeInTheDocument();
     expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
+  });
+
+  it("uses the UID-matched cached scope to show local recordings when the network is offline", async () => {
+    const idToken = tokenFor(activeDoctor.firebase_uid);
+    cacheLocalRecordingContext(
+      {
+        clinicName: "Cached Hospital",
+        scope: {
+          authUserId: activeDoctor.firebase_uid,
+          doctorId: activeDoctor.id,
+          clinicId: activeDoctor.clinic_id
+        }
+      },
+      idToken
+    );
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => idToken)
+    };
+    const fetcher = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+
+    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("Cached Hospital")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Consultations" })).toBeInTheDocument();
+    expect(screen.queryByText("Unable to load dashboard. Please sign in again.")).not.toBeInTheDocument();
   });
 
   it("signs out and redirects to onboarding when the dashboard token is expired", async () => {

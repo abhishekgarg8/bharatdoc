@@ -22,3 +22,7 @@ export function useExplicitDemoMode(): boolean {
 export function useExplicitMockRecorder(): boolean {
   return useMemo(() => currentSearchParams()?.get("mockRecorder") === "1", []);
 }
+
+export function useExplicitLocalRecordingId(): string | undefined {
+  return currentSearchParams()?.get("local_recording_id")?.trim() || undefined;
+}
