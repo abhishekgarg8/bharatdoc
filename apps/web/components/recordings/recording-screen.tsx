@@ -14,8 +14,10 @@ import {
 } from "@/lib/client/audio-recorder";
 import {
   createIndexedDbLocalRecordingRepository,
+  isLocalRecordingQuotaError,
   localRecordingAudioBlob,
   localRecordingMatchesScope,
+  localRecordingStorageError,
   type LocalRecording,
   type LocalRecordingScope,
   type LocalRecordingRepository
@@ -74,9 +76,15 @@ export function RecordingScreen({
     recorderFactory ?? (useDemoRecorder ? createDemoAudioRecorder : createRecordRtcAudioRecorder);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const chunkUnsubscribeRef = useRef<(() => void) | null>(null);
+  const checkpointWritesRef = useRef<Promise<unknown>>(Promise.resolve());
+  const checkpointErrorRef = useRef<Error | null>(null);
+  const chunkSequenceRef = useRef(0);
+  const chunkEndRef = useRef(0);
   const patientIdInputRef = useRef<HTMLInputElement>(null);
   const patientIdRef = useRef("");
   const labelRef = useRef("");
+  const recordingRef = useRef<LocalRecording | null>(null);
+  const elapsedSecondsRef = useRef(0);
   const limitReachedRef = useRef(false);
   const [phase, setPhase] = useState<LocalRecordingCaptureState>("idle");
   const [recording, setRecording] = useState<LocalRecording | null>(null);
@@ -108,6 +116,11 @@ export function RecordingScreen({
   useEffect(() => {
     patientIdRef.current = patientId;
   }, [patientId]);
+
+  useEffect(() => {
+    recordingRef.current = recording;
+    elapsedSecondsRef.current = elapsedSeconds;
+  }, [elapsedSeconds, recording]);
 
   useEffect(() => {
     function syncOnlineState() {
@@ -266,11 +279,70 @@ export function RecordingScreen({
     };
   }, [audioUrl]);
 
+  useEffect(() => {
+    if (phase !== "recording" && phase !== "paused") return;
+    let appStateHandle: { remove(): Promise<void> } | undefined;
+    let disposed = false;
+    const checkpoint = () => {
+      const activeRecorder = recorderRef.current;
+      if (!activeRecorder) return;
+      activeRecorder.checkpoint();
+      const activeRecording = recordingRef.current;
+      if (!activeRecording || checkpointErrorRef.current) return;
+      const write = checkpointWritesRef.current.then(async () => {
+        await repository.updateDraft({
+          id: activeRecording.id,
+          patientId: patientIdRef.current,
+          label: labelRef.current,
+          durationSeconds: elapsedSecondsRef.current,
+          captureState: phase
+        });
+      });
+      checkpointWritesRef.current = write;
+      void write.catch(handleCheckpointFailure);
+    };
+    const onVisibilityChange = () => { if (document.visibilityState === "hidden") checkpoint(); };
+    window.addEventListener("pagehide", checkpoint);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void import("@capacitor/app")
+      .then(({ App }) => App.addListener("appStateChange", ({ isActive }) => { if (!isActive) checkpoint(); }))
+      .then((handle) => {
+        if (disposed) void handle.remove();
+        else appStateHandle = handle;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("pagehide", checkpoint);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void appStateHandle?.remove();
+    };
+  }, [phase, repository]);
+
+  function handleCheckpointFailure(caught: unknown) {
+    if (checkpointErrorRef.current) return;
+    const storageError = localRecordingStorageError(caught);
+    checkpointErrorRef.current = storageError;
+    setMessage(null);
+    setError(storageError.message);
+    setPhase("failed");
+    const activeRecorder = recorderRef.current;
+    recorderRef.current = null;
+    chunkUnsubscribeRef.current?.();
+    chunkUnsubscribeRef.current = null;
+    void Promise.resolve().then(() => activeRecorder?.stop()).catch(() => undefined);
+  }
+
   async function startRecording() {
     setError(null);
     setMessage(null);
     setElapsedSeconds(0);
     limitReachedRef.current = false;
+    checkpointWritesRef.current = Promise.resolve();
+    checkpointErrorRef.current = null;
+    chunkSequenceRef.current = 0;
+    chunkEndRef.current = 0;
 
     try {
       const nextRecorder = await selectedRecorderFactory();
@@ -280,18 +352,28 @@ export function RecordingScreen({
         ...(localRecordingScope ? { scope: localRecordingScope } : {})
       });
       chunkUnsubscribeRef.current?.();
-      chunkUnsubscribeRef.current = nextRecorder.onChunk(async (chunk) => {
-        const updated = await repository.appendChunk({
-          id: draft.id,
-          audioChunk: chunk.blob,
-          audioMimeType: chunk.mimeType,
-          durationSeconds: chunk.durationSeconds,
-          patientId: patientIdRef.current,
-          label: labelRef.current
-        });
+      chunkUnsubscribeRef.current = nextRecorder.onChunk((chunk) => {
+        const sequence = chunkSequenceRef.current++;
+        const startedAtSeconds = chunkEndRef.current;
+        const endedAtSeconds = Math.max(startedAtSeconds, chunk.durationSeconds);
+        chunkEndRef.current = endedAtSeconds;
+        const write = checkpointWritesRef.current.then(async () => {
+          const updated = await repository.appendChunk({
+            id: draft.id,
+            audioChunk: chunk.blob,
+            audioMimeType: chunk.mimeType,
+            durationSeconds: endedAtSeconds,
+            sequence,
+            startedAtSeconds,
+            patientId: patientIdRef.current,
+            label: labelRef.current
+          });
 
-        setRecording(updated);
-        setElapsedSeconds(updated.durationSeconds);
+          setRecording(updated);
+          setElapsedSeconds(updated.durationSeconds);
+        });
+        checkpointWritesRef.current = write;
+        void write.catch(handleCheckpointFailure);
       });
       await nextRecorder.start();
       recorderRef.current = nextRecorder;
@@ -314,13 +396,16 @@ export function RecordingScreen({
           online: isOnline
         }
       });
-    } catch {
+    } catch (caught) {
+      const message = isLocalRecordingQuotaError(caught)
+        ? localRecordingStorageError(caught).message
+        : "Unable to start microphone recording.";
       setPhase("failed");
-      setError("Unable to start microphone recording.");
+      setError(message);
       logDeviceEvent({
         level: "error",
         event: "recording.capture_start_failed",
-        message: "Unable to start microphone recording.",
+        message,
         metadata: {
           clinic_name: clinicName,
           online: isOnline
@@ -335,15 +420,21 @@ export function RecordingScreen({
     }
 
     await recorderRef.current.pause();
-    const updated = await repository.updateDraft({
-      id: recording.id,
-      patientId,
-      label,
-      durationSeconds: elapsedSeconds,
-      captureState: "paused"
-    });
-    setRecording(updated);
-    setPhase("paused");
+    const update = checkpointWritesRef.current.then(() => repository.updateDraft({
+        id: recording.id,
+        patientId,
+        label,
+        durationSeconds: elapsedSeconds,
+        captureState: "paused"
+      }));
+    checkpointWritesRef.current = update;
+    try {
+      const updated = await update;
+      setRecording(updated);
+      setPhase("paused");
+    } catch (caught) {
+      handleCheckpointFailure(caught);
+    }
   }
 
   async function resumeRecording() {
@@ -352,15 +443,21 @@ export function RecordingScreen({
     }
 
     await recorderRef.current.resume();
-    const updated = await repository.updateDraft({
-      id: recording.id,
-      patientId,
-      label,
-      durationSeconds: elapsedSeconds,
-      captureState: "recording"
-    });
-    setRecording(updated);
-    setPhase("recording");
+    const update = checkpointWritesRef.current.then(() => repository.updateDraft({
+        id: recording.id,
+        patientId,
+        label,
+        durationSeconds: elapsedSeconds,
+        captureState: "recording"
+      }));
+    checkpointWritesRef.current = update;
+    try {
+      const updated = await update;
+      setRecording(updated);
+      setPhase("recording");
+    } catch (caught) {
+      handleCheckpointFailure(caught);
+    }
   }
 
   async function stopRecording(successMessage = "Recording saved on this device.") {
@@ -368,14 +465,21 @@ export function RecordingScreen({
       return;
     }
 
+    const activeRecorder = recorderRef.current;
+    recorderRef.current = null;
     setError(null);
     setMessage(null);
 
     try {
-      const recordedAudio = await recorderRef.current.stop();
-      recorderRef.current = null;
-      chunkUnsubscribeRef.current?.();
-      chunkUnsubscribeRef.current = null;
+      let recordedAudio;
+      try {
+        recordedAudio = await activeRecorder.stop();
+      } finally {
+        chunkUnsubscribeRef.current?.();
+        chunkUnsubscribeRef.current = null;
+      }
+      await checkpointWritesRef.current;
+      if (checkpointErrorRef.current) throw checkpointErrorRef.current;
       const durationSeconds = Math.max(1, recordedAudio.durationSeconds ?? elapsedSeconds);
       const finalized = await repository.finalize({
         id: recording.id,
@@ -409,12 +513,13 @@ export function RecordingScreen({
         }
       });
     } catch (caught) {
+      const storageError = localRecordingStorageError(caught);
       setPhase("failed");
-      setError(caught instanceof Error ? caught.message : "Unable to save local recording.");
+      setError(storageError.message);
       logDeviceEvent({
         level: "error",
         event: "recording.capture_stop_failed",
-        message: caught instanceof Error ? caught.message : "Unable to save local recording.",
+        message: storageError.message,
         metadata: {
           online: isOnline
         }

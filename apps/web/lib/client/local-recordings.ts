@@ -38,12 +38,20 @@ export interface LocalRecording {
   updatedAt: string;
   audioBlob: Blob | null;
   audioChunks: Blob[];
+  audioChunkMetadata?: LocalRecordingAudioChunkMetadata[];
   audioMimeType: string | null;
   captureState: LocalRecordingCaptureState;
   syncState: LocalRecordingSyncState;
   serverRecordingId: string | null;
   transcript: string | null;
   error: string | null;
+}
+
+export interface LocalRecordingAudioChunkMetadata {
+  sequence: number;
+  startedAtSeconds: number;
+  endedAtSeconds: number;
+  durationSeconds: number;
 }
 
 export interface LocalRecordingDraftInput {
@@ -67,6 +75,8 @@ export interface AppendAudioChunkInput {
   audioChunk: Blob;
   audioMimeType: string;
   durationSeconds: number;
+  sequence: number;
+  startedAtSeconds: number;
   patientId?: string | null;
   label?: string | null;
 }
@@ -139,6 +149,34 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+async function blobBytes(blob: Blob): Promise<Uint8Array> {
+  if (typeof blob.arrayBuffer === "function") return new Uint8Array(await blob.arrayBuffer());
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+async function assembleWavCheckpoints(blobs: Blob[]): Promise<Blob> {
+  const chunks = await Promise.all(blobs.map(blobBytes));
+  const firstFormat = chunks[0]?.slice(20, 36).join(",");
+  if (chunks.some((chunk) => {
+    if (chunk.length < 44 || String.fromCharCode(...chunk.slice(0, 4)) !== "RIFF" || String.fromCharCode(...chunk.slice(8, 12)) !== "WAVE") return true;
+    const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+    return view.getUint32(4, true) !== chunk.length - 8 || view.getUint32(40, true) !== chunk.length - 44 || chunk.slice(20, 36).join(",") !== firstFormat;
+  })) {
+    throw new Error("Unable to validate WAV checkpoint audio.");
+  }
+  const dataSize = chunks.reduce((total, chunk) => total + chunk.length - 44, 0);
+  const header = chunks[0]!.slice(0, 44);
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  view.setUint32(4, 36 + dataSize, true);
+  view.setUint32(40, dataSize, true);
+  return new Blob([header, ...chunks.map((chunk) => chunk.slice(44))], { type: "audio/wav" });
+}
+
 function requireExisting(recording: LocalRecording | null, id: string): LocalRecording {
   if (!recording) {
     throw new Error(`Local recording ${id} was not found.`);
@@ -206,6 +244,8 @@ async function openLocalRecordingDb(): Promise<IDBPDatabase<BharatDocRecordingDb
 }
 
 abstract class BaseLocalRecordingRepository implements LocalRecordingRepository {
+  private readonly chunkWrites = new Map<string, Promise<LocalRecording>>();
+
   abstract save(recording: LocalRecording): Promise<LocalRecording>;
   abstract get(id: string): Promise<LocalRecording | null>;
   abstract list(): Promise<LocalRecording[]>;
@@ -223,6 +263,7 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
       updatedAt: timestamp,
       audioBlob: null,
       audioChunks: [],
+      audioChunkMetadata: [],
       audioMimeType: null,
       captureState: "idle",
       syncState: "local",
@@ -246,20 +287,51 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
     });
   }
 
-  async appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording> {
-    const current = requireExisting(await this.get(input.id), input.id);
+  appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording> {
+    const write = (this.chunkWrites.get(input.id) ?? Promise.resolve(null)).then(async () => {
+      const current = requireExisting(await this.get(input.id), input.id);
+      const expectedSequence = current.audioChunks.length;
+      const previousEnd = current.audioChunkMetadata?.at(-1)?.endedAtSeconds ?? (expectedSequence ? current.durationSeconds : 0);
+      const endedAtSeconds = assertRecordingDuration(input.durationSeconds);
+      const startedAtSeconds = assertRecordingDuration(input.startedAtSeconds);
 
-    return this.save({
-      ...current,
-      patientId: input.patientId !== undefined ? normalizeOptionalPatientId(input.patientId) : current.patientId,
-      label: input.label !== undefined ? normalizeOptionalText(input.label) : current.label,
-      durationSeconds: assertRecordingDuration(input.durationSeconds),
-      audioChunks: [...current.audioChunks, input.audioChunk],
-      audioMimeType: input.audioMimeType,
-      captureState: current.captureState === "paused" ? current.captureState : nextCaptureState(current.captureState, "recording"),
-      updatedAt: nowIso(),
-      error: null
+      if (
+        input.sequence !== expectedSequence ||
+        startedAtSeconds !== previousEnd ||
+        endedAtSeconds < startedAtSeconds ||
+        (current.audioMimeType !== null && current.audioMimeType !== input.audioMimeType)
+      ) {
+        throw new Error(`Invalid local recording chunk sequence or timing: expected chunk sequence ${expectedSequence}.`);
+      }
+
+      const audioBlob = input.audioMimeType.startsWith("audio/wav")
+        ? await assembleWavCheckpoints([...(current.audioBlob ? [current.audioBlob] : []), input.audioChunk])
+        : current.audioBlob;
+
+      return this.save({
+        ...current,
+        patientId: input.patientId !== undefined ? normalizeOptionalPatientId(input.patientId) : current.patientId,
+        label: input.label !== undefined ? normalizeOptionalText(input.label) : current.label,
+        durationSeconds: endedAtSeconds,
+        audioBlob,
+        audioChunks: [...current.audioChunks, input.audioChunk],
+        audioChunkMetadata: [...(current.audioChunkMetadata ?? []), {
+          sequence: input.sequence,
+          startedAtSeconds,
+          endedAtSeconds,
+          durationSeconds: endedAtSeconds - startedAtSeconds
+        }],
+        audioMimeType: input.audioMimeType,
+        captureState: current.captureState === "paused" ? current.captureState : nextCaptureState(current.captureState, "recording"),
+        updatedAt: nowIso(),
+        error: null
+      });
     });
+    this.chunkWrites.set(input.id, write);
+    void write.finally(() => {
+      if (this.chunkWrites.get(input.id) === write) this.chunkWrites.delete(input.id);
+    }).catch(() => undefined);
+    return write;
   }
 
   async getLatestRecoverable(scope?: LocalRecordingScope | null): Promise<LocalRecording | null> {
@@ -346,9 +418,13 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
 
 export class IndexedDbLocalRecordingRepository extends BaseLocalRecordingRepository {
   async save(recording: LocalRecording): Promise<LocalRecording> {
-    const db = await openLocalRecordingDb();
-    await db.put(STORE_NAME, recording);
-    return recording;
+    try {
+      const db = await openLocalRecordingDb();
+      await db.put(STORE_NAME, recording);
+      return recording;
+    } catch (caught) {
+      throw localRecordingStorageError(caught);
+    }
   }
 
   async get(id: string): Promise<LocalRecording | null> {
@@ -365,6 +441,19 @@ export class IndexedDbLocalRecordingRepository extends BaseLocalRecordingReposit
     const db = await openLocalRecordingDb();
     await db.delete(STORE_NAME, id);
   }
+}
+
+export function isLocalRecordingQuotaError(caught: unknown): boolean {
+  return typeof caught === "object" && caught !== null && "name" in caught && caught.name === "QuotaExceededError";
+}
+
+export function localRecordingStorageError(caught: unknown): Error {
+  if (isLocalRecordingQuotaError(caught)) {
+    const error = new Error("Device storage is full. Free space before recording again; earlier checkpoints remain available.");
+    error.name = "QuotaExceededError";
+    return error;
+  }
+  return caught instanceof Error ? caught : new Error("Unable to save audio on this device.");
 }
 
 export class MemoryLocalRecordingRepository extends BaseLocalRecordingRepository {

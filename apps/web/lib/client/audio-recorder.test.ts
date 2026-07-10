@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  AUDIO_CHECKPOINT_INTERVAL_MS,
   createDemoAudioRecorder,
   createDemoWavBlob,
   createRecordRtcAudioRecorder,
@@ -12,6 +13,9 @@ const recordRtcInstances: Array<{
   resumeRecording: ReturnType<typeof vi.fn>;
   stopRecording: ReturnType<typeof vi.fn>;
   getBlob: ReturnType<typeof vi.fn>;
+  requestData: ReturnType<typeof vi.fn>;
+  getInternalRecorder: ReturnType<typeof vi.fn>;
+  options: { recorderType?: unknown; timeSlice?: number };
 }> = [];
 
 vi.mock("recordrtc", () => {
@@ -22,8 +26,12 @@ vi.mock("recordrtc", () => {
     resumeRecording = vi.fn();
     stopRecording = vi.fn((callback: () => void) => callback());
     getBlob = vi.fn(() => new Blob(["recorded-audio"], { type: "audio/wav" }));
+    requestData = vi.fn();
+    getInternalRecorder = vi.fn(() => ({ getInternalRecorder: () => ({ requestData: this.requestData, state: "recording" }) }));
+    options: { recorderType?: unknown; timeSlice?: number };
 
-    constructor() {
+    constructor(_stream: MediaStream, options: { recorderType?: unknown; timeSlice?: number }) {
+      this.options = options;
       recordRtcInstances.push(this);
     }
   }
@@ -95,5 +103,42 @@ describe("demo audio recorder", () => {
     expect(recordedAudio.blob.type).toBe("audio/wav");
     expect(stopTrack).toHaveBeenCalledOnce();
     expect(recordRtcInstances).toHaveLength(1);
+  });
+
+  it("checkpoints native recorder data within the 30-second durability window", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [] })) }
+    });
+    vi.stubGlobal("MediaRecorder", {
+      isTypeSupported: vi.fn(() => true)
+    });
+
+    const recorder = await createRecordRtcAudioRecorder();
+    recorder.checkpoint();
+
+    expect(AUDIO_CHECKPOINT_INTERVAL_MS).toBeGreaterThanOrEqual(15_000);
+    expect(AUDIO_CHECKPOINT_INTERVAL_MS).toBeLessThanOrEqual(30_000);
+    expect(recordRtcInstances[0]?.options).toMatchObject({ timeSlice: AUDIO_CHECKPOINT_INTERVAL_MS });
+    expect(recordRtcInstances[0]?.options.recorderType).toBeUndefined();
+    expect(recordRtcInstances[0]?.requestData).toHaveBeenCalledOnce();
+  });
+
+  it("treats unsupported, paused, and inactive lifecycle checkpoints as best effort", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [] })) }
+    });
+    vi.stubGlobal("MediaRecorder", { isTypeSupported: vi.fn(() => true) });
+    const recorder = await createRecordRtcAudioRecorder();
+    const instance = recordRtcInstances[0]!;
+
+    for (const state of ["paused", "inactive"]) {
+      instance.getInternalRecorder.mockReturnValue({
+        getInternalRecorder: () => ({ requestData: instance.requestData, state })
+      });
+      expect(recorder.checkpoint()).toBe(false);
+    }
+    instance.getInternalRecorder.mockReturnValue({});
+    expect(recorder.checkpoint()).toBe(false);
+    expect(instance.requestData).not.toHaveBeenCalled();
   });
 });
