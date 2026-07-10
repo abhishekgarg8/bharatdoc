@@ -66,3 +66,10 @@ Persisted reopened metadata, reused server IDs to prevent duplicate transcriptio
 Added StrictMode, scope-isolation, retry/idempotency, offline-cache, and full record-to-reopen E2E coverage; 356 web tests passed.
 Merged PR #88, waited 3 minutes, then verified exact reopen, two reloads, persisted edits, and no duplicate production metadata POST.
 Saved screenshot/video evidence in testing/issue-58-production-local-reopen and removed all synthetic server/device data.
+
+2026-07-10 - Issue #59: Made local audio checkpoints ordered, durable, and failure-aware.
+Added 20-second/native lifecycle checkpoints, strict sequence/timing/MIME validation, stop-time draining, and quota guidance.
+Preferred native MediaRecorder containers and validated canonical WAV fallback assembly for interrupted recovery.
+Added first/mid-write, race, lifecycle, recovery, and container regressions; 371 web tests and the production build passed.
+Merged PR #90, waited 3 minutes, then decoded periodic/recovery chunks and the 125.88-second canonical WebM in production Chrome.
+Saved screenshot/video evidence in testing/issue-59-production-audio-checkpoints and removed the synthetic IndexedDB record.
