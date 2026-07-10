@@ -44,11 +44,11 @@ describe("DashboardScreen", () => {
 
     expect(screen.getByText("P-10482")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open recording P-10482" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Local recording P-10482 awaiting transcription")).toBeInTheDocument();
+    expect(screen.getByLabelText("Local recording P-10482: Awaiting transcription")).toBeInTheDocument();
     expect(screen.getByText("Awaiting transcription")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Resume recording P-10482" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Transcribe recording P-10482" })).toHaveAttribute(
       "href",
-      "/recordings/new"
+      "/recordings/new?local_recording_id=local-p-10482"
     );
     expect(screen.getByText("Transcribed")).toBeInTheDocument();
     expect(screen.getByText("Summary ready")).toBeInTheDocument();
@@ -183,10 +183,43 @@ describe("DashboardScreen", () => {
     await expect(screen.findByText("P-LOCAL")).resolves.toBeInTheDocument();
     expect(screen.getByLabelText("Stored offline")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open recording P-LOCAL" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Resume recording P-LOCAL" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Transcribe recording P-LOCAL" })).toHaveAttribute(
       "href",
-      "/recordings/new"
+      "/recordings/new?local_recording_id=local-recording"
     );
+  });
+
+  it("uses state-specific local recording actions with exact local IDs", () => {
+    const record = (id: string, patientId: string, localCaptureState: LocalRecording["captureState"]): DashboardRecord => ({
+      id,
+      patientId,
+      time: "Today, 12:05",
+      duration: "0:30",
+      doctorName: "You",
+      status: "recorded",
+      offline: true,
+      localRecordingId: id,
+      localCaptureState
+    });
+
+    render(
+      <DashboardScreen
+        records={[
+          record("local-stopped", "P-STOPPED", "stopped"),
+          record("local-failed", "P-FAILED", "failed"),
+          record("local-paused", "P-PAUSED", "paused"),
+          record("local-transcribing", "P-TRANSCRIBING", "transcribing")
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Transcribe recording P-STOPPED" })).toHaveAttribute(
+      "href",
+      "/recordings/new?local_recording_id=local-stopped"
+    );
+    expect(screen.getByRole("link", { name: "Retry recording P-FAILED" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume recording P-PAUSED" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue recording P-TRANSCRIBING" })).toBeInTheDocument();
   });
 
   it("deletes local device recordings from IndexedDB after confirmation", async () => {

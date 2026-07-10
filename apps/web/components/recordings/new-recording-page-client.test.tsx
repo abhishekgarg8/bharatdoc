@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { NewRecordingPageClient } from "@/components/recordings/new-recording-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
 import type { Doctor } from "@bharatdoc/shared";
+import { cacheLocalRecordingContext } from "@/lib/client/local-recording-context";
 
 const activeDoctor: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -20,12 +21,16 @@ const activeDoctor: Doctor = {
 };
 
 describe("NewRecordingPageClient", () => {
+  function tokenFor(sub: string): string {
+    return `header.${btoa(JSON.stringify({ sub })).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_")}.signature`;
+  }
+
   it("redirects pending users away from the recorder", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
+      getCurrentIdToken: vi.fn(async () => tokenFor(activeDoctor.firebase_uid))
     };
     const navigate = vi.fn();
     const fetcher = vi.fn(async () =>
@@ -47,7 +52,7 @@ describe("NewRecordingPageClient", () => {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
+      getCurrentIdToken: vi.fn(async () => tokenFor(activeDoctor.firebase_uid))
     };
     const fetcher = vi.fn(async () =>
       Response.json({
@@ -68,5 +73,38 @@ describe("NewRecordingPageClient", () => {
     await waitFor(() => {
       expect(document.body).toHaveTextContent("Sunrise Hospital · Online");
     });
+  });
+
+  it("uses the UID-matched cached scope when the dashboard is offline", async () => {
+    const token = tokenFor(activeDoctor.firebase_uid);
+    cacheLocalRecordingContext({
+      clinicName: "Cached Hospital",
+      scope: {
+        authUserId: activeDoctor.firebase_uid,
+        doctorId: activeDoctor.id,
+        clinicId: activeDoctor.clinic_id
+      }
+    }, token);
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      getCurrentIdToken: vi.fn(async () => token)
+    };
+    const fetcher = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+
+    render(
+      <NewRecordingPageClient
+        authClient={authClient}
+        fetcher={fetcher}
+        localRecordingId="exact-local-recording"
+        useDemoRecorder
+      />
+    );
+
+    await waitFor(() => expect(document.body).toHaveTextContent("Cached Hospital"));
+    expect(document.body).not.toHaveTextContent("Unable to prepare recorder");
   });
 });

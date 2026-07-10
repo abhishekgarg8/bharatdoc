@@ -12,8 +12,13 @@ import {
 } from "@/lib/client/dashboard-data";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
-import { DEMO_LOCAL_RECORDING_SCOPE } from "@/lib/client/local-recordings";
+import { DEMO_LOCAL_RECORDING_SCOPE, type LocalRecordingScope } from "@/lib/client/local-recordings";
 import { deleteRecording } from "@/lib/client/summary-api";
+import {
+  cacheLocalRecordingContext,
+  localRecordingContextMatchesToken,
+  readCachedLocalRecordingContext
+} from "@/lib/client/local-recording-context";
 import type { Doctor } from "@bharatdoc/shared";
 
 interface DashboardPageClientProps {
@@ -38,6 +43,9 @@ export function DashboardPageClient({
   const [clinicName, setClinicName] = useState<string | null>(allowDemoFallback ? "Sunrise Hospital, Pune" : null);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(allowDemoFallback ? 1 : 0);
   const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
+  const [localRecordingScope, setLocalRecordingScope] = useState<LocalRecordingScope | undefined>(
+    allowDemoFallback ? DEMO_LOCAL_RECORDING_SCOPE : undefined
+  );
   const [idToken, setIdToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,8 +87,21 @@ export function DashboardPageClient({
         }
 
         if (isMounted) {
+          const context = {
+            clinicName: snapshot.clinic?.name ?? "Hospital",
+            scope: {
+              authUserId: snapshot.doctor.firebase_uid,
+              doctorId: snapshot.doctor.id,
+              clinicId: snapshot.doctor.clinic_id
+            }
+          };
+          if (!localRecordingContextMatchesToken(context, idToken)) {
+            throw new Error("Dashboard scope did not match the authenticated account.");
+          }
+          cacheLocalRecordingContext(context, idToken);
           setDoctor(snapshot.doctor);
           setClinicName(snapshot.clinic?.name ?? null);
+          setLocalRecordingScope(context.scope);
           setPendingApprovalsCount(snapshot.pendingApprovalsCount);
           setRecords(snapshot.records);
         }
@@ -95,6 +116,17 @@ export function DashboardPageClient({
             setClinicName("Sunrise Hospital, Pune");
             setPendingApprovalsCount(1);
             setRecords(demoDashboardRecords);
+          } else if (loadError instanceof TypeError) {
+            const cachedContext = readCachedLocalRecordingContext(idToken);
+
+            if (cachedContext) {
+              setClinicName(cachedContext.clinicName);
+              setLocalRecordingScope(cachedContext.scope);
+              setPendingApprovalsCount(0);
+              setRecords([]);
+            } else {
+              setError("Unable to load dashboard. Please sign in again.");
+            }
           } else {
             setError("Unable to load dashboard. Please sign in again.");
           }
@@ -133,19 +165,10 @@ export function DashboardPageClient({
 
   const screenProps = {
     records,
+    demoMode: allowDemoFallback,
     pendingApprovalsCount,
     onDeleteRecording: deleteDashboardRecording,
-    ...(doctor
-      ? {
-          localRecordingScope: {
-            authUserId: doctor.firebase_uid,
-            doctorId: doctor.id,
-            clinicId: doctor.clinic_id
-          }
-        }
-      : allowDemoFallback
-        ? { localRecordingScope: DEMO_LOCAL_RECORDING_SCOPE }
-      : {}),
+    ...(localRecordingScope ? { localRecordingScope } : {}),
     ...(doctor?.name ? { doctorName: doctor.name } : allowDemoFallback ? { doctorName: "Dr. Aparna Iyer" } : {}),
     ...(clinicName ? { clinicName } : {})
   };

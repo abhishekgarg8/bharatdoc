@@ -6,6 +6,7 @@ import { BharatButton } from "@/components/bharat-button";
 
 interface DashboardRecordCardProps {
   record: DashboardRecord;
+  demoMode?: boolean;
   deleteState?: "idle" | "confirming" | "deleting";
   deleteError?: string | null;
   onRequestDelete?: (record: DashboardRecord) => void;
@@ -15,6 +16,7 @@ interface DashboardRecordCardProps {
 
 export function DashboardRecordCard({
   record,
+  demoMode = false,
   deleteState = "idle",
   deleteError,
   onRequestDelete,
@@ -44,7 +46,15 @@ export function DashboardRecordCard({
         <div className="mt-2">
           {record.offline ? (
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-terracotta">
-              Awaiting transcription
+              {record.localCaptureState === "recording" || record.localCaptureState === "paused"
+                ? "Interrupted recording"
+                : record.localCaptureState === "failed"
+                  ? "Transcription failed"
+                  : record.localCaptureState === "transcribing"
+                    ? "Transcription interrupted"
+                    : record.localCaptureState === "transcribed"
+                      ? "Transcript ready"
+                      : "Awaiting transcription"}
             </span>
           ) : (
             <StatusTick status={record.status} />
@@ -89,20 +99,46 @@ export function DashboardRecordCard({
   ) : null;
 
   if (record.offline) {
+    const action =
+      record.localCaptureState === "recording" || record.localCaptureState === "paused"
+        ? "Resume"
+        : record.localCaptureState === "failed"
+          ? "Retry"
+          : record.localCaptureState === "transcribing"
+            ? "Continue"
+            : record.localCaptureState === "transcribed"
+              ? "Open"
+              : "Transcribe";
+    const localRecordingId = record.localRecordingId ?? record.id;
+    const href =
+      record.localCaptureState === "transcribed" && record.id !== localRecordingId
+        ? `/recordings/${record.id}`
+        : `/recordings/new?local_recording_id=${encodeURIComponent(localRecordingId)}${demoMode ? "&demo=1" : ""}`;
+    const localStatus =
+      record.localCaptureState === "recording" || record.localCaptureState === "paused"
+        ? "Interrupted recording"
+        : record.localCaptureState === "failed"
+          ? "Transcription failed"
+          : record.localCaptureState === "transcribing"
+            ? "Transcription interrupted"
+            : record.localCaptureState === "transcribed"
+              ? "Transcript ready"
+              : "Awaiting transcription";
+
     return (
       <article
         className="overflow-hidden rounded-[14px] border border-rule bg-paper shadow-[0_1px_0_#E5DAC5]"
-        aria-label={`Local recording ${record.patientId} awaiting transcription`}
+        aria-label={`Local recording ${record.patientId}: ${localStatus}`}
       >
         <div className="flex items-start gap-3 p-4">
           {content}
           <div className="flex shrink-0 items-center gap-2">
             <Link
               className="inline-flex min-h-11 items-center rounded-full border border-rule bg-paper-deep px-3 py-1.5 font-body text-xs font-bold text-terracotta transition active:scale-[0.99]"
-              href="/recordings/new"
-              aria-label={`Resume recording ${record.patientId}`}
+              href={href}
+              aria-label={`${action} recording ${record.patientId}`}
             >
-              Resume
+              {action}
             </Link>
             {deleteButton}
           </div>

@@ -1,8 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 import { RecordingScreen } from "@/components/recordings/recording-screen";
 import type { AudioRecorder, RecordedAudioChunk } from "@/lib/client/audio-recorder";
-import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
+import {
+  createMemoryLocalRecordingRepository,
+  type LocalRecording,
+  type LocalRecordingScope
+} from "@/lib/client/local-recordings";
 
 function createRecorder(overrides: Partial<AudioRecorder> = {}) {
   const listeners = new Set<(chunk: RecordedAudioChunk) => void | Promise<void>>();
@@ -41,6 +46,28 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
 const DEVICE_LOGS_URL = "/api/device-logs";
 const RECORDINGS_URL = "/api/recordings";
 const WORKER_TRANSCRIBE_URL = "https://worker.example.com/api/transcribe";
+const scope: LocalRecordingScope = { authUserId: "auth-user-1", doctorId: "doctor-1", clinicId: "clinic-1" };
+
+function savedRecording(overrides: Partial<LocalRecording> = {}): LocalRecording {
+  return {
+    id: "exact-local-recording",
+    ...scope,
+    patientId: "P-10482",
+    label: "Follow-up",
+    durationSeconds: 42,
+    recordedAt: "2026-04-23T06:12:00.000Z",
+    updatedAt: "2026-04-23T06:12:00.000Z",
+    audioBlob: new Blob(["audio"], { type: "audio/webm" }),
+    audioChunks: [],
+    audioMimeType: "audio/webm",
+    captureState: "stopped",
+    syncState: "local",
+    serverRecordingId: null,
+    transcript: null,
+    error: null,
+    ...overrides
+  };
+}
 
 function fetchUrl(call: readonly unknown[]): string {
   return String(call[0]);
@@ -204,6 +231,165 @@ describe("RecordingScreen", () => {
     expect(screen.getByLabelText("Patient ID")).toHaveValue("P-10482");
     expect(screen.getByRole("button", { name: /transcribe/i })).toBeInTheDocument();
     expect((await repository.list())[0]).toMatchObject({ captureState: "stopped" });
+  });
+
+  it("loads only the exact stopped recording in StrictMode and persists reopened metadata edits", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      savedRecording(),
+      savedRecording({ id: "newer-local-recording", patientId: "P-NEWER", recordedAt: "2026-04-24T06:12:00.000Z" })
+    ]);
+
+    render(
+      <StrictMode>
+        <RecordingScreen
+          localRecordingId="exact-local-recording"
+          localRecordingScope={scope}
+          localRepository={repository}
+          useDemoRecorder
+        />
+      </StrictMode>
+    );
+
+    await expect(screen.findByText("Local recording ready to transcribe.")).resolves.toBeInTheDocument();
+    expect(screen.getByLabelText("Patient ID")).toHaveValue("P-10482");
+    fireEvent.change(screen.getByLabelText("Patient ID"), { target: { value: " p-10555 " } });
+    fireEvent.blur(screen.getByLabelText("Patient ID"));
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: " Reopened visit " } });
+    fireEvent.blur(screen.getByLabelText("Label"));
+
+    await waitFor(async () => {
+      await expect(repository.get("exact-local-recording")).resolves.toMatchObject({
+        patientId: "P-10555",
+        label: "Reopened visit"
+      });
+    });
+    await expect(repository.get("newer-local-recording")).resolves.toMatchObject({ patientId: "P-NEWER" });
+  });
+
+  it("fails closed when the exact recording is missing or belongs to another scope", async () => {
+    const repository = createMemoryLocalRecordingRepository([savedRecording({ doctorId: "doctor-2" })]);
+    const { rerender } = render(
+      <RecordingScreen
+        localRecordingId="missing-recording"
+        localRecordingScope={scope}
+        localRepository={repository}
+        useDemoRecorder
+      />
+    );
+
+    await expect(screen.findByText("This local recording is unavailable for the current account.")).resolves.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("P-10482")).not.toBeInTheDocument();
+
+    rerender(
+      <RecordingScreen
+        localRecordingId="exact-local-recording"
+        localRecordingScope={scope}
+        localRepository={repository}
+        useDemoRecorder
+      />
+    );
+    await expect(screen.findByText("This local recording is unavailable for the current account.")).resolves.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("P-10482")).not.toBeInTheDocument();
+  });
+
+  it("turns interrupted capture and transcription states into safe stopped or retry states", async () => {
+    const captureRepository = createMemoryLocalRecordingRepository([
+      savedRecording({ captureState: "paused", audioBlob: null, audioChunks: [new Blob(["audio"], { type: "audio/webm" })] })
+    ]);
+    const { unmount } = render(
+      <RecordingScreen
+        localRecordingId="exact-local-recording"
+        localRecordingScope={scope}
+        localRepository={captureRepository}
+        useDemoRecorder
+      />
+    );
+
+    await expect(screen.findByText("Recovered an interrupted local recording.")).resolves.toBeInTheDocument();
+    await expect(captureRepository.get("exact-local-recording")).resolves.toMatchObject({ captureState: "stopped" });
+    unmount();
+
+    const transcriptionRepository = createMemoryLocalRecordingRepository([
+      savedRecording({ captureState: "transcribing", syncState: "transcribing", serverRecordingId: "server-recording" })
+    ]);
+    render(
+      <RecordingScreen
+        localRecordingId="exact-local-recording"
+        localRecordingScope={scope}
+        localRepository={transcriptionRepository}
+        useDemoRecorder
+      />
+    );
+
+    await expect(screen.findByText("Transcription was interrupted. Retry when ready.")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    await expect(transcriptionRepository.get("exact-local-recording")).resolves.toMatchObject({
+      captureState: "failed",
+      syncState: "failed",
+      serverRecordingId: "server-recording"
+    });
+  });
+
+  it("opens an already transcribed exact recording on its server detail", async () => {
+    const navigate = vi.fn();
+    const repository = createMemoryLocalRecordingRepository([
+      savedRecording({
+        captureState: "transcribed",
+        syncState: "transcribed",
+        serverRecordingId: "server-recording",
+        transcript: "Ready"
+      })
+    ]);
+
+    render(
+      <RecordingScreen
+        localRecordingId="exact-local-recording"
+        localRecordingScope={scope}
+        localRepository={repository}
+        onNavigate={navigate}
+        useDemoRecorder
+      />
+    );
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/recordings/server-recording"));
+  });
+
+  it("retries an exact failed recording without creating duplicate server metadata", async () => {
+    vi.stubEnv("NEXT_PUBLIC_RAILWAY_WORKER_URL", "https://worker.example.com");
+    const repository = createMemoryLocalRecordingRepository([
+      savedRecording({ captureState: "failed", syncState: "failed", serverRecordingId: "server-recording", error: "Worker stopped." })
+    ]);
+    const fetcher = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url === DEVICE_LOGS_URL) return Response.json({ accepted: 1 }, { status: 202 });
+      if (url === WORKER_TRANSCRIBE_URL) {
+        return Response.json({
+          recording_id: "server-recording",
+          transcript: "Recovered transcript.",
+          audio_storage_path: "clinic/doctor/recording.webm",
+          status: "transcribed"
+        });
+      }
+      return Response.json({ error: { code: "UNEXPECTED_TEST_REQUEST", url } }, { status: 500 });
+    });
+
+    render(
+      <RecordingScreen
+        idToken="id-token"
+        fetcher={fetcher as unknown as typeof fetch}
+        localRecordingId="exact-local-recording"
+        localRecordingScope={scope}
+        localRepository={repository}
+        onNavigate={vi.fn()}
+      />
+    );
+
+    await screen.findByRole("button", { name: "Retry" });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
+    expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === RECORDINGS_URL)).toHaveLength(0);
+    expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === WORKER_TRANSCRIBE_URL)).toHaveLength(1);
+    await expect(repository.list()).resolves.toHaveLength(1);
   });
 
   it("saves stopped audio without Patient ID and blocks transcription until Patient ID is added", async () => {

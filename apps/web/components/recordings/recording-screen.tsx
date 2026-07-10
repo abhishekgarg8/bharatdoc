@@ -15,6 +15,7 @@ import {
 import {
   createIndexedDbLocalRecordingRepository,
   localRecordingAudioBlob,
+  localRecordingMatchesScope,
   type LocalRecording,
   type LocalRecordingScope,
   type LocalRecordingRepository
@@ -32,6 +33,8 @@ interface RecordingScreenProps {
   recorderFactory?: AudioRecorderFactory;
   useDemoRecorder?: boolean;
   onNavigate?: (href: string) => void;
+  localRecordingId?: string;
+  dashboardHref?: string;
 }
 
 const DEMO_TRANSCRIPT =
@@ -59,7 +62,9 @@ export function RecordingScreen({
   localRecordingScope,
   recorderFactory,
   useDemoRecorder = false,
-  onNavigate
+  onNavigate,
+  localRecordingId,
+  dashboardHref = "/dashboard"
 }: RecordingScreenProps) {
   const repository = useMemo(
     () => localRepository ?? createIndexedDbLocalRecordingRepository(),
@@ -83,7 +88,10 @@ export function RecordingScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shouldHighlightPatientId, setShouldHighlightPatientId] = useState(false);
-  const navigate = onNavigate ?? ((href: string) => window.location.assign(href));
+  const [exactLoadFailed, setExactLoadFailed] = useState(false);
+  const [completedExactLoadId, setCompletedExactLoadId] = useState<string | null>(null);
+  const [isLoadingLocalRecording, setIsLoadingLocalRecording] = useState(Boolean(localRecordingId));
+  const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
 
   function logDeviceEvent(input: DeviceLogInput) {
     appendDeviceLog({
@@ -144,54 +152,109 @@ export function RecordingScreen({
   useEffect(() => {
     let isMounted = true;
 
-    async function loadRecoverableRecording() {
+    async function loadLocalRecording() {
       if (!localRepository && typeof indexedDB === "undefined") {
         return;
       }
 
       try {
-        const recoverable = await repository.getLatestRecoverable(localRecordingScope);
+        if (localRecordingId) {
+          setExactLoadFailed(false);
+          setError(null);
+          setMessage(null);
+        }
+        const recoverable = localRecordingId
+          ? await repository.get(localRecordingId)
+          : await repository.getLatestRecoverable(localRecordingScope);
 
-        if (!isMounted || !recoverable) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (!recoverable) {
+          if (localRecordingId) {
+            setExactLoadFailed(true);
+            setError("This local recording is unavailable for the current account.");
+          }
+          return;
+        }
+
+        if (localRecordingId && (!localRecordingScope || !localRecordingMatchesScope(recoverable, localRecordingScope))) {
+          setExactLoadFailed(true);
+          setError("This local recording is unavailable for the current account.");
+          return;
+        }
+
+        if (localRecordingId && recoverable.captureState === "transcribed" && recoverable.serverRecordingId) {
+          navigate(`/recordings/${recoverable.serverRecordingId}`);
           return;
         }
 
         const recoveredAudio = localRecordingAudioBlob(recoverable);
+
+        if (localRecordingId && !recoveredAudio) {
+          setExactLoadFailed(true);
+          setError("This local recording has no recoverable audio.");
+          return;
+        }
         const nextUrl = recoveredAudio ? objectUrlFor(recoveredAudio) : null;
 
         if (audioUrl && typeof URL.revokeObjectURL === "function") {
           URL.revokeObjectURL(audioUrl);
         }
 
+        let refreshed = recoverable;
         if (recoverable.captureState === "recording" || recoverable.captureState === "paused") {
-          await repository.updateDraft({
+          refreshed = await repository.updateDraft({
             id: recoverable.id,
             captureState: "stopped",
             durationSeconds: recoverable.durationSeconds
           });
+        } else if (recoverable.captureState === "transcribing") {
+          refreshed = await repository.markFailed(recoverable.id, "Transcription was interrupted. Retry when ready.");
         }
 
-        const refreshed = (await repository.get(recoverable.id)) ?? recoverable;
         setRecording(refreshed);
         setPatientId(refreshed.patientId ?? "");
         setLabel(refreshed.label ?? "");
         setElapsedSeconds(refreshed.durationSeconds);
         setAudioUrl(nextUrl);
-        setPhase("stopped");
-        setMessage("Recovered an interrupted local recording.");
+        setPhase(refreshed.captureState === "failed" ? "failed" : refreshed.captureState === "transcribed" ? "transcribed" : "stopped");
+        if (recoverable.captureState === "recording" || recoverable.captureState === "paused") {
+          setMessage("Recovered an interrupted local recording.");
+        } else if (recoverable.captureState === "transcribing") {
+          setError("Transcription was interrupted. Retry when ready.");
+        } else if (recoverable.captureState === "failed") {
+          setError(recoverable.error || "Transcription failed. Audio is saved; retry when ready.");
+        } else if (recoverable.captureState === "stopped") {
+          setMessage("Local recording ready to transcribe.");
+        } else if (recoverable.captureState === "transcribed") {
+          setMessage("Transcript ready.");
+        }
       } catch {
-        return;
+        if (isMounted && localRecordingId) {
+          setExactLoadFailed(true);
+          setError("Unable to reopen this local recording.");
+        }
+      } finally {
+        if (isMounted && localRecordingId) {
+          setCompletedExactLoadId(localRecordingId);
+          setIsLoadingLocalRecording(false);
+        }
       }
     }
 
-    if (phase === "idle" && !recording) {
-      void loadRecoverableRecording();
+    if (
+      !recording &&
+      ((localRecordingId && completedExactLoadId !== localRecordingId) || (!localRecordingId && phase === "idle"))
+    ) {
+      void loadLocalRecording();
     }
 
     return () => {
       isMounted = false;
     };
-  }, [audioUrl, localRepository, localRecordingScope, phase, recording, repository]);
+  }, [audioUrl, completedExactLoadId, localRecordingId, localRepository, localRecordingScope, navigate, phase, recording, repository]);
 
   useEffect(() => {
     return () => {
@@ -514,7 +577,7 @@ export function RecordingScreen({
     setError(null);
   }
 
-  const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped";
+  const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped" || phase === "failed";
   const transcript = recording?.transcript;
   const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
   const patientIdErrorId = "recording-patient-id-error";
@@ -531,7 +594,7 @@ export function RecordingScreen({
         >
           <Link
             className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
-            href="/dashboard"
+            href={dashboardHref}
             aria-label="Back to dashboard"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -640,6 +703,7 @@ export function RecordingScreen({
           </section>
 
           {message ? <p className="mt-3 font-body text-xs font-semibold text-sage">{message}</p> : null}
+          {isLoadingLocalRecording ? <p className="mt-3 font-body text-xs font-semibold text-ink-muted">Reopening local recording…</p> : null}
           {error ? (
             <p
               id={error === "Patient ID is required before transcription." ? patientIdErrorId : undefined}
@@ -662,7 +726,7 @@ export function RecordingScreen({
         </div>
 
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-rule bg-paper px-5 pb-4 pt-3">
-          {phase === "idle" || (phase === "failed" && !hasSavedAudio) ? (
+          {!exactLoadFailed && (phase === "idle" || (phase === "failed" && !hasSavedAudio)) ? (
             <BharatButton className="col-span-2" icon={<Mic className="h-4 w-4" />} onClick={startRecording}>
               Start recording
             </BharatButton>
@@ -671,7 +735,7 @@ export function RecordingScreen({
             <>
               <Link
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rule bg-transparent px-4 py-3 font-body text-sm font-bold text-ink-soft transition active:scale-[0.99]"
-                href="/dashboard"
+                href={dashboardHref}
               >
                 <Save className="h-4 w-4" />
                 Later
@@ -705,7 +769,7 @@ export function RecordingScreen({
             <>
               <Link
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rule bg-transparent px-4 py-3 font-body text-sm font-bold text-ink-soft transition active:scale-[0.99]"
-                href="/dashboard"
+                href={dashboardHref}
               >
                 <Save className="h-4 w-4" />
                 Later
@@ -727,7 +791,7 @@ export function RecordingScreen({
               </BharatButton>
               <Link
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-terracotta px-4 py-3 font-body text-sm font-bold text-white shadow-warm transition active:scale-[0.99]"
-                href="/dashboard"
+                href={dashboardHref}
               >
                 Dashboard
               </Link>
