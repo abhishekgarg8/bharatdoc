@@ -71,6 +71,33 @@ describe("worker HTTP error handling", () => {
     });
   });
 
+  it("maps body parser size limits to a stable 413 response", () => {
+    expect(
+      sanitizeErrorForTelemetry(
+        Object.assign(new Error("request entity too large"), {
+          type: "entity.too.large",
+        }),
+      ),
+    ).toMatchObject({
+      error_status: 413,
+      error_code: "REQUEST_TOO_LARGE",
+    });
+  });
+
+  it("maps every multipart resource limit to the stable audio 413", () => {
+    expect(
+      sanitizeErrorForTelemetry(
+        Object.assign(new Error("Too many parts"), {
+          name: "MulterError",
+          code: "LIMIT_PART_COUNT",
+        }),
+      ),
+    ).toMatchObject({
+      error_status: 413,
+      error_code: "AUDIO_TOO_LARGE",
+    });
+  });
+
   it("keeps bounded upstream provider metadata for diagnostics", () => {
     const error = Object.assign(new Error("Invalid value for audio"), {
       status: 400,

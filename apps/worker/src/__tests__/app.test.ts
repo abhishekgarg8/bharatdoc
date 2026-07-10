@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
+import type { RequestHandler } from "express";
 import { createApp } from "../app.js";
 import type { WorkerDependencies } from "../types.js";
 
@@ -68,7 +69,9 @@ function depsFor(
     },
     recordings: {
       findRecordingForDoctor: vi.fn(async () => recordingResult),
-      findLatestRecordingAudioPath: vi.fn(async () => recordingResult?.audio_storage_path ?? null),
+      findLatestRecordingAudioPath: vi.fn(
+        async () => recordingResult?.audio_storage_path ?? null,
+      ),
       markRecordingTranscribed: vi.fn(async (input) => ({
         ...(recordingResult ?? recording),
         audio_storage_path: input.audioStoragePath,
@@ -251,6 +254,290 @@ describe("worker app", () => {
     expect(deps.transcriptionClient.transcribe).not.toHaveBeenCalled();
   });
 
+  it("authenticates active doctors before parsing multipart bodies", async () => {
+    const multipartParser: RequestHandler = vi.fn((_req, _res, next) => next());
+    const unauthenticated = depsFor(activeDoctor);
+
+    await request(createApp(unauthenticated, { multipartParser }))
+      .post("/api/transcribe")
+      .set("Content-Type", "multipart/form-data")
+      .send("an intentionally invalid multipart body")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(unauthenticated.tokenVerifier.verifyIdToken).not.toHaveBeenCalled();
+
+    const invalidToken = depsFor(activeDoctor);
+
+    await request(createApp(invalidToken, { multipartParser }))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer bad-token")
+      .set("Content-Type", "multipart/form-data")
+      .send("an intentionally invalid multipart body")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+
+    expect(invalidToken.doctors.findByAuthUid).not.toHaveBeenCalled();
+
+    await request(createApp(depsFor(activeDoctor), { multipartParser }))
+      .post("/api/transcribe")
+      .set("Authorization", "Token malformed")
+      .set("Content-Type", "multipart/form-data")
+      .send("an intentionally invalid multipart body")
+      .expect(401);
+
+    const pending = depsFor({
+      ...activeDoctor,
+      account_status: "pending_approval",
+    });
+
+    await request(createApp(pending, { multipartParser }))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("Content-Type", "multipart/form-data")
+      .send("an intentionally invalid multipart body")
+      .expect(403)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("ACCOUNT_INACTIVE");
+      });
+
+    expect(pending.recordings.findRecordingForDoctor).not.toHaveBeenCalled();
+
+    await request(
+      createApp(depsFor({ ...activeDoctor, account_status: "rejected" }), {
+        multipartParser,
+      }),
+    )
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("Content-Type", "multipart/form-data")
+      .send("an intentionally invalid multipart body")
+      .expect(403)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("ACCOUNT_INACTIVE");
+      });
+
+    expect(multipartParser).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits transcription uploads per authenticated doctor", async () => {
+    const secondDoctor = {
+      ...activeDoctor,
+      id: "33333333-3333-4333-8333-333333333333",
+      firebase_uid: "firebase-second",
+    };
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+    });
+    deps.tokenVerifier.verifyIdToken = vi.fn(async (token) => ({ uid: token }));
+    deps.doctors.findByAuthUid = vi.fn(async (uid) =>
+      uid === secondDoctor.firebase_uid ? secondDoctor : activeDoctor,
+    );
+    const app = createApp(deps, {
+      uploadAdmission: {
+        maxConcurrent: 2,
+        maxPerIp: 10,
+        maxPerUser: 1,
+        windowMs: 60_000,
+      },
+    });
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", `Bearer ${activeDoctor.firebase_uid}`)
+      .send({ recording_id: recording.id })
+      .expect(200);
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", `Bearer ${activeDoctor.firebase_uid}`)
+      .send({ recording_id: recording.id })
+      .expect("Retry-After", "60")
+      .expect(429)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("UPLOAD_USER_RATE_LIMITED");
+      });
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", `Bearer ${secondDoctor.firebase_uid}`)
+      .send({ recording_id: recording.id })
+      .expect(200);
+  });
+
+  it("rate-limits transcription uploads per client IP", async () => {
+    const app = createApp(
+      depsFor(activeDoctor, {
+        ...recording,
+        status: "recorded",
+        transcript: null,
+        summary: null,
+      }),
+      {
+        uploadAdmission: {
+          maxConcurrent: 2,
+          maxPerIp: 1,
+          maxPerUser: 10,
+          windowMs: 60_000,
+        },
+      },
+    );
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("X-Real-IP", "192.0.2.1")
+      .send({ recording_id: recording.id })
+      .expect(200);
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("X-Real-IP", "192.0.2.1")
+      .send({ recording_id: recording.id })
+      .expect("Retry-After", "60")
+      .expect(429)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("UPLOAD_IP_RATE_LIMITED");
+      });
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("X-Real-IP", "198.51.100.2")
+      .send({ recording_id: recording.id })
+      .expect(200);
+  });
+
+  it("returns 413 for Multer limits and releases the upload permit", async () => {
+    const multipartParser: RequestHandler = (_req, _res, next) => {
+      next(
+        Object.assign(new Error("File too large"), {
+          name: "MulterError",
+          code: "LIMIT_FILE_SIZE",
+        }),
+      );
+    };
+    const app = createApp(depsFor(activeDoctor), {
+      multipartParser,
+      uploadAdmission: {
+        maxConcurrent: 1,
+        maxPerIp: 10,
+        maxPerUser: 10,
+        windowMs: 60_000,
+      },
+    });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await request(app)
+        .post("/api/transcribe")
+        .set("Authorization", "Bearer valid-token")
+        .field("recording_id", recording.id)
+        .expect(413)
+        .expect(({ body }) => {
+          expect(body.error.code).toBe("AUDIO_TOO_LARGE");
+        });
+    }
+  });
+
+  it("bounds real multipart fields and releases admission after rejection", async () => {
+    const app = createApp(depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+    }), {
+      uploadAdmission: {
+        maxConcurrent: 1,
+        maxPerIp: 10,
+        maxPerUser: 10,
+      },
+    });
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .field("unexpected", "bounded")
+      .expect(413)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUDIO_TOO_LARGE");
+      });
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(200);
+  });
+
+  it("caps concurrent in-memory transcription uploads and releases admission", async () => {
+    let releaseTranscription!: () => void;
+    let transcriptionStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      transcriptionStarted = resolve;
+    });
+    const blocked = new Promise<string>((resolve) => {
+      releaseTranscription = () =>
+        resolve("Patient reports fever for two days.");
+    });
+    const deps = depsFor(activeDoctor, {
+      ...recording,
+      status: "recorded",
+      transcript: null,
+      summary: null,
+    });
+    vi.mocked(deps.transcriptionClient.transcribe).mockImplementationOnce(
+      async () => {
+        transcriptionStarted();
+        return blocked;
+      },
+    );
+    const app = createApp(deps, {
+      uploadAdmission: {
+        maxConcurrent: 1,
+        maxPerIp: 10,
+        maxPerUser: 10,
+        windowMs: 60_000,
+      },
+    });
+    const first = request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("first audio"), {
+        filename: "first.webm",
+        contentType: "audio/webm",
+      })
+      .then((response) => response);
+
+    await started;
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(429)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("UPLOAD_CONCURRENCY_LIMITED");
+      });
+
+    releaseTranscription();
+    expect((await first).status).toBe(200);
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(200);
+  });
+
   it("rejects transcription requests without recording ids or audio", async () => {
     await request(createApp(depsFor(activeDoctor)))
       .post("/api/transcribe")
@@ -292,7 +579,9 @@ describe("worker app", () => {
       summary: null,
     });
 
-    await request(createApp(deps))
+    const app = createApp(deps);
+
+    await request(app)
       .post("/api/transcribe")
       .set("Authorization", "Bearer valid-token")
       .field("recording_id", recording.id)
@@ -390,8 +679,9 @@ describe("worker app", () => {
     vi.mocked(deps.transcriptionClient.transcribe).mockRejectedValueOnce(
       new Error("provider failed with secret detail"),
     );
+    const app = createApp(deps);
 
-    await request(createApp(deps))
+    await request(app)
       .post("/api/transcribe")
       .set("Authorization", "Bearer valid-token")
       .set("x-request-id", "req-transcribe-failure")
@@ -452,6 +742,12 @@ describe("worker app", () => {
         error_message: "Internal server error.",
       }),
     );
+
+    await request(app)
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id })
+      .expect(200);
   });
 
   it("accepts realistic mobile audio uploads under the Phase 1 limit", async () => {
@@ -529,6 +825,17 @@ describe("worker app", () => {
     expect(deps.summaryClient.summarize).not.toHaveBeenCalled();
   });
 
+  it("authenticates before parsing protected JSON bodies", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/summarize")
+      .set("Content-Type", "application/json")
+      .send("{")
+      .expect(401)
+      .expect(({ body }) => {
+        expect(body.error.code).toBe("AUTH_REQUIRED");
+      });
+  });
+
   it("rejects summary requests without recording ids", async () => {
     await request(createApp(depsFor(activeDoctor)))
       .post("/api/summarize")
@@ -551,7 +858,8 @@ describe("worker app", () => {
       .expect(({ body }) => {
         expect(body).toEqual({
           recording_id: recording.id,
-          summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
+          summary:
+            "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
           status: "summary_ready",
         });
       });
@@ -564,7 +872,8 @@ describe("worker app", () => {
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
+      summary:
+        "Chief Complaint\nFever\n\nTreatment / Prescription\nFluids and paracetamol.",
     });
   });
 
