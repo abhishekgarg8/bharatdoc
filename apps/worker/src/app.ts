@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import cors from "cors";
-import express from "express";
+import express, { type RequestHandler } from "express";
 import multer from "multer";
-import { authenticateRequest } from "./auth.js";
+import {
+  authenticatedContext,
+  createAuthenticationMiddleware,
+} from "./auth.js";
 import {
   createErrorHandler,
   sanitizeErrorForTelemetry,
@@ -16,9 +19,16 @@ import {
   type TranscribeRecordingInput,
 } from "./transcription.js";
 import type { WorkerDependencies } from "./types.js";
+import {
+  createUploadAdmission,
+  holdUploadPermitForHandler,
+  type UploadAdmissionLimits,
+} from "./upload-admission.js";
 
 interface WorkerAppOptions {
   corsOrigins?: string;
+  multipartParser?: RequestHandler;
+  uploadAdmission?: Partial<UploadAdmissionLimits>;
 }
 
 const DEFAULT_CORS_ORIGINS = [
@@ -70,12 +80,22 @@ export function createApp(
   const app = express();
   const allowedOrigins = parseCorsOrigins(options.corsOrigins);
   const logger = deps.logger ?? consoleStructuredLogger;
+  const authenticate = createAuthenticationMiddleware(deps);
+  const uploadAdmission = createUploadAdmission(options.uploadAdmission);
+  const jsonBody = express.json({ limit: "1mb" });
   const audioUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
       fileSize: MAX_TRANSCRIPTION_UPLOAD_BYTES,
+      files: 1,
+      fields: 1,
+      parts: 3,
+      fieldNameSize: 64,
+      fieldSize: 1024,
     },
   });
+  const multipartParser =
+    options.multipartParser ?? audioUpload.single("audio");
 
   app.disable("x-powered-by");
   app.use((req, res, next) => {
@@ -101,8 +121,6 @@ export function createApp(
       },
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
-
   app.get("/health", (_req, res) => {
     res.json({
       ok: true,
@@ -110,37 +128,34 @@ export function createApp(
     });
   });
 
-  app.get("/api/me", async (req, res, next) => {
-    try {
-      const auth = await authenticateRequest(req, deps);
-      res.json({
-        doctor: auth.doctor,
-      });
-    } catch (error) {
-      next(error);
-    }
+  app.get("/api/me", authenticate, (_req, res) => {
+    res.json({ doctor: authenticatedContext(res).doctor });
   });
 
   app.post(
     "/api/transcribe",
-    audioUpload.single("audio"),
+    uploadAdmission.limitIp,
+    authenticate,
+    uploadAdmission.admitAuthenticated,
+    jsonBody,
+    multipartParser,
     async (req, res, next) => {
+      const releaseUploadPermit = holdUploadPermitForHandler(res);
       const requestId = res.locals.requestId as string;
       const startedAt = Date.now();
       const recordingId = recordingIdFromBody(req.body);
 
-      logger.info("transcription.request.received", {
-        request_id: requestId,
-        recording_id: recordingId,
-        method: req.method,
-        path: req.path,
-        content_length: req.header("content-length") ?? null,
-        audio_size_bytes: req.file?.size ?? null,
-        audio_mime_type: req.file?.mimetype ?? null,
-      });
-
       try {
-        const auth = await authenticateRequest(req, deps);
+        logger.info("transcription.request.received", {
+          request_id: requestId,
+          recording_id: recordingId,
+          method: req.method,
+          path: req.path,
+          content_length: req.header("content-length") ?? null,
+          audio_size_bytes: req.file?.size ?? null,
+          audio_mime_type: req.file?.mimetype ?? null,
+        });
+        const auth = authenticatedContext(res);
         logger.info("transcription.request.authenticated", {
           request_id: requestId,
           recording_id: recordingId,
@@ -176,13 +191,15 @@ export function createApp(
           ...sanitizeErrorForTelemetry(error),
         });
         next(error);
+      } finally {
+        releaseUploadPermit();
       }
     },
   );
 
-  app.post("/api/summarize", async (req, res, next) => {
+  app.post("/api/summarize", authenticate, jsonBody, async (req, res, next) => {
     try {
-      const auth = await authenticateRequest(req, deps);
+      const auth = authenticatedContext(res);
       const result = await summarizeRecording(
         auth,
         {
@@ -200,25 +217,30 @@ export function createApp(
     }
   });
 
-  app.post("/api/generate-pdf", async (req, res, next) => {
-    try {
-      const auth = await authenticateRequest(req, deps);
-      const result = await generateRecordingPdf(
-        auth,
-        {
-          recordingId:
-            typeof req.body.recording_id === "string"
-              ? req.body.recording_id
-              : undefined,
-        },
-        deps,
-      );
+  app.post(
+    "/api/generate-pdf",
+    authenticate,
+    jsonBody,
+    async (req, res, next) => {
+      try {
+        const auth = authenticatedContext(res);
+        const result = await generateRecordingPdf(
+          auth,
+          {
+            recordingId:
+              typeof req.body.recording_id === "string"
+                ? req.body.recording_id
+                : undefined,
+          },
+          deps,
+        );
 
-      res.json(result);
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.use(createErrorHandler(logger));
 

@@ -23,12 +23,25 @@ export function toHttpError(error: unknown): HttpError {
     error instanceof Error &&
     error.name === "MulterError" &&
     "code" in error &&
-    error.code === "LIMIT_FILE_SIZE"
+    typeof error.code === "string" &&
+    error.code.startsWith("LIMIT_")
   ) {
     return new HttpError(
       413,
-      "Audio file exceeds the Phase 1 size limit.",
+      "Transcription upload exceeds the worker limits.",
       "AUDIO_TOO_LARGE",
+    );
+  }
+
+  if (
+    error instanceof Error &&
+    "type" in error &&
+    error.type === "entity.too.large"
+  ) {
+    return new HttpError(
+      413,
+      "Request body is too large.",
+      "REQUEST_TOO_LARGE",
     );
   }
 
