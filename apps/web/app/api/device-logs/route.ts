@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       repository
     );
 
-    return Response.json({ logs });
+    return Response.json({ logs }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return errorResponse(error, request);
   }
