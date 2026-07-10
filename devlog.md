@@ -59,3 +59,10 @@ Allowlisted client telemetry and response fields so patient IDs, messages, URLs,
 Added route/service/repository regressions; 345 web tests, lint, typecheck, and production build passed.
 Merged PR #86, waited 3 minutes, then verified production with the supplied active-owner test account.
 Saved sanitized HTTP 202/200/401, no-store, and redaction evidence in testing/issue-57-production-diagnostic-log-auth.
+
+2026-07-10 - Issue #58: Made saved local recordings reopenable by exact stable ID.
+Validated auth-user, doctor, and clinic scope; added safe interrupted/failed retry states and state-specific dashboard actions.
+Persisted reopened metadata, reused server IDs to prevent duplicate transcription records, and enabled offline query-route app-shell recovery.
+Added StrictMode, scope-isolation, retry/idempotency, offline-cache, and full record-to-reopen E2E coverage; 356 web tests passed.
+Merged PR #88, waited 3 minutes, then verified exact reopen, two reloads, persisted edits, and no duplicate production metadata POST.
+Saved screenshot/video evidence in testing/issue-58-production-local-reopen and removed all synthetic server/device data.
