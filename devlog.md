@@ -96,3 +96,11 @@ Covered route, auth, cache, telemetry, search, and detail behavior with 78 focus
 Merged PR #97, waited over 3 minutes, and verified the deployed production flow with the supplied account.
 Production confirmed POST path-only requests, clean links, reload/back restoration, and sanitized telemetry.
 Saved visually reviewed masked screenshots locally in testing/issue-75-phi-safe-navigation; raw PHI was not committed.
+
+2026-07-10 - Issue #77: Added a typed authenticated route shell with one minimal no-store doctor/clinic bootstrap.
+Centralized auth changes, routing, retries, expiry recovery, bounded requests, and a 24-hour exact-scope offline cache.
+Kept patient/record payloads page-specific; 437 web tests, full TypeScript, lint, and the Next/PWA build passed.
+Merged PR #100, caught a doubled bearer header in production, then fixed it test-first in PR #102.
+After the second deploy wait, production returned 200 for both bootstrap and dashboard with one identical bearer value.
+Verified minimal bootstrap/cache fields plus an offline dashboard reload without a server record request or error.
+Saved visually reviewed masked screenshots locally in testing/issue-77-authenticated-app-shell; no PHI was committed.
