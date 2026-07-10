@@ -273,7 +273,10 @@ describe("RecordingDetailPageClient", () => {
     await expect(screen.findByText("Generated transcript from local audio.")).resolves.toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith("https://worker.example.com/api/transcribe", expect.objectContaining({
       method: "POST",
-      headers: { Authorization: "Bearer id-token" },
+      headers: {
+        Authorization: "Bearer id-token",
+        "Idempotency-Key": `${apiRecording.id}:transcription:v1`
+      },
       body: expect.any(FormData)
     }));
     await expect(repository.get("local-recording")).resolves.toMatchObject({
@@ -329,7 +332,8 @@ describe("RecordingDetailPageClient", () => {
       if (url === "https://worker.example.com/api/transcribe") {
         expect(init?.headers).toEqual({
           Authorization: "Bearer id-token",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${apiRecording.id}:transcription:v1`
         });
         expect(init?.body).toBe(
           JSON.stringify({
@@ -395,7 +399,8 @@ describe("RecordingDetailPageClient", () => {
       if (url === "https://worker.example.com/api/transcribe") {
         expect(init?.headers).toEqual({
           Authorization: "Bearer id-token",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${apiRecording.id}:transcription:v1`
         });
         expect(init?.body).toBe(
           JSON.stringify({

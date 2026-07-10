@@ -4,11 +4,16 @@ import {
   sanitizeClinicalSummaryText,
   type Recording
 } from "@bharatdoc/shared";
-import { HttpError } from "./http-errors.js";
+import { HttpError, toHttpError } from "./http-errors.js";
+import {
+  claimProcessingJob, processingIdempotencyKey, reconcileProcessingArtifacts,
+  requireLease, sha256, withProcessingHeartbeat
+} from "./processing.js";
 import type { AuthContext, WorkerDependencies } from "./types.js";
 
 export interface SummaryRequestInput {
   recordingId?: string;
+  idempotencyKey?: string;
 }
 
 export interface SummaryResponse {
@@ -56,31 +61,90 @@ function requireTranscribableRecording(recording: Recording | null): Recording {
 export async function summarizeRecording(
   auth: AuthContext,
   input: SummaryRequestInput,
-  deps: Pick<WorkerDependencies, "recordings" | "summaryClient">
+  deps: Pick<WorkerDependencies, "recordings" | "summaryClient"> &
+    Partial<Pick<WorkerDependencies, "processingJobs" | "pdfStorage" | "logger">>
 ): Promise<SummaryResponse> {
-  requireClinicId(auth.doctor.clinic_id);
+  const clinicId = requireClinicId(auth.doctor.clinic_id);
+  if (deps.processingJobs && deps.pdfStorage) {
+    await reconcileProcessingArtifacts(deps.processingJobs, { pdfStorage: deps.pdfStorage });
+  }
   const recordingId = requireRecordingId(input.recordingId);
-  const recording = requireTranscribableRecording(
+  let recording = requireTranscribableRecording(
     await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
   );
   const prompt = renderSummaryPrompt(auth.doctor.custom_prompt, recording.transcript!);
-  const summary = sanitizeClinicalSummaryText(
-    await deps.summaryClient.summarize({ prompt, recording, doctor: auth.doctor })
-  );
+  const inputHash = sha256(prompt);
+  const idempotencyKey = input.idempotencyKey?.trim() ||
+    processingIdempotencyKey("summary", recording.id, inputHash);
+  const claim = deps.processingJobs
+    ? await claimProcessingJob(deps.processingJobs, {
+        operation: "summary", idempotencyKey, inputHash, recordingId: recording.id,
+        doctorId: auth.doctor.id, clinicId
+      })
+    : null;
 
-  if (!summary) {
-    throw new HttpError(502, "Summary provider returned an empty response.", "SUMMARY_EMPTY");
+  if (claim?.disposition === "completed") {
+    recording = requireTranscribableRecording(
+      await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
+    );
+    if (!recording.summary?.trim()) {
+      throw new HttpError(409, "Completed summary result is unavailable.", "PROCESSING_RESULT_MISSING");
+    }
+    return { recording_id: recording.id, summary: recording.summary, status: "summary_ready" };
   }
 
-  await deps.recordings.markRecordingSummarized({
-    recordingId: recording.id,
-    doctorId: auth.doctor.id,
-    summary
-  });
+  const lease = claim ? requireLease(claim) : null;
+  const providerRequestKey = lease ? `${lease.jobId}:summary` : undefined;
+  try {
+    if (lease && deps.processingJobs) {
+      await deps.processingJobs.markProviderSubmitted({ ...lease, providerRequestKey: providerRequestKey! });
+    }
+    const startedAt = Date.now();
+    const providerWork = () => deps.summaryClient.summarize({
+      prompt, recording, doctor: auth.doctor,
+      ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {})
+    });
+    const summary = sanitizeClinicalSummaryText(
+      lease && deps.processingJobs
+        ? await withProcessingHeartbeat(deps.processingJobs, lease, providerWork)
+        : await providerWork()
+    );
 
-  return {
-    recording_id: recording.id,
-    summary,
-    status: "summary_ready"
-  };
+    if (lease && deps.processingJobs) {
+      await deps.processingJobs.recordProviderCall({
+        ...lease, provider: "openai", latencyMs: Date.now() - startedAt, estimatedCostUsd: 0.0002
+      });
+    }
+
+    if (!summary) {
+      throw new HttpError(502, "Summary provider returned an empty response.", "SUMMARY_EMPTY");
+    }
+
+    const supersededPdf = recording.pdf_storage_path;
+    await deps.recordings.markRecordingSummarized({
+      recordingId: recording.id, doctorId: auth.doctor.id, summary,
+      ...(lease ? {
+        expectedTranscript: recording.transcript!, processingJobId: lease.jobId,
+        processingLeaseToken: lease.leaseToken
+      } : {})
+    });
+    if (supersededPdf && lease && deps.processingJobs) {
+      await deps.processingJobs.supersedeArtifacts({
+        recordingId: recording.id, kind: "pdf", keepStoragePath: ""
+      });
+      if (deps.pdfStorage) {
+        await reconcileProcessingArtifacts(deps.processingJobs, { pdfStorage: deps.pdfStorage });
+      }
+    }
+    return { recording_id: recording.id, summary, status: "summary_ready" };
+  } catch (error) {
+    if (lease && deps.processingJobs) {
+      try {
+        await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
+      } catch {
+        // A lost lease must not mask the operation error.
+      }
+    }
+    throw error;
+  }
 }

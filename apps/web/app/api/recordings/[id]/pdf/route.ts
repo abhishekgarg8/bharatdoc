@@ -17,10 +17,12 @@ export async function POST(request: Request, { params }: RouteContext) {
   try {
     const bearerToken = extractBearerToken(request.headers.get("authorization"));
     await verifyRequestUser(request, createSupabaseAuthVerifier());
+    const idempotencyKey = request.headers.get("idempotency-key");
     const result = await proxyPdfRequest({
       recordingId: params.id,
       bearerToken,
-      workerBaseUrl: getWebEnv().RAILWAY_WORKER_URL
+      workerBaseUrl: getWebEnv().RAILWAY_WORKER_URL,
+      ...(idempotencyKey ? { idempotencyKey } : {})
     });
 
     return Response.json({

@@ -5,7 +5,8 @@ export class AppError extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    public readonly code: string
+    public readonly code: string,
+    public readonly retryAfterSeconds?: number
   ) {
     super(message);
     this.name = "AppError";
@@ -95,6 +96,11 @@ export function errorResponse(error: unknown, request?: Request): Response {
         request_id: requestId
       }
     },
-    { status: appError.status }
+    {
+      status: appError.status,
+      ...(appError.retryAfterSeconds
+        ? { headers: { "retry-after": String(appError.retryAfterSeconds) } }
+        : {})
+    }
   );
 }

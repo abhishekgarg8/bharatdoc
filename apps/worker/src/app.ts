@@ -8,6 +8,7 @@ import {
 } from "./auth.js";
 import {
   createErrorHandler,
+  HttpError,
   sanitizeErrorForTelemetry,
 } from "./http-errors.js";
 import { consoleStructuredLogger } from "./logger.js";
@@ -62,6 +63,15 @@ function requestIdFromHeader(
   return null;
 }
 
+function idempotencyKeyFromHeader(header: string | string[] | undefined): string | undefined {
+  const value = requestIdFromHeader(header);
+  if (!value) return undefined;
+  if (value.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw new HttpError(400, "Idempotency key is invalid.", "IDEMPOTENCY_KEY_INVALID");
+  }
+  return value;
+}
+
 function recordingIdFromBody(body: unknown): string | null {
   if (!body || typeof body !== "object" || !("recording_id" in body)) {
     return null;
@@ -109,7 +119,7 @@ export function createApp(
   });
   app.use(
     cors({
-      allowedHeaders: ["Authorization", "Content-Type"],
+      allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
       methods: ["GET", "POST", "OPTIONS"],
       origin(origin, callback) {
         if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
@@ -173,6 +183,8 @@ export function createApp(
         }
 
         input.requestId = requestId;
+        const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
+        if (idempotencyKey) input.idempotencyKey = idempotencyKey;
         const result = await transcribeRecording(auth, input, deps);
 
         logger.info("transcription.request.succeeded", {
@@ -200,13 +212,12 @@ export function createApp(
   app.post("/api/summarize", authenticate, jsonBody, async (req, res, next) => {
     try {
       const auth = authenticatedContext(res);
+      const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
       const result = await summarizeRecording(
         auth,
         {
-          recordingId:
-            typeof req.body.recording_id === "string"
-              ? req.body.recording_id
-              : undefined,
+          ...(typeof req.body.recording_id === "string" ? { recordingId: req.body.recording_id } : {}),
+          ...(idempotencyKey ? { idempotencyKey } : {})
         },
         deps,
       );
@@ -224,13 +235,12 @@ export function createApp(
     async (req, res, next) => {
       try {
         const auth = authenticatedContext(res);
+        const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
         const result = await generateRecordingPdf(
           auth,
           {
-            recordingId:
-              typeof req.body.recording_id === "string"
-                ? req.body.recording_id
-                : undefined,
+            ...(typeof req.body.recording_id === "string" ? { recordingId: req.body.recording_id } : {}),
+            ...(idempotencyKey ? { idempotencyKey } : {})
           },
           deps,
         );

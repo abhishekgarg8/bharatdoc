@@ -355,7 +355,8 @@ describe("recordings service", () => {
     expect(repository.updateRecordingSummary).toHaveBeenCalledWith({
       recordingId: recording.id,
       doctorId: activeDoctor.id,
-      summary: "Chief Complaint: Fever"
+      summary: "Chief Complaint: Fever",
+      expectedTranscript: recording.transcript!
     });
   });
 

@@ -3,6 +3,7 @@ import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreateRecordingRow, RecordingListItem, RecordingsRepository } from "@/lib/server/recordings";
 import { patientIdSearchPattern } from "@/lib/server/patient-id-search";
+import { AppError } from "@/lib/server/errors";
 
 interface RecordingWithDoctorRow extends Recording {
   doctors:
@@ -178,25 +179,38 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
     },
 
     async updateRecordingSummary(input): Promise<RecordingListItem> {
-      const { data, error } = await supabase
-        .from("recordings")
-        .update({
-          summary: input.summary,
-          status: "summary_ready",
-          pdf_storage_path: null,
-          pdf_generated_at: null,
-          pdf_version: null
-        })
-        .eq("id", input.recordingId)
-        .eq("doctor_id", input.doctorId)
-        .select("*, doctors!inner(name)")
-        .single();
+      const { data, error } = await supabase.rpc("save_recording_summary_with_processing_lock", {
+        p_recording_id: input.recordingId,
+        p_doctor_id: input.doctorId,
+        p_expected_transcript: input.expectedTranscript,
+        p_summary: input.summary
+      });
 
       if (error) {
+        if (error.message?.includes("PROCESSING_RECORDING_BUSY")) {
+          throw new AppError(409, "This recording is already being processed.", "PROCESSING_RECORDING_BUSY");
+        }
+        if (error.message?.includes("PROCESSING_INPUT_CHANGED")) {
+          throw new AppError(409, "Transcript changed while saving the summary.", "PROCESSING_INPUT_CHANGED");
+        }
         throw error;
       }
-
-      return toRecordingListItem(data as RecordingWithDoctorRow);
+      const result = data as { recording: Recording; superseded_pdf_path: string | null };
+      if (result.superseded_pdf_path) {
+        const { data: candidates, error: claimError } = await supabase.rpc("claim_processing_artifact_cleanup", {
+          p_limit: 5, p_kinds: ["pdf"]
+        });
+        for (const candidate of (claimError ? [] : candidates ?? []) as Array<{ storage_path: string; cleanup_token: string }>) {
+          const { error: deleteError } = await supabase.storage.from("pdfs").remove([candidate.storage_path]);
+          const { error: cleanupError } = await supabase.rpc(
+            deleteError ? "release_processing_artifact_cleanup" : "complete_processing_artifact_cleanup", {
+            p_storage_path: candidate.storage_path,
+            p_cleanup_token: candidate.cleanup_token
+          });
+          if (cleanupError) break; // The cleanup lease expires and is safely reclaimed later.
+        }
+      }
+      return { ...result.recording, doctor_name: null };
     },
 
     async deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null> {

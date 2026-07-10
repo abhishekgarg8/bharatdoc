@@ -181,6 +181,10 @@ export function createErrorHandler(
       ...sanitizedError,
     });
 
+    if (httpError.status === 429) {
+      res.setHeader("retry-after", "60");
+    }
+
     res.status(httpError.status).json({
       error: {
         code: httpError.code,

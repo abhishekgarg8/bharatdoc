@@ -35,6 +35,10 @@ export interface RecordingProcessingRepository {
     doctorId: string;
     transcript: string;
     audioStoragePath: string;
+    expectedStatus?: "recorded";
+    processingJobId?: string;
+    processingLeaseToken?: string;
+    processingInputHash?: string;
   }): Promise<Recording>;
   markRecordingAudioUploaded(input: {
     recordingId: string;
@@ -45,6 +49,9 @@ export interface RecordingProcessingRepository {
     recordingId: string;
     doctorId: string;
     summary: string;
+    expectedTranscript?: string;
+    processingJobId?: string;
+    processingLeaseToken?: string;
   }): Promise<Recording>;
   markRecordingPdfSaved(input: {
     recordingId: string;
@@ -52,6 +59,9 @@ export interface RecordingProcessingRepository {
     pdfStoragePath: string;
     pdfGeneratedAt: string;
     pdfVersion: string;
+    expectedSummary?: string;
+    processingJobId?: string;
+    processingLeaseToken?: string;
   }): Promise<Recording>;
 }
 
@@ -81,6 +91,7 @@ export interface SummaryClient {
     prompt: string;
     recording: Recording;
     doctor: Doctor;
+    idempotencyKey?: string;
   }): Promise<string>;
 }
 
@@ -90,6 +101,7 @@ export interface TranscriptionClient {
     mimeType: string;
     filename: string;
     language: Doctor["transcription_lang"];
+    idempotencyKey?: string;
   }): Promise<string>;
 }
 
@@ -108,8 +120,12 @@ export interface PdfStorage {
     clinicId: string;
     doctorId: string;
     recordingId: string;
+    artifactKey?: string;
   }): Promise<string>;
   createSignedUrl(path: string): Promise<string>;
+  deleteRecordingPdf?(path: string): Promise<void>;
+  downloadRecordingPdf?(path: string): Promise<Buffer>;
+  recordingPdfPath?(input: { clinicId: string; doctorId: string; recordingId: string; artifactKey: string }): string;
 }
 
 export interface AudioStorage {
@@ -120,6 +136,7 @@ export interface AudioStorage {
     doctorId: string;
     recordingId: string;
     filename: string;
+    artifactKey?: string;
   }): Promise<string>;
   downloadRecordingAudio(path: string): Promise<{
     audio: Buffer;
@@ -127,6 +144,136 @@ export interface AudioStorage {
     filename: string;
     size: number;
   }>;
+  deleteRecordingAudio?(path: string): Promise<void>;
+  recordingAudioPath?(input: {
+    mimeType: string; clinicId: string; doctorId: string; recordingId: string; artifactKey: string;
+  }): string;
+}
+
+export type ProcessingOperation = "transcription" | "summary" | "pdf";
+export type ProcessingJobState = "running" | "completed" | "failed";
+
+export interface ProcessingJob {
+  id: string;
+  operation: ProcessingOperation;
+  state: ProcessingJobState;
+  leaseToken: string | null;
+  attempt: number;
+  result: Record<string, unknown> | null;
+  inputHash: string;
+  createdAt: string;
+}
+
+export interface ProcessingJobClaim {
+  disposition: "acquired" | "running" | "completed";
+  job: ProcessingJob;
+}
+
+export interface PersistedTranscriptionChunk {
+  index: number;
+  count: number;
+  bytes: number;
+  durationSeconds: number;
+  checksum: string;
+  storagePath: string;
+  state: "pending" | "provider_submitted" | "completed" | "failed";
+  transcript: string | null;
+}
+
+export interface ProcessingJobRepository {
+  begin(input: {
+    operation: ProcessingOperation;
+    idempotencyKey: string;
+    inputHash: string;
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    transcriptionSeconds: number;
+    storageBytes: number;
+  }): Promise<ProcessingJobClaim>;
+  find(jobId: string): Promise<ProcessingJob | null>;
+  findByIdempotencyKey(input: {
+    operation: ProcessingOperation;
+    doctorId: string;
+    idempotencyKey: string;
+  }): Promise<ProcessingJob | null>;
+  findByLogicalInput(input: {
+    operation: ProcessingOperation;
+    recordingId: string;
+    inputHash?: string;
+  }): Promise<ProcessingJob | null>;
+  heartbeat(input: { jobId: string; leaseToken: string }): Promise<void>;
+  saveTranscriptionManifest(input: {
+    jobId: string;
+    leaseToken: string;
+    recordingId: string;
+    chunks: Array<{
+      index: number;
+      count: number;
+      bytes: number;
+      durationSeconds: number;
+      checksum: string;
+      storagePath: string;
+    }>;
+  }): Promise<PersistedTranscriptionChunk[]>;
+  markTranscriptionChunkCompleted(input: {
+    jobId: string;
+    leaseToken: string;
+    index: number;
+    transcript: string;
+  }): Promise<void>;
+  markProviderSubmitted(input: {
+    jobId: string;
+    leaseToken: string;
+    providerRequestKey: string;
+    chunkIndex?: number;
+  }): Promise<void>;
+  recordProviderCall(input: {
+    jobId: string;
+    leaseToken: string;
+    provider: string;
+    latencyMs: number;
+    estimatedCostUsd: number;
+  }): Promise<void>;
+  recordArtifact(input: {
+    jobId: string;
+    leaseToken: string;
+    kind: "audio" | "pdf";
+    storagePath: string;
+    byteSize: number;
+    checksum: string;
+    state?: "pending" | "current";
+  }): Promise<void>;
+  findArtifact(input: {
+    jobId: string;
+    kind: "audio" | "pdf";
+    checksum: string;
+  }): Promise<{ storagePath: string; state: "pending" | "current" | "superseded" | "orphaned" | "deleted" } | null>;
+  markArtifactReady(input: { jobId: string; leaseToken: string; storagePath: string }): Promise<void>;
+  supersedeArtifacts(input: {
+    recordingId: string;
+    kind: "audio" | "pdf";
+    keepStoragePath: string;
+  }): Promise<string[]>;
+  markArtifactOrphaned(storagePath: string): Promise<void>;
+  claimCleanupArtifacts(input: { limit: number; kinds: Array<"audio" | "pdf"> }): Promise<Array<{
+    kind: "audio" | "pdf";
+    storagePath: string;
+    cleanupToken: string;
+  }>>;
+  completeArtifactCleanup(input: { storagePath: string; cleanupToken: string }): Promise<void>;
+  releaseArtifactCleanup(input: { storagePath: string; cleanupToken: string }): Promise<void>;
+  invalidateCompleted(input: { jobId: string; inputHash: string; errorCode: string }): Promise<void>;
+  complete(input: {
+    jobId: string;
+    leaseToken: string;
+    result: Record<string, unknown>;
+  }): Promise<void>;
+  fail(input: {
+    jobId: string;
+    leaseToken: string;
+    errorCode: string;
+  }): Promise<void>;
 }
 
 export interface WorkerDependencies {
@@ -140,6 +287,7 @@ export interface WorkerDependencies {
   audioStorage: AudioStorage;
   pdfRenderer: PdfRenderer;
   pdfStorage: PdfStorage;
+  processingJobs?: ProcessingJobRepository;
   logger?: StructuredLogger;
 }
 
