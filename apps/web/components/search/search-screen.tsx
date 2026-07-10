@@ -12,12 +12,20 @@ import {
   searchPatientRecords,
   type DashboardRecord
 } from "@/lib/client/dashboard-data";
+import {
+  clearSearchNavigationState,
+  saveSearchNavigationState,
+  type SearchNavigationScope,
+  type SearchNavigationState
+} from "@/lib/client/search-navigation-state";
 
 interface SearchScreenProps {
   idToken?: string;
   fetcher?: typeof fetch;
   initialQuery?: string;
   initialRecords?: DashboardRecord[];
+  restoredSearch?: SearchNavigationState | null;
+  navigationScope?: SearchNavigationScope;
 }
 
 function demoSearch(records: DashboardRecord[], query: string): DashboardRecord[] {
@@ -30,9 +38,9 @@ function demoSearch(records: DashboardRecord[], query: string): DashboardRecord[
   return records.filter((record) => normalizePatientId(record.patientId).includes(normalizedQuery));
 }
 
-function SearchResultCard({ record, returnTo }: { record: DashboardRecord; returnTo: string }) {
+function SearchResultCard({ record }: { record: DashboardRecord }) {
   const hasPdf = Boolean(record.hasPdf || record.pdfSignedUrl || record.status === "pdf_saved");
-  const recordingHref = `/recordings/${record.id}?returnTo=${encodeURIComponent(returnTo)}`;
+  const recordingHref = `/recordings/${record.id}`;
 
   return (
     <article className="rounded-[14px] border border-rule bg-paper p-4 shadow-[0_1px_0_#E5DAC5]">
@@ -94,16 +102,18 @@ export function SearchScreen({
   idToken,
   fetcher = fetch,
   initialQuery = "",
-  initialRecords = demoDashboardRecords
+  initialRecords = demoDashboardRecords,
+  restoredSearch,
+  navigationScope
 }: SearchScreenProps) {
-  const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<DashboardRecord[]>(() => demoSearch(initialRecords, initialQuery));
-  const [searchedQuery, setSearchedQuery] = useState(initialQuery);
+  const restoredQuery = restoredSearch?.query ?? initialQuery;
+  const [query, setQuery] = useState(restoredQuery);
+  const [results, setResults] = useState<DashboardRecord[]>(() => restoredSearch?.records ?? demoSearch(initialRecords, initialQuery));
+  const [searchedQuery, setSearchedQuery] = useState(restoredQuery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const normalizedQuery = useMemo(() => normalizePatientId(query), [query]);
   const hasSearched = Boolean(searchedQuery.trim());
-  const returnTo = hasSearched ? `/search?patient_id=${encodeURIComponent(searchedQuery)}` : "/search";
 
   async function submitSearch(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -112,6 +122,7 @@ export function SearchScreen({
     if (!normalizedQuery) {
       setResults(initialRecords);
       setSearchedQuery("");
+      clearSearchNavigationState();
       return;
     }
 
@@ -124,10 +135,12 @@ export function SearchScreen({
 
       setResults(nextResults);
       setSearchedQuery(normalizedQuery);
+      if (navigationScope) saveSearchNavigationState(navigationScope, { query: normalizedQuery, records: nextResults });
     } catch {
       setError("Unable to search patient records.");
       setResults([]);
       setSearchedQuery(normalizedQuery);
+      clearSearchNavigationState();
     } finally {
       setLoading(false);
     }
@@ -138,6 +151,7 @@ export function SearchScreen({
     setSearchedQuery("");
     setResults(initialRecords);
     setError(null);
+    clearSearchNavigationState();
   }
 
   return (
@@ -219,7 +233,7 @@ export function SearchScreen({
             </div>
           ) : null}
           {results.map((record) => (
-            <SearchResultCard key={record.id} record={record} returnTo={returnTo} />
+            <SearchResultCard key={record.id} record={record} />
           ))}
         </div>
 

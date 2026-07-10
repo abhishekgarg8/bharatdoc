@@ -11,13 +11,17 @@ test("dashboard smoke renders Bharat Warmth home screen", async ({ page }) => {
 });
 
 test("hospital search finds records and opens completed consultations", async ({ page }) => {
+  const requestUrls: string[] = [];
+  page.on("request", (request) => requestUrls.push(request.url()));
   await page.goto("/search?demo=1");
 
   await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
   await page.getByLabel("Patient ID").fill("P-10470");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("Results for P-10470")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open recording P-10470" })).toBeVisible();
+  await expect(page).not.toHaveURL(/P-10470/);
+  await expect(page.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute("href", "/recordings/p-10470");
+  expect(requestUrls.every((url) => !url.includes("P-10470"))).toBe(true);
   await page.goto("/recordings/p-10470?demo=1");
   await expect(page).toHaveURL(/\/recordings\/p-10470\?demo=1$/);
   await expect(page.getByLabel("PDF saved")).toBeVisible();

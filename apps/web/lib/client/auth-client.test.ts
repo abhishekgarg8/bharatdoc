@@ -7,6 +7,7 @@ import {
   getAuthRedirectUrl,
   signupErrorMessage
 } from "@/lib/client/auth-client";
+import { readSearchNavigationState, saveSearchNavigationState } from "@/lib/client/search-navigation-state";
 
 const supabaseMocks = vi.hoisted(() => {
   const signUp = vi.fn();
@@ -98,6 +99,19 @@ describe("Supabase auth client", () => {
         }
       }
     });
+  });
+
+  it("clears scoped patient search state when signing out", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://supabase.test");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-key");
+    supabaseMocks.signOut.mockResolvedValue({ error: null });
+    const scope = { authUserId: "auth-a", doctorId: "doctor-a", clinicId: "clinic-a" };
+    saveSearchNavigationState(scope, { query: "P-SECRET", records: [] });
+
+    await createSupabaseAuthClient().signOut();
+
+    expect(readSearchNavigationState(scope)).toBeNull();
+    expect(supabaseMocks.signOut).toHaveBeenCalledTimes(1);
   });
 
   it("does not continue signup when Supabase requires email confirmation", async () => {

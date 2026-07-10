@@ -4,12 +4,14 @@ import { RecordingDetailPageClient } from "@/components/recordings/recording-det
 import type { AuthClient } from "@/lib/client/auth-client";
 import type { Doctor } from "@bharatdoc/shared";
 import { createMemoryLocalRecordingRepository } from "@/lib/client/local-recordings";
+import { clearSearchNavigationState, readSearchNavigationState, saveSearchNavigationState } from "@/lib/client/search-navigation-state";
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   window.history.pushState({}, "", "/");
   Object.defineProperty(document, "referrer", { configurable: true, value: "" });
+  clearSearchNavigationState();
 });
 
 const activeDoctor: Doctor = {
@@ -86,6 +88,10 @@ describe("RecordingDetailPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, recording: apiRecording })) as unknown as typeof fetch;
+    saveSearchNavigationState(
+      { authUserId: activeDoctor.firebase_uid, doctorId: activeDoctor.id, clinicId: activeDoctor.clinic_id },
+      { query: apiRecording.patient_id, records: [{ id: apiRecording.id, patientId: apiRecording.patient_id, time: "Today", duration: "3:00", doctorName: activeDoctor.name, status: "transcribed" }] }
+    );
 
     render(
       <RecordingDetailPageClient
@@ -100,6 +106,41 @@ describe("RecordingDetailPageClient", () => {
     fireEvent.click(screen.getByLabelText("Back to search results"));
 
     expect(historyBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores a safe search return link after detail reload without URL parameters", async () => {
+    window.history.replaceState({}, "", `/recordings/${apiRecording.id}?returnTo=${encodeURIComponent(`/search?patient_id=${apiRecording.patient_id}`)}#legacy`);
+    saveSearchNavigationState(
+      { authUserId: activeDoctor.firebase_uid, doctorId: activeDoctor.id, clinicId: activeDoctor.clinic_id },
+      { query: apiRecording.patient_id, records: [{ id: apiRecording.id, patientId: apiRecording.patient_id, time: "Today", duration: "3:00", doctorName: activeDoctor.name, status: "transcribed" }] }
+    );
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, recording: apiRecording })) as unknown as typeof fetch;
+
+    render(<RecordingDetailPageClient recordingId={apiRecording.id} authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByLabelText("Back to search results")).resolves.toHaveAttribute("href", "/search");
+    expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("");
+  });
+
+  it("keeps dashboard back navigation when stale search state is for another recording", async () => {
+    const scope = { authUserId: activeDoctor.firebase_uid, doctorId: activeDoctor.id, clinicId: activeDoctor.clinic_id };
+    saveSearchNavigationState(scope, {
+      query: "P-OTHER",
+      records: [{ id: "other-recording", patientId: "P-OTHER", time: "Today", duration: "1:00", doctorName: activeDoctor.name, status: "recorded" }]
+    });
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, recording: apiRecording })) as unknown as typeof fetch;
+
+    render(<RecordingDetailPageClient recordingId={apiRecording.id} authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByLabelText("Back to dashboard")).resolves.toHaveAttribute("href", "/dashboard");
+    expect(screen.queryByLabelText("Back to search results")).not.toBeInTheDocument();
   });
 
   it("renders demo recording detail only when explicit demo fallback is enabled", async () => {
@@ -390,6 +431,8 @@ describe("RecordingDetailPageClient", () => {
   });
 
   it("redirects rejected users away from recording details", async () => {
+    const scope = { authUserId: activeDoctor.firebase_uid, doctorId: activeDoctor.id, clinicId: activeDoctor.clinic_id };
+    saveSearchNavigationState(scope, { query: apiRecording.patient_id, records: [] });
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
       signInWithPassword: vi.fn(),
@@ -412,6 +455,7 @@ describe("RecordingDetailPageClient", () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/access-rejected"));
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(readSearchNavigationState(scope)).toBeNull();
   });
 
   it("passes read-only same-clinic recordings through to the detail screen", async () => {

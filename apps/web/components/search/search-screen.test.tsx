@@ -1,7 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchScreen } from "@/components/search/search-screen";
 import type { DashboardRecord } from "@/lib/client/dashboard-data";
+import {
+  clearSearchNavigationState,
+  readSearchNavigationState,
+  saveSearchNavigationState,
+  type SearchNavigationScope
+} from "@/lib/client/search-navigation-state";
+
+const scope: SearchNavigationScope = { authUserId: "auth-a", doctorId: "doctor-a", clinicId: "clinic-a" };
 
 const records: DashboardRecord[] = [
   {
@@ -25,6 +33,7 @@ const records: DashboardRecord[] = [
 ];
 
 describe("SearchScreen", () => {
+  beforeEach(() => clearSearchNavigationState());
   it("renders recent records and search form", () => {
     render(<SearchScreen initialRecords={records} />);
 
@@ -74,7 +83,7 @@ describe("SearchScreen", () => {
     expect(screen.queryByText("P-10481")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute(
       "href",
-      "/recordings/p-10470?returnTo=%2Fsearch%3Fpatient_id%3DP-10470"
+      "/recordings/p-10470"
     );
   });
 
@@ -129,7 +138,7 @@ describe("SearchScreen", () => {
       })
     ) as unknown as typeof fetch;
 
-    render(<SearchScreen idToken="id-token" fetcher={fetcher} initialRecords={[]} />);
+    render(<SearchScreen idToken="id-token" fetcher={fetcher} initialRecords={[]} navigationScope={scope} />);
 
     fireEvent.change(screen.getByLabelText("Patient ID"), {
       target: { value: "P-10470" }
@@ -137,20 +146,31 @@ describe("SearchScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     await waitFor(() => {
-      expect(fetcher).toHaveBeenCalledWith("/api/patients/search?patient_id=P-10470", {
+      expect(fetcher).toHaveBeenCalledWith("/api/patients/search", {
+        method: "POST",
+        cache: "no-store",
         headers: {
-          Authorization: "Bearer id-token"
-        }
+          Authorization: "Bearer id-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ patient_id: "P-10470" })
       });
     });
     expect(screen.getByText("P-10470")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute(
       "href",
-      "/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa?returnTo=%2Fsearch%3Fpatient_id%3DP-10470"
+      "/recordings/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     );
     expect(screen.getByText(/Follow-up/)).toBeInTheDocument();
     expect(screen.getByText("Sunrise Hospital")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open PDF" })).toHaveAttribute("href", "https://signed.example.com/p-10470.pdf");
+  });
+
+  it("restores scoped results without URL parameters", () => {
+    render(<SearchScreen initialRecords={records} restoredSearch={{ query: "P-10470", records: [records[1]!] }} navigationScope={scope} />);
+    expect(screen.getByText("Results for P-10470")).toBeInTheDocument();
+    expect(screen.queryByText("P-10481")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute("href", "/recordings/p-10470");
   });
 
   it("clears search results back to recent records", async () => {
@@ -162,5 +182,12 @@ describe("SearchScreen", () => {
     expect(screen.getByText("Recent hospital records")).toBeInTheDocument();
     expect(screen.getByText("P-10481")).toBeInTheDocument();
     expect(screen.getByText("P-10470")).toBeInTheDocument();
+  });
+
+  it("clears persisted PHI when an empty query is submitted", async () => {
+    saveSearchNavigationState(scope, { query: "P-10470", records: [records[1]!] });
+    render(<SearchScreen initialRecords={records} navigationScope={scope} />);
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(readSearchNavigationState(scope)).toBeNull());
   });
 });

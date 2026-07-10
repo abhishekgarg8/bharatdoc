@@ -29,6 +29,39 @@ interface DeviceLogStore {
 const STORE_KEY = "bharatdoc-device-logs-v1";
 const MAX_LOGS = 250;
 const APP_VERSION = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "local";
+const PATIENT_IDENTIFIER = /\bP(?:ATIENT)?[-_][A-Z0-9][A-Z0-9_-]{1,}\b/gi;
+const LABELED_PATIENT_IDENTIFIER = /\b(patient(?:[_ ]?id)?|mrn|uhid)(\s*[:=]\s*)([A-Z0-9_-]{2,})/gi;
+const TELEMETRY_URL = /https?:\/\/[^\s<>"']+/gi;
+const PATIENT_METADATA_KEY = /^(?:patient_?id|mrn|uhid|query|search(?:_term|_query)?)$/i;
+const URL_METADATA_KEY = /(?:url|uri|href|link)$/i;
+
+function safeTelemetryUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname.replace(PATIENT_IDENTIFIER, "[REDACTED_PATIENT_ID]")}`;
+  } catch {
+    return "[REDACTED_URL]";
+  }
+}
+
+function redactPatientIdentifiers(value: string): string {
+  return value
+    .replace(TELEMETRY_URL, (url) => safeTelemetryUrl(url))
+    .replace(LABELED_PATIENT_IDENTIFIER, (_match, label, separator) => `${label}${separator}[REDACTED_PATIENT_ID]`)
+    .replace(PATIENT_IDENTIFIER, "[REDACTED_PATIENT_ID]");
+}
+
+function safeMetadata(value: unknown, key = ""): unknown {
+  if (PATIENT_METADATA_KEY.test(key)) return "[REDACTED_PATIENT_ID]";
+  if (URL_METADATA_KEY.test(key) && typeof value === "string") return safeTelemetryUrl(value);
+  if (typeof value === "string") return redactPatientIdentifiers(value);
+  if (Array.isArray(value)) return value.map((item) => safeMetadata(item, key));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([childKey, item]) => [
+    PATIENT_METADATA_KEY.test(childKey) || URL_METADATA_KEY.test(childKey) ? childKey : redactPatientIdentifiers(childKey),
+    safeMetadata(item, childKey)
+  ]));
+  return value;
+}
 
 function safeRandomId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -110,7 +143,7 @@ function writeStore(store: DeviceLogStore): void {
 }
 
 function currentUrl(): string {
-  return typeof window === "undefined" ? "" : window.location.href;
+  return typeof window === "undefined" ? "" : `${window.location.origin}${window.location.pathname}`;
 }
 
 function currentUserAgent(): string {
@@ -119,10 +152,12 @@ function currentUserAgent(): string {
 
 export function appendDeviceLog(input: DeviceLogInput): DeviceLogEntry {
   const store = readStore();
+  const { metadata, ...safeInput } = input;
   const entry: DeviceLogEntry = {
-    ...input,
-    event: input.event.slice(0, 120),
-    message: input.message?.slice(0, 500) ?? null,
+    ...safeInput,
+    event: redactPatientIdentifiers(input.event).slice(0, 120),
+    message: input.message ? redactPatientIdentifiers(input.message).slice(0, 500) : null,
+    ...(metadata ? { metadata: safeMetadata(metadata) as Record<string, unknown> } : {}),
     patientId: null,
     id: safeRandomId("log"),
     createdAt: new Date().toISOString(),
