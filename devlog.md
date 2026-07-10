@@ -73,3 +73,10 @@ Preferred native MediaRecorder containers and validated canonical WAV fallback a
 Added first/mid-write, race, lifecycle, recovery, and container regressions; 371 web tests and the production build passed.
 Merged PR #90, waited 3 minutes, then decoded periodic/recovery chunks and the 125.88-second canonical WebM in production Chrome.
 Saved screenshot/video evidence in testing/issue-59-production-audio-checkpoints and removed the synthetic IndexedDB record.
+
+2026-07-10 - Issue #60: Guaranteed microphone cleanup throughout recorder lifecycle and navigation races.
+Added idempotent disposal, exactly-once track release, bounded stop settlement, and serialized failure handling.
+Interlocked active-capture navigation with Stop & Save / Continue while retaining safe refresh protection.
+Added setup/start/pause/resume/chunk/stop/unmount/race regressions; 386 web tests and the production build passed.
+Merged PR #92, waited 3 minutes, then verified production track state changed live to ended without a second prompt.
+Saved screenshot/video evidence in testing/issue-60-production-recorder-cleanup and removed the synthetic IndexedDB record.
