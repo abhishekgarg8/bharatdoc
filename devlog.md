@@ -88,3 +88,11 @@ Covered parser order, 401/403/413/429 contracts, isolation, concurrency, ownersh
 Merged PR #94, waited 3 minutes, then verified the production BharatDoc-to-Railway path with the supplied account.
 Production returned 401 before malformed multipart parsing and 429 plus Retry-After after six admitted user requests.
 Saved sanitized screenshot/video/JSON evidence in testing/issue-61-production-preauth-upload without creating records.
+
+2026-07-10 - Issue #75: Removed patient identifiers from search, detail, back-navigation, and telemetry URLs.
+Replaced query-string search with a bounded POST-only API and private no-store responses.
+Added account/doctor/clinic-scoped, expiring session state so search results restore without URL state.
+Covered route, auth, cache, telemetry, search, and detail behavior with 78 focused tests; focused lint passed.
+Merged PR #97, waited over 3 minutes, and verified the deployed production flow with the supplied account.
+Production confirmed POST path-only requests, clean links, reload/back restoration, and sanitized telemetry.
+Saved visually reviewed masked screenshots locally in testing/issue-75-phi-safe-navigation; raw PHI was not committed.
