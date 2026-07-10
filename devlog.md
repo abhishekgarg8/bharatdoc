@@ -80,3 +80,11 @@ Interlocked active-capture navigation with Stop & Save / Continue while retainin
 Added setup/start/pause/resume/chunk/stop/unmount/race regressions; 386 web tests and the production build passed.
 Merged PR #92, waited 3 minutes, then verified production track state changed live to ended without a second prompt.
 Saved screenshot/video evidence in testing/issue-60-production-recorder-cleanup and removed the synthetic IndexedDB record.
+
+2026-07-10 - Issue #61: Rejected transcription uploads before buffering untrusted request bodies.
+Added reusable header-only auth, per-IP/user rates, declared/multipart bounds, and one process-wide processing permit.
+Kept permits through multipart and stored-audio pipelines with idempotent success/error/abort/close release.
+Covered parser order, 401/403/413/429 contracts, isolation, concurrency, ownership, and cleanup; 71 worker tests passed.
+Merged PR #94, waited 3 minutes, then verified the production BharatDoc-to-Railway path with the supplied account.
+Production returned 401 before malformed multipart parsing and 429 plus Retry-After after six admitted user requests.
+Saved sanitized screenshot/video/JSON evidence in testing/issue-61-production-preauth-upload without creating records.
