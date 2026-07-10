@@ -71,6 +71,20 @@ describe("worker HTTP error handling", () => {
     });
   });
 
+  it("returns a stable retry window for quota responses", () => {
+    const handler = createErrorHandler({ error: vi.fn(), info: vi.fn(), warn: vi.fn() });
+    const response = {
+      locals: {}, setHeader: vi.fn(),
+      status: vi.fn(function status() { return response; }), json: vi.fn()
+    };
+    handler(
+      new HttpError(429, "AI processing quota exceeded.", "QUOTA_DOCTOR_SUMMARY"),
+      { method: "POST", path: "/api/summarize" } as never, response as never, vi.fn()
+    );
+    expect(response.setHeader).toHaveBeenCalledWith("retry-after", "60");
+    expect(response.status).toHaveBeenCalledWith(429);
+  });
+
   it("maps body parser size limits to a stable 413 response", () => {
     expect(
       sanitizeErrorForTelemetry(

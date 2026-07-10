@@ -11,6 +11,7 @@ export interface ProxySummaryRequestInput {
   bearerToken: string;
   workerBaseUrl: string;
   fetcher?: typeof fetch;
+  idempotencyKey?: string;
 }
 
 function requireRecordingId(recordingId: string): string {
@@ -36,13 +37,15 @@ export async function proxySummaryRequest({
   recordingId,
   bearerToken,
   workerBaseUrl,
-  fetcher = fetch
+  fetcher = fetch,
+  idempotencyKey
 }: ProxySummaryRequestInput): Promise<WorkerSummaryResponse> {
   const response = await fetcher(`${workerBaseUrl.replace(/\/$/, "")}/api/summarize`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${bearerToken}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
     },
     body: JSON.stringify({
       recording_id: requireRecordingId(recordingId)
@@ -50,7 +53,11 @@ export async function proxySummaryRequest({
   });
 
   if (!response.ok) {
-    throw new AppError(response.status, "Unable to generate summary.", await workerErrorCode(response));
+    const retryAfter = Number(response.headers.get("retry-after"));
+    throw new AppError(
+      response.status, "Unable to generate summary.", await workerErrorCode(response),
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined
+    );
   }
 
   return (await response.json()) as WorkerSummaryResponse;

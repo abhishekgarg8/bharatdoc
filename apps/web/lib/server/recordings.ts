@@ -91,6 +91,7 @@ export interface RecordingsRepository {
     recordingId: string;
     doctorId: string;
     summary: string;
+    expectedTranscript: string;
   }): Promise<RecordingListItem>;
   deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null>;
   removeRecordingStorageObjects(input: {
@@ -381,7 +382,8 @@ export async function saveRecordingSummaryForDoctor(
   const updated = await repository.updateRecordingSummary({
     recordingId: recording.id,
     doctorId: doctor.id,
-    summary: requireSummary(summary)
+    summary: requireSummary(summary),
+    expectedTranscript: recording.transcript!
   });
 
   return toRecordingDetail(updated, doctor.name, null, doctor.id);

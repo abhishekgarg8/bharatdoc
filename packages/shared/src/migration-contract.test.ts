@@ -67,6 +67,10 @@ const phiRlsPoliciesMigration = readFileSync(
   ),
   "utf8",
 );
+const aiProcessingMigration = readFileSync(
+  resolve(dirname, "../../../supabase/migrations/202607100001_ai_processing_controls.sql"),
+  "utf8",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -272,5 +276,34 @@ describe("initial Supabase migration contract", () => {
       "add column if not exists audio_size_bytes integer",
     );
     expect(diagnosticLoggingMigration).toContain("'download_audio'");
+  });
+
+  it("adds durable AI jobs, immutable chunks, atomic quotas, and PHI-free cost metrics", () => {
+    for (const table of [
+      "recording_processing_jobs", "processing_usage_reservations",
+      "transcription_chunks", "processing_artifacts"
+    ]) expect(aiProcessingMigration).toContain(`public.${table}`);
+    expect(aiProcessingMigration).toContain("processing_job_idempotency_unique");
+    expect(aiProcessingMigration).toContain("processing_job_logical_input_unique");
+    expect(aiProcessingMigration).toContain("transcription_chunk_recording_index_unique");
+    expect(aiProcessingMigration).toContain("pg_advisory_xact_lock(6201");
+    expect(aiProcessingMigration).toContain("pg_advisory_xact_lock(6202");
+    expect(aiProcessingMigration).toContain("QUOTA_DOCTOR_TRANSCRIPTION_MINUTES");
+    expect(aiProcessingMigration).toContain("QUOTA_DOCTOR_TRANSCRIPTION'");
+    expect(aiProcessingMigration).toContain("doctor_daily_operations >= 24");
+    expect(aiProcessingMigration).toContain("QUOTA_CLINIC_STORAGE");
+    expect(aiProcessingMigration).toContain("save_recording_summary_with_processing_lock");
+    expect(aiProcessingMigration).toContain("provider_calls");
+    expect(aiProcessingMigration).toContain("cleanup_claimed_at < now() - interval '5 minutes'");
+    expect(aiProcessingMigration).toContain("for update skip locked");
+    expect(aiProcessingMigration).toContain("processing_job_lease_state_check");
+    expect(aiProcessingMigration).toContain("QUOTA_PROCESSING_RETRIES");
+    expect(aiProcessingMigration).toContain("reserved_job.state = 'running'");
+    expect(aiProcessingMigration).toContain("active_job.state = 'running'");
+    expect(aiProcessingMigration).toContain("PROCESSING_ARTIFACT_CLEANUP_BUSY");
+    expect(aiProcessingMigration).toContain("TRANSCRIPTION_MANIFEST_INCOMPLETE");
+    expect(aiProcessingMigration).toContain("PROCESSING_OUTPUT_REPLACED");
+    expect(aiProcessingMigration).toContain("mark_processing_artifact_ready(uuid,uuid,text)");
+    expect(aiProcessingMigration).not.toContain("patient_id");
   });
 });

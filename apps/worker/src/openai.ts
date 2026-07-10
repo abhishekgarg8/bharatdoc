@@ -8,21 +8,21 @@ export function createOpenAISummaryClient(apiKey: string, model: string): Summar
 
   return {
     async summarize(input): Promise<string> {
-      const result = await openai.chat.completions.create({
-        model,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You generate concise, factual clinical documentation from doctor-patient consultation transcripts."
-          },
-          {
-            role: "user",
-            content: input.prompt
-          }
-        ]
-      });
+      const result = await openai.chat.completions.create(
+        {
+          model,
+          temperature: 0.2,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You generate concise, factual clinical documentation from doctor-patient consultation transcripts."
+            },
+            { role: "user", content: input.prompt }
+          ]
+        },
+        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
+      );
       const summary = result.choices[0]?.message?.content?.trim();
 
       if (!summary) {
@@ -46,7 +46,8 @@ export function createOpenAITranscriptionClient(apiKey: string, model: string): 
         stream: false as const
       };
       const result = await openai.audio.transcriptions.create(
-        input.language === "hi" || input.language === "en" ? { ...params, language: input.language } : params
+        input.language === "hi" || input.language === "en" ? { ...params, language: input.language } : params,
+        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
       );
       const transcript = result.text?.trim();
 

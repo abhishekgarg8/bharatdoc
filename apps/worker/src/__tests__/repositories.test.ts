@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  createProcessingJobRepository,
   createRecordingProcessingRepository,
   createSupabaseAudioStorage,
   createTranscriptionAttemptRepository,
@@ -129,6 +130,36 @@ describe("createRecordingProcessingRepository", () => {
   });
 });
 
+describe("createProcessingJobRepository", () => {
+  it("maps durable claim timestamps and scopes artifact readiness to the live lease", async () => {
+    const rpc = vi.fn(async (name: string) => name === "claim_recording_processing_job"
+      ? {
+          data: [{
+            disposition: "acquired", id: "job-1", operation: "pdf", state: "running",
+            lease_token: "lease-1", attempt: 1, result: null, input_hash: "a".repeat(64),
+            created_at: "2026-07-10T10:00:00.000Z"
+          }],
+          error: null
+        }
+      : { data: null, error: null });
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.begin({
+      operation: "pdf", idempotencyKey: "pdf-key", inputHash: "a".repeat(64),
+      recordingId: "recording", doctorId: "doctor", clinicId: "clinic",
+      transcriptionSeconds: 0, storageBytes: 1024
+    })).resolves.toMatchObject({
+      disposition: "acquired",
+      job: { id: "job-1", createdAt: "2026-07-10T10:00:00.000Z" }
+    });
+    await repository.markArtifactReady({ jobId: "job-1", leaseToken: "lease-1", storagePath: "pdf/path" });
+
+    expect(rpc).toHaveBeenLastCalledWith("mark_processing_artifact_ready", {
+      p_job_id: "job-1", p_lease_token: "lease-1", p_storage_path: "pdf/path"
+    });
+  });
+});
+
 describe("createTranscriptionAttemptRepository", () => {
   it("persists failed transcription attempt metadata without transcript content", async () => {
     const { supabase, query } = supabaseForInsert({ error: null });
@@ -217,7 +248,7 @@ describe("createSupabaseAudioStorage", () => {
       Buffer.from("audio"),
       {
         contentType: "audio/aac",
-        upsert: true,
+        upsert: false,
       },
     );
   });

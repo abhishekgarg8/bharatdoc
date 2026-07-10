@@ -855,7 +855,10 @@ describe("RecordingScreen", () => {
       WORKER_TRANSCRIBE_URL,
       expect.objectContaining({
         method: "POST",
-        headers: { Authorization: "Bearer id-token" },
+        headers: {
+          Authorization: "Bearer id-token",
+          "Idempotency-Key": `${apiRecord.id}:transcription:v1`
+        },
         body: expect.any(FormData)
       })
     ]);

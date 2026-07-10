@@ -32,7 +32,8 @@ describe("transcription api client", () => {
     expect(fetcher).toHaveBeenCalledWith("https://worker.example.com/api/transcribe", {
       method: "POST",
       headers: {
-        Authorization: "Bearer id-token"
+        Authorization: "Bearer id-token",
+        "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:transcription:v1"
       },
       body: expect.any(FormData)
     });
@@ -105,6 +106,7 @@ describe("transcription api client", () => {
       method: "POST",
       headers: {
         Authorization: "Bearer id-token",
+        "Idempotency-Key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:transcription:v1",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({

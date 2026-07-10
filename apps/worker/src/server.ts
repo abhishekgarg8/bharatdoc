@@ -9,6 +9,7 @@ import { createSimplePdfRenderer } from "./pdf-renderer.js";
 import {
   createClinicRepository,
   createDoctorRepository,
+  createProcessingJobRepository,
   createRecordingProcessingRepository,
   createSupabaseAudioStorage,
   createSupabasePdfStorage,
@@ -35,6 +36,7 @@ const app = createApp(
     audioStorage: createSupabaseAudioStorage(supabase),
     pdfRenderer: createSimplePdfRenderer(),
     pdfStorage: createSupabasePdfStorage(supabase),
+    processingJobs: createProcessingJobRepository(supabase),
     logger: consoleStructuredLogger,
   },
   {

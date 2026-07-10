@@ -17,6 +17,10 @@ function workerTranscriptionUrl(): string {
   return `${workerBaseUrl.replace(/\/$/, "")}/api/transcribe`;
 }
 
+export function transcriptionIdempotencyKey(recordingId: string): string {
+  return `${recordingId}:transcription:v1`;
+}
+
 export function audioFilenameExtension(mimeType: string): "m4a" | "ogg" | "wav" | "webm" {
   const normalizedMimeType = mimeType.toLowerCase();
 
@@ -50,7 +54,8 @@ export async function transcribeRecordingAudio(
   const response = await fetcher(workerTranscriptionUrl(), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${idToken}`
+      Authorization: `Bearer ${idToken}`,
+      "Idempotency-Key": transcriptionIdempotencyKey(recordingId)
     },
     body
   });
@@ -67,6 +72,7 @@ export async function transcribeStoredRecordingAudio(
     method: "POST",
     headers: {
       Authorization: `Bearer ${idToken}`,
+      "Idempotency-Key": transcriptionIdempotencyKey(recordingId),
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
