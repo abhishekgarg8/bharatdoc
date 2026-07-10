@@ -52,3 +52,10 @@ Saved sanitized production evidence in testing/issue-42-production-structured-su
 Signup confirmations now redirect to /auth/callback, recover code/hash/token_hash sessions, scrub URL auth material, and route through dashboard/onboarding/approval gates.
 Updated Supabase redirect/template repo config and docs for token_hash confirmation links without open redirects.
 Covered valid, expired, already-used, missing-profile, and template cases with focused tests plus browser evidence in testing/issue-29-auth-callback.
+
+2026-07-10 - Issue #57: Restricted clinic diagnostic logs to authorized active operators.
+Required active accounts for ingestion, active owners for reads, and server-derived clinic scope on every request.
+Allowlisted client telemetry and response fields so patient IDs, messages, URLs, paths, and crafted values cannot leak.
+Added route/service/repository regressions; 345 web tests, lint, typecheck, and production build passed.
+Merged PR #86, waited 3 minutes, then verified production with the supplied active-owner test account.
+Saved sanitized HTTP 202/200/401, no-store, and redaction evidence in testing/issue-57-production-diagnostic-log-auth.
