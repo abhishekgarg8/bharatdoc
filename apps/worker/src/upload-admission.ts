@@ -33,6 +33,21 @@ interface UploadPermit {
   release(): void;
 }
 
+interface QueuedUpload {
+  req: Request;
+  res: Response;
+  next: Parameters<RequestHandler>[2];
+  cancel(): void;
+}
+
+interface UploadGroup {
+  waiters: QueuedUpload[];
+}
+
+const MAX_QUEUED_DUPLICATES = 1;
+const CANONICAL_TRANSCRIPTION_KEY =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):transcription:v1$/;
+
 function positiveInteger(value: number, fallback: number): number {
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
@@ -115,7 +130,78 @@ export function createUploadAdmission(
   };
   const ipBuckets = new Map<string, RateBucket>();
   const userBuckets = new Map<string, RateBucket>();
+  const groups = new Map<string, UploadGroup>();
   let active = 0;
+
+  function duplicateGroupKey(req: Request, res: Response): string | null {
+    const idempotencyKey = req.header("idempotency-key")?.trim();
+    const match = idempotencyKey ? CANONICAL_TRANSCRIPTION_KEY.exec(idempotencyKey) : null;
+    const contentLength = req.header("content-length");
+    if (!match || !contentLength || !/^\d{1,12}$/.test(contentLength)) return null;
+    const normalizedLength = Number(contentLength);
+    if (!Number.isSafeInteger(normalizedLength) || normalizedLength <= 0) return null;
+    res.locals.uploadRecordingId = match[1];
+    const auth = res.locals.auth as AuthContext;
+    return `${auth.doctor.id}:${idempotencyKey}:${normalizedLength}`;
+  }
+
+  function grant(req: Request, res: Response, next: Parameters<RequestHandler>[2], groupKey: string | null): void {
+    let released = false;
+    const permit: UploadPermit = {
+      inHandler: false,
+      release() {
+        if (released) return;
+        released = true;
+        const group = groupKey ? groups.get(groupKey) : undefined;
+        const waiter = group?.waiters.shift();
+        if (waiter) {
+          waiter.cancel();
+          grant(waiter.req, waiter.res, waiter.next, groupKey);
+          return;
+        }
+        if (groupKey) groups.delete(groupKey);
+        active -= 1;
+      },
+    };
+    res.locals.uploadPermit = permit;
+    res.once("finish", permit.release);
+    res.once("close", () => { if (!permit.inHandler) permit.release(); });
+    req.once("aborted", () => { if (!permit.inHandler) permit.release(); });
+    try {
+      next();
+    } catch (error) {
+      permit.release();
+      throw error;
+    }
+  }
+
+  function queueDuplicate(
+    req: Request,
+    res: Response,
+    next: Parameters<RequestHandler>[2],
+    group: UploadGroup,
+  ): boolean {
+    if (group.waiters.length >= MAX_QUEUED_DUPLICATES) return false;
+    let canceled = false;
+    const waiter: QueuedUpload = {
+      req, res, next,
+      cancel() {
+        req.off("aborted", abort);
+        res.off("close", abort);
+      },
+    };
+    const abort = () => {
+      if (canceled) return;
+      canceled = true;
+      const index = group.waiters.indexOf(waiter);
+      if (index >= 0) group.waiters.splice(index, 1);
+      waiter.cancel();
+    };
+    group.waiters.push(waiter);
+    req.once("aborted", abort);
+    res.once("close", abort);
+    return true;
+  }
 
   return {
     limitIp(req, res, next) {
@@ -164,7 +250,11 @@ export function createUploadAdmission(
         return;
       }
 
-      if (active >= limits.maxConcurrent) {
+      const groupKey = duplicateGroupKey(req, res);
+      const group = groupKey ? groups.get(groupKey) : undefined;
+      if (group && queueDuplicate(req, res, next, group)) return;
+
+      if (active >= limits.maxConcurrent || group) {
         res.setHeader("Retry-After", "1");
         next(
           new HttpError(
@@ -177,31 +267,8 @@ export function createUploadAdmission(
       }
 
       active += 1;
-      let released = false;
-      const permit: UploadPermit = {
-        inHandler: false,
-        release() {
-          if (!released) {
-            released = true;
-            active -= 1;
-          }
-        },
-      };
-      res.locals.uploadPermit = permit;
-      res.once("finish", permit.release);
-      res.once("close", () => {
-        if (!permit.inHandler) permit.release();
-      });
-      req.once("aborted", () => {
-        if (!permit.inHandler) permit.release();
-      });
-
-      try {
-        next();
-      } catch (error) {
-        permit.release();
-        throw error;
-      }
+      if (groupKey) groups.set(groupKey, { waiters: [] });
+      grant(req, res, next, groupKey);
     },
   };
 }

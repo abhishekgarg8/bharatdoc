@@ -71,6 +71,10 @@ const aiProcessingMigration = readFileSync(
   resolve(dirname, "../../../supabase/migrations/202607100001_ai_processing_controls.sql"),
   "utf8",
 );
+const manifestHotfixPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607100002_fix_transcription_manifest_ambiguity.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -305,5 +309,16 @@ describe("initial Supabase migration contract", () => {
     expect(aiProcessingMigration).toContain("PROCESSING_OUTPUT_REPLACED");
     expect(aiProcessingMigration).toContain("mark_processing_artifact_ready(uuid,uuid,text)");
     expect(aiProcessingMigration).not.toContain("patient_id");
+  });
+
+  it("replaces the transcription manifest RPC without ambiguous JSON aliases", () => {
+    const hotfix = readFileSync(manifestHotfixPath, "utf8");
+    expect(hotfix).toContain("create or replace function public.save_transcription_chunk_manifest");
+    expect(hotfix).toContain("manifest_element jsonb");
+    expect(hotfix).toContain("as manifest_entries(entry)");
+    expect(hotfix).not.toContain("jsonb_array_elements(p_chunks) item");
+    expect(hotfix).toMatch(
+      /grant execute on function public\.save_transcription_chunk_manifest\(uuid,uuid,uuid,jsonb\)\s+to service_role/,
+    );
   });
 });

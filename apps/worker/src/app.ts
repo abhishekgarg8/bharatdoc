@@ -166,6 +166,10 @@ export function createApp(
           audio_mime_type: req.file?.mimetype ?? null,
         });
         const auth = authenticatedContext(res);
+        const admissionRecordingId = res.locals.uploadRecordingId as string | undefined;
+        if (admissionRecordingId && recordingId && admissionRecordingId !== recordingId) {
+          throw new HttpError(409, "Idempotency key does not match the recording.", "IDEMPOTENCY_KEY_REUSED");
+        }
         logger.info("transcription.request.authenticated", {
           request_id: requestId,
           recording_id: recordingId,

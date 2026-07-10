@@ -10,11 +10,13 @@ const auth = {
   doctor: { id: "doctor-1" },
 };
 
-function requestWith(contentLength?: string) {
+function requestWith(contentLength?: string, idempotencyKey?: string) {
   return Object.assign(new EventEmitter(), {
     header: vi.fn((name: string) =>
       name === "content-length"
         ? contentLength
+        : name === "idempotency-key"
+          ? idempotencyKey
         : name === "content-type"
           ? "multipart/form-data; boundary=test"
           : undefined,
@@ -187,6 +189,48 @@ describe("upload admission", () => {
     );
 
     release();
+    const admitted = vi.fn();
+    admitAuthenticated(requestWith() as never, response() as never, admitted);
+    expect(admitted).toHaveBeenCalledWith();
+  });
+
+  it("queues one canonical duplicate without admitting a distinct upload", () => {
+    const { admitAuthenticated } = createUploadAdmission({ maxConcurrent: 1, maxPerUser: 10 });
+    const key = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:transcription:v1";
+    const firstResponse = response();
+    admitAuthenticated(requestWith("512", key) as never, firstResponse as never, vi.fn());
+
+    const duplicate = vi.fn();
+    admitAuthenticated(requestWith("512", key) as never, response() as never, duplicate);
+    expect(duplicate).not.toHaveBeenCalled();
+
+    const queueOverflow = vi.fn();
+    admitAuthenticated(requestWith("512", key) as never, response() as never, queueOverflow);
+    expect(queueOverflow).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "UPLOAD_CONCURRENCY_LIMITED" }),
+    );
+
+    const distinct = vi.fn();
+    const distinctKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb:transcription:v1";
+    admitAuthenticated(requestWith("512", distinctKey) as never, response() as never, distinct);
+    expect(distinct).toHaveBeenCalledWith(expect.objectContaining({ code: "UPLOAD_CONCURRENCY_LIMITED" }));
+
+    firstResponse.emit("finish");
+    expect(duplicate).toHaveBeenCalledWith();
+  });
+
+  it("removes an aborted duplicate from the bounded queue", () => {
+    const { admitAuthenticated } = createUploadAdmission({ maxConcurrent: 1, maxPerUser: 10 });
+    const key = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:transcription:v1";
+    const firstResponse = response();
+    admitAuthenticated(requestWith("512", key) as never, firstResponse as never, vi.fn());
+    const queuedRequest = requestWith("512", key);
+    const queued = vi.fn();
+    admitAuthenticated(queuedRequest as never, response() as never, queued);
+    queuedRequest.emit("aborted");
+    firstResponse.emit("finish");
+
+    expect(queued).not.toHaveBeenCalled();
     const admitted = vi.fn();
     admitAuthenticated(requestWith() as never, response() as never, admitted);
     expect(admitted).toHaveBeenCalledWith();
