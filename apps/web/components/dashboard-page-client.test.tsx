@@ -1,214 +1,77 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPageClient } from "@/components/dashboard-page-client";
-import type { AuthClient } from "@/lib/client/auth-client";
-import { cacheLocalRecordingContext } from "@/lib/client/local-recording-context";
-import type { Doctor } from "@bharatdoc/shared";
+import type { AuthenticatedAppState } from "@/lib/client/authenticated-app";
 
-const activeDoctor: Doctor = {
-  id: "11111111-1111-4111-8111-111111111111",
-  firebase_uid: "firebase-doctor",
-  clinic_id: "22222222-2222-4222-8222-222222222222",
-  role: "doctor",
-  account_status: "active",
-  name: "Dr. Nisha Shah",
-  specialization: "General Physician",
-  phone: "+919876543210",
-  profile_photo_path: null,
-  custom_prompt: null,
-  transcription_lang: "auto",
-  created_at: "2026-04-23T09:00:00.000Z"
+const request = vi.fn();
+let state: AuthenticatedAppState;
+vi.mock("@/components/session/authenticated-app-shell", () => ({
+  useAuthenticatedApp: () => ({ state, request, refresh: vi.fn(), signOut: vi.fn() })
+}));
+
+const context = {
+  authUserId: "auth-user",
+  doctorId: "11111111-1111-4111-8111-111111111111",
+  clinicId: "22222222-2222-4222-8222-222222222222",
+  clinicName: "Care Hospital",
+  doctorName: "Dr. Nisha Shah",
+  permissions: { canManageClinic: false, canRecord: true }
 };
 
-const apiRecord = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-  patient_id: "P-20001",
-  label: null,
-  duration_seconds: 180,
-  doctor_name: "Dr. Nisha Shah",
-  status: "recorded",
-  recorded_at: "2026-04-23T06:12:00.000Z"
-};
-
-function tokenFor(sub: string): string {
-  return `header.${btoa(JSON.stringify({ sub })).replaceAll("=", "").replaceAll("+", "-").replaceAll("/", "_")}.signature`;
-}
-
-describe("DashboardPageClient", () => {
-  beforeEach(() => window.localStorage.clear());
-
-  it("loads authenticated doctor context and dashboard records", async () => {
-    const idToken = tokenFor(activeDoctor.firebase_uid);
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => idToken)
-    };
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      const url = input.toString();
-
-      if (url === "/api/dashboard") {
-        return Response.json({
-          doctor: activeDoctor,
-          clinic: {
-            id: activeDoctor.clinic_id,
-            name: "Care Hospital",
-            code: "CARE42",
-            address: "Surat"
-          },
-          pending_approvals_count: 0,
-          records: [apiRecord]
-        });
-      }
-
-      return Response.json({ error: { message: "Unexpected request" } }, { status: 500 });
-    }) as unknown as typeof fetch;
-
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
-
-    await expect(screen.findAllByText("Dr. Nisha Shah")).resolves.toHaveLength(2);
-    expect(screen.getByText("Care Hospital")).toBeInTheDocument();
-    expect(screen.getByText("P-20001")).toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
-      headers: { Authorization: `Bearer ${idToken}` }
-    });
-    expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
-    expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
+describe("DashboardPageClient shell integration", () => {
+  beforeEach(() => {
+    request.mockReset();
+    state = { status: "active_online", token: "token", context, source: "network", refreshedAt: 1 };
   });
 
-  it("uses the dashboard API pending approval count for owners", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => tokenFor(activeDoctor.firebase_uid))
-    };
-    const fetcher = vi.fn(async () =>
-      Response.json({
-        doctor: { ...activeDoctor, role: "owner" },
-        clinic: {
-          id: activeDoctor.clinic_id,
-          name: "Care Hospital",
-          code: "CARE42",
-          address: "Surat"
-        },
-        pending_approvals_count: 0,
-        records: []
-      })
-    ) as unknown as typeof fetch;
+  it("consumes shell identity and keeps record loading page-specific", async () => {
+    request.mockResolvedValue(Response.json({
+      doctor: {}, clinic: null, pending_approvals_count: 0,
+      records: [{
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        patient_id: "P-20001",
+        label: null,
+        duration_seconds: 180,
+        doctor_name: "Dr. Nisha Shah",
+        status: "recorded",
+        recorded_at: "2026-04-23T06:12:00.000Z"
+      }]
+    }));
 
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
+    render(<DashboardPageClient />);
+
+    await expect(screen.findByText("P-20001")).resolves.toBeInTheDocument();
+    expect(screen.getAllByText("Dr. Nisha Shah")).toHaveLength(2);
+    expect(screen.getByText("Care Hospital")).toBeInTheDocument();
+    expect(request).toHaveBeenCalledWith("/api/dashboard", { headers: { Authorization: "Bearer token" } });
+    expect(request).not.toHaveBeenCalledWith("/api/me", expect.anything());
+  });
+
+  it("renders stale minimum context without requesting record PHI offline", async () => {
+    state = { status: "active_offline_stale", token: "token", context, source: "cache", cachedAt: 1, expiresAt: 2 };
+
+    render(<DashboardPageClient />);
 
     await expect(screen.findByText("Care Hospital")).resolves.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open settings/i })).toHaveTextContent("");
-  });
-
-  it("uses demo dashboard only when explicit demo fallback is enabled", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => null)
-    };
-
-    render(<DashboardPageClient authClient={authClient} demoOnMissingToken />);
-
-    await expect(screen.findByText("Dr. Aparna Iyer")).resolves.toBeInTheDocument();
-    expect(screen.getByText("P-10482")).toBeInTheDocument();
-  });
-
-  it("shows an error instead of demo records when authenticated loading fails", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
-    };
-    const fetcher = vi.fn(async () => Response.json({ error: { message: "failed" } }, { status: 500 })) as unknown as typeof fetch;
-
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
-
-    await expect(screen.findByText("Unable to load dashboard. Please sign in again.")).resolves.toBeInTheDocument();
-    expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
-  });
-
-  it("uses the UID-matched cached scope to show local recordings when the network is offline", async () => {
-    const idToken = tokenFor(activeDoctor.firebase_uid);
-    cacheLocalRecordingContext(
-      {
-        clinicName: "Cached Hospital",
-        scope: {
-          authUserId: activeDoctor.firebase_uid,
-          doctorId: activeDoctor.id,
-          clinicId: activeDoctor.clinic_id
-        }
-      },
-      idToken
-    );
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => idToken)
-    };
-    const fetcher = vi.fn(async () => {
-      throw new TypeError("Failed to fetch");
-    }) as unknown as typeof fetch;
-
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} />);
-
-    await expect(screen.findByText("Cached Hospital")).resolves.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Consultations" })).toBeInTheDocument();
-    expect(screen.queryByText("Unable to load dashboard. Please sign in again.")).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it("signs out and redirects to onboarding when the dashboard token is expired", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(async () => undefined),
-      getCurrentIdToken: vi.fn(async () => "expired-token")
-    };
-    const navigate = vi.fn();
-    const fetcher = vi.fn(async () =>
-      Response.json({ error: { code: "AUTH_REQUIRED", message: "Supabase token verification failed." } }, { status: 401 })
-    ) as unknown as typeof fetch;
+  it("shows demo records only when the shell explicitly provides demo state", async () => {
+    state = { status: "active_demo", context, source: "demo" };
 
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
+    render(<DashboardPageClient />);
 
-    await waitFor(() => expect(authClient.signOut).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenCalledWith("/signup");
-    expect(screen.queryByText("Unable to load dashboard. Please sign in again.")).not.toBeInTheDocument();
+    await expect(screen.findByText("P-10482")).resolves.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it("redirects pending users away from the dashboard without loading records", async () => {
-    const authClient: AuthClient = {
-      signUpWithPassword: vi.fn(),
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getCurrentIdToken: vi.fn(async () => "id-token")
-    };
-    const navigate = vi.fn();
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input.toString() === "/api/dashboard") {
-        return Response.json({
-          doctor: { ...activeDoctor, account_status: "pending_approval" },
-          clinic: null,
-          pending_approvals_count: 0,
-          records: []
-        });
-      }
+  it("does not substitute demo data when authenticated record loading fails", async () => {
+    request.mockResolvedValue(Response.json({ error: { message: "failed" } }, { status: 500 }));
 
-      return Response.json({ records: [apiRecord] });
-    }) as unknown as typeof fetch;
+    render(<DashboardPageClient />);
 
-    render(<DashboardPageClient authClient={authClient} fetcher={fetcher} onNavigate={navigate} />);
-
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/pending-approval"));
-    expect(fetcher).toHaveBeenCalledWith("/api/dashboard", {
-      headers: { Authorization: "Bearer id-token" }
-    });
-    expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
+    await expect(screen.findByText("Unable to load dashboard. Please try again.")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("P-10482")).not.toBeInTheDocument();
   });
 });

@@ -34,7 +34,7 @@ export function SessionGate({ authClient, onNavigate }: SessionGateProps) {
 
       try {
         const me = await fetchCurrentDoctor(idToken);
-        navigate(destinationForDoctorStatus(me.doctor.account_status));
+        navigate(destinationForDoctorStatus(me.doctor.accountStatus));
       } catch {
         if (isMounted) {
           setMessage("We could not load your profile. Please sign in again.");

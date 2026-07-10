@@ -198,7 +198,7 @@ export function OnboardingScreen({ authClient, onNavigate, demoMode = false, bra
 
       try {
         const me = await fetchCurrentDoctor(token);
-        navigate(destinationForDoctorStatus(me.doctor.account_status));
+        navigate(destinationForDoctorStatus(me.doctor.accountStatus));
       } catch {
         setStep("profile");
       }

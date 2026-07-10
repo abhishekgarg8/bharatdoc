@@ -11,6 +11,7 @@ export interface AuthClient {
   recoverSessionFromUrl?: (callbackUrl: string) => Promise<string>;
   resetPasswordForEmail?: (email: string) => Promise<void>;
   getCurrentIdToken(): Promise<string | null>;
+  subscribeToTokenChanges?: (listener: (token: string | null) => void) => () => void;
   signOut(): Promise<void>;
 }
 
@@ -318,6 +319,17 @@ export function createSupabaseAuthClient(): AuthClient {
       }
 
       return getAccessTokenFromSession(supabase);
+    },
+
+    subscribeToTokenChanges(listener): () => void {
+      let supabase: SupabaseClient;
+      try {
+        supabase = getSupabaseBrowserClient();
+      } catch {
+        return () => undefined;
+      }
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => listener(session?.access_token ?? null));
+      return () => data.subscription.unsubscribe();
     },
 
     async signOut(): Promise<void> {

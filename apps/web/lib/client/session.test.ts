@@ -15,10 +15,11 @@ describe("session client helpers", () => {
   });
 
   it("loads current doctor using bearer token", async () => {
-    const fetcher = vi.fn(async () => Response.json({ doctor: { account_status: "active" } }));
+    const fetcher = vi.fn(async () => Response.json({ doctor: { accountStatus: "active" }, clinic: null }));
 
     await expect(fetchCurrentDoctor("id-token", fetcher as unknown as typeof fetch)).resolves.toEqual({
-      doctor: { account_status: "active" }
+      doctor: { accountStatus: "active" },
+      clinic: null
     });
     expect(fetcher).toHaveBeenCalledWith("/api/me", {
       headers: { Authorization: "Bearer id-token" }

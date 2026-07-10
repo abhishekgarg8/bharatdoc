@@ -4,8 +4,8 @@ import { AuthCallbackPageClient } from "@/components/session/auth-callback-page-
 import { ApiResponseError } from "@/lib/client/api-error";
 import type { MeResponse } from "@/lib/client/session";
 
-function meResponse(status: MeResponse["doctor"]["account_status"]): MeResponse {
-  return { doctor: { account_status: status } } as MeResponse;
+function meResponse(status: MeResponse["doctor"]["accountStatus"]): MeResponse {
+  return { doctor: { accountStatus: status } } as MeResponse;
 }
 
 afterEach(() => {
