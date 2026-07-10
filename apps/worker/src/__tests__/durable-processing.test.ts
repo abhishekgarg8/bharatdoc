@@ -237,6 +237,42 @@ describe("durable AI workflows", () => {
     expect(transcribe).toHaveBeenCalledTimes(3);
   });
 
+  it("recovers a failed manifest RPC from the already-uploaded canonical audio", async () => {
+    const jobs = new MemoryProcessingJobs();
+    const audio = Buffer.from("production retry audio");
+    const recordings = mutableRecordings({
+      ...baseRecording, status: "recorded", transcript: null, duration_seconds: 60
+    }, jobs);
+    vi.spyOn(jobs, "saveTranscriptionManifest").mockRejectedValueOnce(
+      Object.assign(new Error('column reference "item" is ambiguous'), { code: "42702" }),
+    );
+    const storage = {
+      recordingAudioPath: () => "clinic/doctor/recovery.webm",
+      uploadRecordingAudio: vi.fn(async () => "clinic/doctor/recovery.webm"),
+      downloadRecordingAudio: vi.fn(async () => ({
+        audio, mimeType: "audio/webm", filename: "recovery.webm", size: audio.byteLength
+      }))
+    };
+    const transcribe = vi.fn(async () => "Recovered transcript");
+    const deps = {
+      recordings: recordings.repository, audioStorage: storage,
+      transcriptionClient: { transcribe }, processingJobs: jobs
+    };
+    const auth = { doctor, token: { uid: doctor.firebase_uid } };
+    const input = {
+      recordingId: baseRecording.id, idempotencyKey: "recovery-key",
+      audio: { buffer: audio, size: audio.byteLength, mimetype: "audio/webm", originalname: "recovery.webm" }
+    };
+
+    await expect(transcribeRecording(auth, input, deps)).rejects.toMatchObject({ code: "42702" });
+    expect(recordings.get()).toMatchObject({ status: "recorded", audio_storage_path: "clinic/doctor/recovery.webm" });
+    expect(jobs.jobs[0]).toMatchObject({ state: "failed", attempt: 1 });
+    await expect(transcribeRecording(auth, input, deps)).resolves.toMatchObject({ transcript: "Recovered transcript" });
+    expect(jobs.jobs[0]).toMatchObject({ state: "completed", attempt: 2 });
+    expect(storage.uploadRecordingAudio).toHaveBeenCalledOnce();
+    expect(transcribe).toHaveBeenCalledOnce();
+  });
+
   it("replays a PDF with a fresh signed URL but no second render or upload", async () => {
     const jobs = new MemoryProcessingJobs();
     const recordings = mutableRecordings({ ...baseRecording, summary: "Summary", status: "summary_ready" }, jobs);

@@ -3,7 +3,7 @@ import request from "supertest";
 import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import type { RequestHandler } from "express";
 import { createApp } from "../app.js";
-import type { WorkerDependencies } from "../types.js";
+import type { PersistedTranscriptionChunk, ProcessingJob, WorkerDependencies } from "../types.js";
 
 const activeDoctor: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -536,6 +536,104 @@ describe("worker app", () => {
       .set("Authorization", "Bearer valid-token")
       .send({ recording_id: recording.id })
       .expect(200);
+  });
+
+  it("serializes a concurrent canonical duplicate but rejects a distinct upload", async () => {
+    let releaseTranscription!: () => void;
+    let transcriptionStarted!: () => void;
+    const started = new Promise<void>((resolve) => { transcriptionStarted = resolve; });
+    const blocked = new Promise<string>((resolve) => {
+      releaseTranscription = () => resolve("Patient reports fever for two days.");
+    });
+    const deps = depsFor(activeDoctor, { ...recording, status: "recorded", transcript: null, summary: null });
+    let current: Recording = { ...recording, status: "recorded", transcript: null, summary: null };
+    let exists = false;
+    const job: ProcessingJob & { idempotencyKey: string } = {
+      id: "job-duplicate", operation: "transcription", state: "running", leaseToken: "lease-1",
+      attempt: 1, result: null, inputHash: "a".repeat(64), createdAt: "2026-07-10T00:00:00.000Z",
+      idempotencyKey: `${recording.id}:transcription:v1`
+    };
+    let chunks: PersistedTranscriptionChunk[] = [];
+    deps.processingJobs = {
+      async begin(input) {
+        if (exists) return { disposition: job.state === "completed" ? "completed" : "running", job: { ...job } };
+        exists = true;
+        job.inputHash = input.inputHash;
+        return { disposition: "acquired", job: { ...job } };
+      },
+      async find() { return exists ? { ...job } : null; },
+      async findByIdempotencyKey(input) {
+        return exists && input.idempotencyKey === job.idempotencyKey ? { ...job } : null;
+      },
+      async findByLogicalInput() { return exists ? { ...job } : null; },
+      async heartbeat() {},
+      async saveTranscriptionManifest(input) {
+        chunks = input.chunks.map((chunk) => ({ ...chunk, state: "pending", transcript: null }));
+        return chunks;
+      },
+      async markProviderSubmitted(input) {
+        if (input.chunkIndex !== undefined) chunks[input.chunkIndex]!.state = "provider_submitted";
+      },
+      async markTranscriptionChunkCompleted(input) {
+        Object.assign(chunks[input.index]!, { state: "completed", transcript: input.transcript });
+      },
+      async recordProviderCall() {}, async recordArtifact() {}, async findArtifact() { return null; },
+      async markArtifactReady() {}, async supersedeArtifacts() { return []; },
+      async markArtifactOrphaned() {}, async claimCleanupArtifacts() { return []; },
+      async completeArtifactCleanup() {}, async releaseArtifactCleanup() {}, async invalidateCompleted() {},
+      async complete(input) { Object.assign(job, { state: "completed", leaseToken: null, result: input.result }); },
+      async fail() { Object.assign(job, { state: "failed", leaseToken: null }); }
+    };
+    deps.recordings.findRecordingForDoctor = vi.fn(async () => ({ ...current }));
+    deps.recordings.markRecordingAudioUploaded = vi.fn(async (input) => (
+      current = { ...current, audio_storage_path: input.audioStoragePath }
+    ));
+    deps.recordings.markRecordingTranscribed = vi.fn(async (input) => {
+      current = { ...current, audio_storage_path: input.audioStoragePath, transcript: input.transcript, status: "transcribed" };
+      await deps.processingJobs!.complete({
+        jobId: input.processingJobId!, leaseToken: input.processingLeaseToken!,
+        result: { recording_id: current.id, audio_storage_path: input.audioStoragePath, status: "transcribed" }
+      });
+      return current;
+    });
+    vi.mocked(deps.transcriptionClient.transcribe).mockImplementationOnce(async () => {
+      transcriptionStarted();
+      return blocked;
+    });
+    const app = createApp(deps, {
+      uploadAdmission: { maxConcurrent: 1, maxPerIp: 10, maxPerUser: 10, windowMs: 60_000 },
+    });
+    const key = `${recording.id}:transcription:v1`;
+    const upload = () => request(app).post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", key)
+      .field("recording_id", recording.id)
+      .attach("audio", Buffer.from("same audio"), { filename: "same.webm", contentType: "audio/webm" });
+    const first = upload().then((response) => response);
+    await started;
+    const duplicate = upload().then((response) => response);
+    await vi.waitFor(() => expect(deps.tokenVerifier.verifyIdToken).toHaveBeenCalledTimes(2));
+
+    await request(app).post("/api/transcribe").set("Authorization", "Bearer valid-token")
+      .send({ recording_id: recording.id }).expect(429)
+      .expect(({ body }) => expect(body.error.code).toBe("UPLOAD_CONCURRENCY_LIMITED"));
+    releaseTranscription();
+    const firstResponse = await first;
+    expect(firstResponse.status).toBe(200);
+    const duplicateResponse = await duplicate;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicateResponse.body).toEqual(firstResponse.body);
+    expect(deps.transcriptionClient.transcribe).toHaveBeenCalledOnce();
+    expect(deps.audioStorage.uploadRecordingAudio).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a canonical transcription key for another recording after authentication", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcribe")
+      .set("Authorization", "Bearer valid-token")
+      .set("Idempotency-Key", `${recording.id}:transcription:v1`)
+      .send({ recording_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })
+      .expect(409)
+      .expect(({ body }) => expect(body.error.code).toBe("IDEMPOTENCY_KEY_REUSED"));
   });
 
   it("rejects transcription requests without recording ids or audio", async () => {

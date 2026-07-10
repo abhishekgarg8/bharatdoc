@@ -158,6 +158,23 @@ describe("createProcessingJobRepository", () => {
       p_job_id: "job-1", p_lease_token: "lease-1", p_storage_path: "pdf/path"
     });
   });
+
+  it("passes an immutable manifest to the hotfixed RPC and maps its rows", async () => {
+    const rpc = vi.fn(async () => ({ data: [{
+      chunk_index: 0, expected_count: 1, byte_size: 5, duration_seconds: "1.25",
+      checksum: "a".repeat(64), storage_path: "audio/path", state: "pending", transcript: null
+    }], error: null }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+    const chunks = [{ index: 0, count: 1, bytes: 5, durationSeconds: 1.25,
+      checksum: "a".repeat(64), storagePath: "audio/path" }];
+
+    await expect(repository.saveTranscriptionManifest({
+      jobId: "job-1", leaseToken: "lease-1", recordingId: "recording-1", chunks
+    })).resolves.toEqual([{ ...chunks[0], state: "pending", transcript: null }]);
+    expect(rpc).toHaveBeenCalledWith("save_transcription_chunk_manifest", {
+      p_job_id: "job-1", p_lease_token: "lease-1", p_recording_id: "recording-1", p_chunks: chunks
+    });
+  });
 });
 
 describe("createTranscriptionAttemptRepository", () => {
