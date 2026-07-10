@@ -99,6 +99,24 @@ function RequestFailureProbe() {
   );
 }
 
+function AuthorizationProbe() {
+  const app = useAuthenticatedApp();
+  return (
+    <button
+      onClick={() =>
+        void app.request("/protected", {
+          headers: {
+            authorization: "Bearer stale-token",
+            "X-Request-ID": "request-123",
+          },
+        })
+      }
+    >
+      protected request
+    </button>
+  );
+}
+
 describe("AuthenticatedAppShell", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -442,6 +460,35 @@ describe("AuthenticatedAppShell", () => {
 
     await waitFor(() => expect(requestAborted).toBe(true));
     expect(authClient.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a caller Authorization header with exactly one current token", async () => {
+    const token = tokenFor("auth-a");
+    const { authClient } = client(token);
+    const fetcherMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
+      input.toString() === "/api/me"
+        ? Response.json(activeBootstrap)
+        : Response.json({ ok: true }),
+    );
+    const fetcher = fetcherMock as unknown as typeof fetch;
+
+    render(
+      <AuthenticatedAppShell authClient={authClient} fetcher={fetcher}>
+        <AuthorizationProbe />
+      </AuthenticatedAppShell>,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "protected request" }),
+    );
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    const requestInit = fetcherMock.mock.calls[1]?.[1];
+    const headers = new Headers(requestInit?.headers);
+    expect(headers.get("authorization")).toBe(`Bearer ${token}`);
+    expect(headers.get("authorization")).not.toContain(",");
+    expect(headers.get("x-request-id")).toBe("request-123");
+    expect(requestInit?.cache).toBe("no-store");
+    expect(requestInit?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("bounds authenticated page requests even when fetch ignores abort", async () => {
