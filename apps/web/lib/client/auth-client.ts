@@ -3,6 +3,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail, PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
 import { ZodError } from "zod";
+import { clearSearchNavigationState } from "@/lib/client/search-navigation-state";
 
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
@@ -320,6 +321,7 @@ export function createSupabaseAuthClient(): AuthClient {
     },
 
     async signOut(): Promise<void> {
+      clearSearchNavigationState();
       await getSupabaseBrowserClient().auth.signOut();
     }
   };

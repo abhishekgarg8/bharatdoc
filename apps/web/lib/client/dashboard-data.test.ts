@@ -191,10 +191,14 @@ describe("dashboard data helpers", () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ records: [apiRecord] }), { status: 200 })) as unknown as typeof fetch;
 
     await expect(searchPatientRecords("id-token", "P-10482", fetcher)).resolves.toHaveLength(1);
-    expect(fetcher).toHaveBeenCalledWith("/api/patients/search?patient_id=P-10482", {
+    expect(fetcher).toHaveBeenCalledWith("/api/patients/search", {
+      method: "POST",
+      cache: "no-store",
       headers: {
-        Authorization: "Bearer id-token"
-      }
+        Authorization: "Bearer id-token",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ patient_id: "P-10482" })
     });
   });
 });

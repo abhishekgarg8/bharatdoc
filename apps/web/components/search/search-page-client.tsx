@@ -12,6 +12,13 @@ import {
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
+import {
+  clearSearchNavigationState,
+  readSearchNavigationState,
+  scrubCurrentNavigationUrl,
+  type SearchNavigationScope,
+  type SearchNavigationState
+} from "@/lib/client/search-navigation-state";
 
 interface SearchPageClientProps {
   authClient?: AuthClient;
@@ -33,7 +40,11 @@ export function SearchPageClient({
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | undefined>(undefined);
   const [records, setRecords] = useState<DashboardRecord[]>(allowDemoFallback ? demoDashboardRecords : []);
+  const [navigationScope, setNavigationScope] = useState<SearchNavigationScope | undefined>();
+  const [restoredSearch, setRestoredSearch] = useState<SearchNavigationState | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => scrubCurrentNavigationUrl(), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -46,6 +57,7 @@ export function SearchPageClient({
       }
 
       if (!token) {
+        clearSearchNavigationState();
         if (allowDemoFallback) {
           setLoading(false);
         } else {
@@ -68,6 +80,7 @@ export function SearchPageClient({
         const inactiveDestination = destinationForInactiveDoctor(snapshot.doctor);
 
         if (inactiveDestination) {
+          clearSearchNavigationState();
           didRedirect = true;
           navigate(inactiveDestination);
           return;
@@ -75,9 +88,17 @@ export function SearchPageClient({
 
         if (isMounted) {
           setRecords(snapshot.records);
+          const scope = {
+            authUserId: snapshot.doctor.firebase_uid,
+            doctorId: snapshot.doctor.id,
+            clinicId: snapshot.doctor.clinic_id
+          };
+          setNavigationScope(scope);
+          setRestoredSearch(readSearchNavigationState(scope));
         }
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          clearSearchNavigationState();
           didRedirect = true;
           return;
         }
@@ -114,6 +135,8 @@ export function SearchPageClient({
   const searchProps = {
     fetcher,
     initialRecords: records,
+    restoredSearch,
+    ...(navigationScope ? { navigationScope } : {}),
     ...(idToken ? { idToken } : {})
   };
 

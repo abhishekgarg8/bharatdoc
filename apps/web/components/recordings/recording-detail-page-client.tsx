@@ -11,6 +11,7 @@ import {
 import { createSupabaseAuthClient, type AuthClient } from "@/lib/client/auth-client";
 import { useExplicitDemoMode } from "@/lib/client/demo-mode";
 import { destinationForInactiveDoctor } from "@/lib/client/session";
+import { clearSearchNavigationState, readSearchNavigationState, scrubCurrentNavigationUrl } from "@/lib/client/search-navigation-state";
 import { deleteRecording, fetchRecordingDetailBootstrap } from "@/lib/client/summary-api";
 import {
   transcribeRecordingAudio,
@@ -40,55 +41,14 @@ interface RecordingBackNavigation {
   useHistoryBack: boolean;
 }
 
-function safeSameOriginPath(value: string | null): string | null {
-  if (!value || typeof window === "undefined") {
-    return null;
-  }
-
+function cameFromSearch(): boolean {
+  if (typeof window === "undefined" || !document.referrer) return false;
   try {
-    const url = new URL(value, window.location.origin);
-
-    if (url.origin !== window.location.origin) {
-      return null;
-    }
-
-    return `${url.pathname}${url.search}${url.hash}`;
+    const referrer = new URL(document.referrer);
+    return referrer.origin === window.location.origin && referrer.pathname === "/search";
   } catch {
-    return null;
+    return false;
   }
-}
-
-function currentRecordingBackNavigation(): RecordingBackNavigation {
-  if (typeof window === "undefined") {
-    return { href: "/dashboard", label: "Back to dashboard", useHistoryBack: false };
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const explicitReturnTo = safeSameOriginPath(params.get("returnTo") ?? params.get("backHref"));
-
-  if (explicitReturnTo) {
-    return {
-      href: explicitReturnTo,
-      label: explicitReturnTo.startsWith("/search") ? "Back to search results" : "Go back",
-      useHistoryBack: false
-    };
-  }
-
-  const referrerPath = safeSameOriginPath(document.referrer);
-  const cameFromSearch = referrerPath?.startsWith("/search") || params.get("from") === "search";
-
-  if (cameFromSearch) {
-    const patientQuery = params.get("patient_id") ?? params.get("patientId") ?? params.get("q");
-    const href = patientQuery ? `/search?patient_id=${encodeURIComponent(patientQuery)}` : "/search";
-
-    return {
-      href,
-      label: "Back to search results",
-      useHistoryBack: Boolean(referrerPath?.startsWith("/search") && window.history.length > 1)
-    };
-  }
-
-  return { href: "/dashboard", label: "Back to dashboard", useHistoryBack: false };
 }
 
 export function RecordingDetailPageClient({
@@ -105,7 +65,11 @@ export function RecordingDetailPageClient({
     [localRepository]
   );
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
-  const backNavigation = useMemo(() => currentRecordingBackNavigation(), []);
+  const [backNavigation, setBackNavigation] = useState<RecordingBackNavigation>({
+    href: "/dashboard",
+    label: "Back to dashboard",
+    useHistoryBack: false
+  });
   const queryDemoMode = useExplicitDemoMode();
   const allowDemoFallback = demoOnMissingToken ?? queryDemoMode;
   const [loading, setLoading] = useState(true);
@@ -113,6 +77,8 @@ export function RecordingDetailPageClient({
   const [localRecordingScope, setLocalRecordingScope] = useState<LocalRecordingScope | null>(null);
   const [recording, setRecording] = useState<RecordingDetailRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => scrubCurrentNavigationUrl(), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -125,6 +91,7 @@ export function RecordingDetailPageClient({
       }
 
       if (!token) {
+        clearSearchNavigationState();
         if (allowDemoFallback) {
           setRecording(findDemoRecordingDetail(recordingId));
           setLoading(false);
@@ -148,21 +115,31 @@ export function RecordingDetailPageClient({
         const inactiveDestination = destinationForInactiveDoctor(bootstrap.doctor);
 
         if (inactiveDestination) {
+          clearSearchNavigationState();
           didRedirect = true;
           navigate(inactiveDestination);
           return;
         }
 
         if (isMounted) {
-          setLocalRecordingScope({
+          const scope = {
             authUserId: bootstrap.doctor.firebase_uid,
             doctorId: bootstrap.doctor.id,
             clinicId: bootstrap.doctor.clinic_id
-          });
+          };
+          setLocalRecordingScope(scope);
+          if (readSearchNavigationState(scope)?.records.some(({ id }) => id === recordingId)) {
+            setBackNavigation({
+              href: "/search",
+              label: "Back to search results",
+              useHistoryBack: cameFromSearch() && window.history.length > 1
+            });
+          }
           setRecording(bootstrap.recording);
         }
       } catch (loadError) {
         if (await recoverExpiredSession(loadError, () => client.signOut(), navigate)) {
+          clearSearchNavigationState();
           didRedirect = true;
           return;
         }
@@ -237,6 +214,7 @@ export function RecordingDetailPageClient({
     }
 
     await removeMatchingLocalRecording(recordingIdToDelete);
+    clearSearchNavigationState();
     navigate(backNavigation.href);
   }
 

@@ -269,11 +269,14 @@ export async function searchPatientRecords(
   patientId: string,
   fetcher: typeof fetch = fetch
 ): Promise<DashboardRecord[]> {
-  const params = new URLSearchParams({ patient_id: patientId });
-  const response = await fetcher(`/api/patients/search?${params.toString()}`, {
+  const response = await fetcher("/api/patients/search", {
+    method: "POST",
+    cache: "no-store",
     headers: {
-      Authorization: `Bearer ${idToken}`
-    }
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ patient_id: patientId })
   });
   const payload = await parseJsonOrThrow<DashboardRecordListResponse>(response, "Unable to search patient records.");
 

@@ -27,10 +27,18 @@ describe("device logs", () => {
   });
 
   it("stores device logs locally with stable device and session ids", () => {
+    window.history.replaceState({}, "", "/search?patient_id=P-SECRET");
     const first = appendDeviceLog({
       level: "info",
       event: "recording.capture_started",
-      patientId: " P-123 "
+      patientId: " P-123 ",
+      message: "Patient ID: 301748995 at https://example.test/search?patient_id=P-SECRET#result",
+      metadata: {
+        query: 301748995,
+        source_url: "https://example.test/search?patient_id=P-SECRET#result",
+        nested: { patient_id: 301748995, patientId: "RAW-2", mrn: 9911, uhid: "UH-7", "P-SECRET": true },
+        duration_seconds: 42
+      }
     });
     const second = appendDeviceLog({
       level: "error",
@@ -42,6 +50,21 @@ describe("device logs", () => {
     expect(first.patientId).toBeNull();
     expect(second.deviceId).toBe(first.deviceId);
     expect(second.sessionId).toBe(first.sessionId);
+    expect(first.url).toBe(`${window.location.origin}/search`);
+    expect(JSON.stringify(first)).not.toContain("P-SECRET");
+    expect(first.message).toBe("Patient ID: [REDACTED_PATIENT_ID] at https://example.test/search");
+    expect(first.metadata).toMatchObject({
+      query: "[REDACTED_PATIENT_ID]",
+      source_url: "https://example.test/search",
+      nested: {
+        patient_id: "[REDACTED_PATIENT_ID]",
+        patientId: "[REDACTED_PATIENT_ID]",
+        mrn: "[REDACTED_PATIENT_ID]",
+        uhid: "[REDACTED_PATIENT_ID]",
+        "[REDACTED_PATIENT_ID]": true
+      },
+      duration_seconds: 42
+    });
   });
 
   it("flushes local logs to the authenticated server endpoint", async () => {

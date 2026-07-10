@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchPageClient } from "@/components/search/search-page-client";
 import type { AuthClient } from "@/lib/client/auth-client";
 import type { Doctor } from "@bharatdoc/shared";
+import { clearSearchNavigationState, readSearchNavigationState, saveSearchNavigationState } from "@/lib/client/search-navigation-state";
 
 const activeDoctor: Doctor = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -30,6 +31,10 @@ const apiRecord = {
 };
 
 describe("SearchPageClient", () => {
+  beforeEach(() => {
+    clearSearchNavigationState();
+    window.history.replaceState({}, "", "/search");
+  });
   it("loads authenticated recent records and searches with the same token", async () => {
     const authClient: AuthClient = {
       signUpWithPassword: vi.fn(),
@@ -44,7 +49,7 @@ describe("SearchPageClient", () => {
         return Response.json({ doctor: activeDoctor, records: [apiRecord] });
       }
 
-      if (url === "/api/patients/search?patient_id=P-20001") {
+      if (url === "/api/patients/search") {
         return Response.json({ records: [apiRecord] });
       }
 
@@ -63,9 +68,23 @@ describe("SearchPageClient", () => {
     });
     expect(fetcher).not.toHaveBeenCalledWith("/api/me", expect.anything());
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
-    expect(fetcher).toHaveBeenCalledWith("/api/patients/search?patient_id=P-20001", {
-      headers: { Authorization: "Bearer id-token" }
+    expect(fetcher).toHaveBeenCalledWith("/api/patients/search", {
+      method: "POST",
+      cache: "no-store",
+      headers: { Authorization: "Bearer id-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: "P-20001" })
     });
+  });
+
+  it("scrubs legacy patient query and fragment values during bootstrap", async () => {
+    window.history.replaceState({}, "", "/search?patient_id=P-SECRET#result");
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, records: [apiRecord] })) as unknown as typeof fetch;
+    render(<SearchPageClient authClient={authClient} fetcher={fetcher} />);
+    await screen.findByText("P-20001");
+    expect(window.location.href).toBe(`${window.location.origin}/search`);
   });
 
   it("uses demo search only when explicit demo fallback is enabled", async () => {
@@ -76,9 +95,27 @@ describe("SearchPageClient", () => {
       getCurrentIdToken: vi.fn(async () => null)
     };
 
+    const oldScope = { authUserId: "old-auth", doctorId: "old-doctor", clinicId: "old-clinic" };
+    saveSearchNavigationState(oldScope, { query: "P-OLD", records: [] });
     render(<SearchPageClient authClient={authClient} demoOnMissingToken />);
 
     await expect(screen.findByText("P-10482")).resolves.toBeInTheDocument();
+    expect(readSearchNavigationState(oldScope)).toBeNull();
+  });
+
+  it("drops another account's restored search during authenticated bootstrap", async () => {
+    const oldScope = { authUserId: "old-auth", doctorId: "old-doctor", clinicId: "old-clinic" };
+    saveSearchNavigationState(oldScope, { query: "P-OLD", records: [] });
+    const authClient: AuthClient = {
+      signUpWithPassword: vi.fn(), signInWithPassword: vi.fn(), signOut: vi.fn(), getCurrentIdToken: vi.fn(async () => "id-token")
+    };
+    const fetcher = vi.fn(async () => Response.json({ doctor: activeDoctor, records: [apiRecord] })) as unknown as typeof fetch;
+
+    render(<SearchPageClient authClient={authClient} fetcher={fetcher} />);
+
+    await expect(screen.findByText("P-20001")).resolves.toBeInTheDocument();
+    expect(screen.getByText("Recent hospital records")).toBeInTheDocument();
+    expect(readSearchNavigationState(oldScope)).toBeNull();
   });
 
   it("shows an error instead of demo records when authenticated loading fails", async () => {
@@ -123,6 +160,8 @@ describe("SearchPageClient", () => {
       getCurrentIdToken: vi.fn(async () => "id-token")
     };
     const navigate = vi.fn();
+    const oldScope = { authUserId: "old-auth", doctorId: "old-doctor", clinicId: "old-clinic" };
+    saveSearchNavigationState(oldScope, { query: "P-OLD", records: [] });
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       if (input.toString() === "/api/dashboard") {
         return Response.json({ doctor: { ...activeDoctor, account_status: "pending_approval" }, records: [] });
@@ -138,5 +177,6 @@ describe("SearchPageClient", () => {
       headers: { Authorization: "Bearer id-token" }
     });
     expect(fetcher).not.toHaveBeenCalledWith("/api/recordings", expect.anything());
+    expect(readSearchNavigationState(oldScope)).toBeNull();
   });
 });
