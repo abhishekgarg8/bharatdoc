@@ -16,6 +16,7 @@ export interface AudioRecorder {
   resume(): Promise<void>;
   checkpoint(): boolean;
   stop(): Promise<RecordedAudio>;
+  dispose(): Promise<void>;
   onChunk(listener: (chunk: RecordedAudioChunk) => void | Promise<void>): () => void;
 }
 
@@ -45,6 +46,7 @@ interface RecordRtcConstructor {
 export const AUDIO_CHECKPOINT_INTERVAL_MS = 20_000;
 const DEMO_AUDIO_DURATION_SECONDS = 12;
 const DEMO_AUDIO_SAMPLE_RATE = 16_000;
+const RECORDING_STOP_TIMEOUT_MS = 15_000;
 const RECORDING_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -135,46 +137,109 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const module = await import("recordrtc");
-  const RecordRTC = module.default as RecordRtcConstructor;
-  const mimeType = selectSupportedAudioMimeType();
+  let tracksStopped = false;
+  const stopTracks = () => {
+    if (tracksStopped) return;
+    tracksStopped = true;
+    let tracks: MediaStreamTrack[] = [];
+    try { tracks = stream.getTracks(); } catch { return; }
+    for (const track of tracks) {
+      try { track.stop(); } catch { /* Continue releasing remaining tracks. */ }
+    }
+  };
+  let recorder: RecordRtcInstance;
   const listeners = new Set<(chunk: RecordedAudioChunk) => void | Promise<void>>();
   const clock = createElapsedClock();
-  const recorder = new RecordRTC(stream, {
-    type: "audio",
-    mimeType,
-    timeSlice: AUDIO_CHECKPOINT_INTERVAL_MS,
-    ondataavailable(blob: Blob) {
-      if (!blob || blob.size === 0) {
-        return;
-      }
+  let pendingChunks: Promise<void> = Promise.resolve();
+  let chunkError: unknown;
+  const mimeType = selectSupportedAudioMimeType();
 
-      const chunk: RecordedAudioChunk = {
-        blob,
-        mimeType: blob.type || mimeType,
-        durationSeconds: clock.elapsedSeconds()
-      };
-
-      for (const listener of listeners) {
-        void listener(chunk);
+  try {
+    const module = await import("recordrtc");
+    const RecordRTC = module.default as RecordRtcConstructor;
+    recorder = new RecordRTC(stream, {
+      type: "audio",
+      mimeType,
+      timeSlice: AUDIO_CHECKPOINT_INTERVAL_MS,
+      ondataavailable(blob: Blob) {
+        if (!blob?.size || chunkError) return;
+        const chunk: RecordedAudioChunk = {
+          blob,
+          mimeType: blob.type || mimeType,
+          durationSeconds: clock.elapsedSeconds()
+        };
+        pendingChunks = pendingChunks
+          .then(async () => { await Promise.all([...listeners].map((listener) => listener(chunk))); })
+          .catch((caught) => { chunkError ??= caught; });
       }
+    });
+  } catch (caught) {
+    stopTracks();
+    throw caught;
+  }
+
+  let started = false;
+  let disposed = false;
+  let stopRequested = false;
+  let rejectPendingStop: ((reason: Error) => void) | null = null;
+  let stopPromise: Promise<RecordedAudio> | null = null;
+
+  function detachListeners() {
+    listeners.clear();
+    try {
+      const wrapper = recorder.getInternalRecorder?.() as { getInternalRecorder?(): unknown } | undefined;
+      const nativeRecorder = wrapper?.getInternalRecorder?.() as {
+        ondataavailable?: ((event: BlobEvent) => void) | null;
+        onerror?: ((event: Event) => void) | null;
+        onstop?: ((event: Event) => void) | null;
+      } | undefined;
+      if (nativeRecorder) {
+        nativeRecorder.ondataavailable = null;
+        nativeRecorder.onerror = null;
+        nativeRecorder.onstop = null;
+      }
+    } catch { /* Cleanup must never block track release. */ }
+  }
+
+  async function dispose() {
+    if (disposed) return;
+    disposed = true;
+    try {
+      detachListeners();
+      rejectPendingStop?.(new Error("Recorder was disposed before stop completed."));
+      if (started && !stopRequested) {
+        stopRequested = true;
+        try { recorder.stopRecording(() => undefined); } catch { /* Track shutdown is authoritative. */ }
+      }
+    } finally {
+      stopTracks();
     }
-  });
+  }
 
   return {
     async start() {
-      clock.start();
-      recorder.startRecording();
+      if (disposed) throw new Error("Recorder has been disposed.");
+      try {
+        clock.start();
+        recorder.startRecording();
+        started = true;
+      } catch (caught) {
+        await dispose();
+        throw caught;
+      }
     },
     async pause() {
+      if (disposed) throw new Error("Recorder has been disposed.");
       clock.pause();
       recorder.pauseRecording();
     },
     async resume() {
+      if (disposed) throw new Error("Recorder has been disposed.");
       clock.resume();
       recorder.resumeRecording();
     },
     checkpoint() {
+      if (disposed) return false;
       try {
         // RecordRTC's WAV fallback has no requestData; its 20-second timeSlice is the durability bound.
         const wrapper = recorder.getInternalRecorder?.() as { getInternalRecorder?(): unknown } | undefined;
@@ -187,24 +252,54 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
       }
     },
     async stop() {
+      if (stopPromise) return stopPromise;
+      if (disposed) throw new Error("Recorder has been disposed.");
       clock.resume();
-
-      return new Promise<RecordedAudio>((resolve) => {
-        recorder.stopRecording(() => {
-          for (const track of stream.getTracks()) {
-            track.stop();
+      stopRequested = true;
+      stopPromise = new Promise<RecordedAudio>((resolve, reject) => {
+        let settled = false;
+        let stopCallbackReceived = false;
+        const settle = (callback: () => void) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          callback();
+        };
+        const fail = (reason: unknown) => settle(() => reject(reason));
+        rejectPendingStop = fail;
+        const complete = async () => {
+          if (stopCallbackReceived || settled) return;
+          stopCallbackReceived = true;
+          try {
+            await pendingChunks;
+            if (settled) return;
+            if (chunkError) throw chunkError;
+            const blob = recorder.getBlob();
+            settle(() => resolve({
+              blob,
+              mimeType: blob.type || "audio/wav",
+              durationSeconds: clock.elapsedSeconds()
+            }));
+          } catch (caught) {
+            fail(caught);
           }
-          const blob = recorder.getBlob();
-
-          resolve({
-            blob,
-            mimeType: blob.type || "audio/wav",
-            durationSeconds: clock.elapsedSeconds()
-          });
-        });
+        };
+        const timeout = setTimeout(
+          () => fail(new Error("Recorder stop timed out.")),
+          RECORDING_STOP_TIMEOUT_MS
+        );
+        try { recorder.stopRecording(() => { void complete(); }); } catch (caught) { fail(caught); }
+        finally { stopTracks(); }
+      }).finally(() => {
+          rejectPendingStop = null;
+          disposed = true;
+          try { detachListeners(); } finally { stopTracks(); }
       });
+      return stopPromise;
     },
+    dispose,
     onChunk(listener) {
+      if (disposed) return () => undefined;
       listeners.add(listener);
 
       return () => {
@@ -236,6 +331,9 @@ export async function createDemoAudioRecorder(): Promise<AudioRecorder> {
         mimeType: blob.type,
         durationSeconds: DEMO_AUDIO_DURATION_SECONDS
       };
+    },
+    async dispose() {
+      return undefined;
     },
     onChunk() {
       return () => undefined;

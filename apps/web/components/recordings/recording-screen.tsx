@@ -56,6 +56,10 @@ function objectUrlFor(blob: Blob): string | null {
   return URL.createObjectURL(blob);
 }
 
+async function safelyDisposeRecorder(recorder: AudioRecorder | null): Promise<void> {
+  try { await recorder?.dispose(); } catch { /* Track cleanup must not block UI recovery. */ }
+}
+
 export function RecordingScreen({
   idToken,
   clinicName = "Hospital",
@@ -75,6 +79,8 @@ export function RecordingScreen({
   const selectedRecorderFactory =
     recorderFactory ?? (useDemoRecorder ? createDemoAudioRecorder : createRecordRtcAudioRecorder);
   const recorderRef = useRef<AudioRecorder | null>(null);
+  const recorderBusyRef = useRef(false);
+  const mountedRef = useRef(true);
   const chunkUnsubscribeRef = useRef<(() => void) | null>(null);
   const checkpointWritesRef = useRef<Promise<unknown>>(Promise.resolve());
   const checkpointErrorRef = useRef<Error | null>(null);
@@ -99,6 +105,8 @@ export function RecordingScreen({
   const [exactLoadFailed, setExactLoadFailed] = useState(false);
   const [completedExactLoadId, setCompletedExactLoadId] = useState<string | null>(null);
   const [isLoadingLocalRecording, setIsLoadingLocalRecording] = useState(Boolean(localRecordingId));
+  const [isRecorderBusy, setIsRecorderBusy] = useState(false);
+  const [showNavigationDecision, setShowNavigationDecision] = useState(false);
   const navigate = useMemo(() => onNavigate ?? ((href: string) => window.location.assign(href)), [onNavigate]);
 
   function logDeviceEvent(input: DeviceLogInput) {
@@ -112,6 +120,17 @@ export function RecordingScreen({
       void flushDeviceLogs({ idToken, fetcher }).catch(() => undefined);
     }
   }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const activeRecorder = recorderRef.current;
+      chunkUnsubscribeRef.current?.();
+      chunkUnsubscribeRef.current = null;
+      void safelyDisposeRecorder(activeRecorder);
+    };
+  }, []);
 
   useEffect(() => {
     patientIdRef.current = patientId;
@@ -320,6 +339,29 @@ export function RecordingScreen({
     };
   }, [phase, repository]);
 
+  useEffect(() => {
+    if (phase !== "recording" && phase !== "paused") return;
+    const confirmActiveCapture = (event: BeforeUnloadEvent) => {
+      if (!recorderRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", confirmActiveCapture);
+    return () => window.removeEventListener("beforeunload", confirmActiveCapture);
+  }, [phase]);
+
+  function beginRecorderTransition(): boolean {
+    if (recorderBusyRef.current) return false;
+    recorderBusyRef.current = true;
+    setIsRecorderBusy(true);
+    return true;
+  }
+
+  function endRecorderTransition() {
+    recorderBusyRef.current = false;
+    if (mountedRef.current) setIsRecorderBusy(false);
+  }
+
   function handleCheckpointFailure(caught: unknown) {
     if (checkpointErrorRef.current) return;
     const storageError = localRecordingStorageError(caught);
@@ -328,13 +370,15 @@ export function RecordingScreen({
     setError(storageError.message);
     setPhase("failed");
     const activeRecorder = recorderRef.current;
-    recorderRef.current = null;
     chunkUnsubscribeRef.current?.();
     chunkUnsubscribeRef.current = null;
-    void Promise.resolve().then(() => activeRecorder?.stop()).catch(() => undefined);
+    void safelyDisposeRecorder(activeRecorder).finally(() => {
+      if (recorderRef.current === activeRecorder) recorderRef.current = null;
+    });
   }
 
   async function startRecording() {
+    if (!beginRecorderTransition()) return;
     setError(null);
     setMessage(null);
     setElapsedSeconds(0);
@@ -344,8 +388,14 @@ export function RecordingScreen({
     chunkSequenceRef.current = 0;
     chunkEndRef.current = 0;
 
+    let nextRecorder: AudioRecorder | null = null;
     try {
-      const nextRecorder = await selectedRecorderFactory();
+      nextRecorder = await selectedRecorderFactory();
+      recorderRef.current = nextRecorder;
+      if (!mountedRef.current) {
+        await safelyDisposeRecorder(nextRecorder);
+        return;
+      }
       const draft = await repository.createDraft({
         patientId,
         label,
@@ -374,9 +424,9 @@ export function RecordingScreen({
         });
         checkpointWritesRef.current = write;
         void write.catch(handleCheckpointFailure);
+        return write;
       });
       await nextRecorder.start();
-      recorderRef.current = nextRecorder;
       const activeDraft = await repository.updateDraft({
         id: draft.id,
         patientId,
@@ -397,6 +447,10 @@ export function RecordingScreen({
         }
       });
     } catch (caught) {
+      chunkUnsubscribeRef.current?.();
+      chunkUnsubscribeRef.current = null;
+      await safelyDisposeRecorder(nextRecorder);
+      if (recorderRef.current === nextRecorder) recorderRef.current = null;
       const message = isLocalRecordingQuotaError(caught)
         ? localRecordingStorageError(caught).message
         : "Unable to start microphone recording.";
@@ -411,62 +465,67 @@ export function RecordingScreen({
           online: isOnline
         }
       });
+    } finally {
+      endRecorderTransition();
     }
   }
 
   async function pauseRecording() {
-    if (!recorderRef.current || !recording) {
+    if (!recorderRef.current || !recording || !beginRecorderTransition()) {
       return;
     }
 
-    await recorderRef.current.pause();
-    const update = checkpointWritesRef.current.then(() => repository.updateDraft({
+    try {
+      await recorderRef.current.pause();
+      const update = checkpointWritesRef.current.then(() => repository.updateDraft({
         id: recording.id,
         patientId,
         label,
         durationSeconds: elapsedSeconds,
         captureState: "paused"
       }));
-    checkpointWritesRef.current = update;
-    try {
+      checkpointWritesRef.current = update;
       const updated = await update;
       setRecording(updated);
       setPhase("paused");
     } catch (caught) {
       handleCheckpointFailure(caught);
+    } finally {
+      endRecorderTransition();
     }
   }
 
   async function resumeRecording() {
-    if (!recorderRef.current || !recording) {
+    if (!recorderRef.current || !recording || !beginRecorderTransition()) {
       return;
     }
 
-    await recorderRef.current.resume();
-    const update = checkpointWritesRef.current.then(() => repository.updateDraft({
+    try {
+      await recorderRef.current.resume();
+      const update = checkpointWritesRef.current.then(() => repository.updateDraft({
         id: recording.id,
         patientId,
         label,
         durationSeconds: elapsedSeconds,
         captureState: "recording"
       }));
-    checkpointWritesRef.current = update;
-    try {
+      checkpointWritesRef.current = update;
       const updated = await update;
       setRecording(updated);
       setPhase("recording");
     } catch (caught) {
       handleCheckpointFailure(caught);
+    } finally {
+      endRecorderTransition();
     }
   }
 
-  async function stopRecording(successMessage = "Recording saved on this device.") {
-    if (!recorderRef.current || !recording) {
-      return;
+  async function stopRecording(successMessage = "Recording saved on this device."): Promise<boolean> {
+    if (!recorderRef.current || !recording || !beginRecorderTransition()) {
+      return false;
     }
 
     const activeRecorder = recorderRef.current;
-    recorderRef.current = null;
     setError(null);
     setMessage(null);
 
@@ -512,6 +571,7 @@ export function RecordingScreen({
           online: isOnline
         }
       });
+      return true;
     } catch (caught) {
       const storageError = localRecordingStorageError(caught);
       setPhase("failed");
@@ -524,7 +584,24 @@ export function RecordingScreen({
           online: isOnline
         }
       });
+      return false;
+    } finally {
+      chunkUnsubscribeRef.current?.();
+      chunkUnsubscribeRef.current = null;
+      await safelyDisposeRecorder(activeRecorder);
+      if (recorderRef.current === activeRecorder) recorderRef.current = null;
+      endRecorderTransition();
     }
+  }
+
+  function requestDashboardNavigation() {
+    if (phase === "recording" || phase === "paused") setShowNavigationDecision(true);
+    else navigate(dashboardHref);
+  }
+
+  async function stopAndNavigate() {
+    if (await stopRecording()) navigate(dashboardHref);
+    else setShowNavigationDecision(false);
   }
 
   async function persistEditableMetadata(currentRecording: LocalRecording): Promise<LocalRecording> {
@@ -682,13 +759,16 @@ export function RecordingScreen({
     setError(null);
   }
 
-  const canEditPatient = phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped" || phase === "failed";
+  const canEditPatient = !isRecorderBusy && (phase === "idle" || phase === "recording" || phase === "paused" || phase === "stopped" || phase === "failed");
   const transcript = recording?.transcript;
   const hasSavedAudio = Boolean(recording && localRecordingAudioBlob(recording));
   const patientIdErrorId = "recording-patient-id-error";
 
   return (
-    <main className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]">
+    <main
+      className="relative mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-paper text-ink shadow-[0_30px_80px_rgba(55,35,15,0.18)]"
+      aria-busy={isRecorderBusy}
+    >
       <section className="paper-bg flex min-h-0 flex-1 flex-col">
         <header
           className="flex items-start gap-3 px-5 pb-4"
@@ -697,13 +777,15 @@ export function RecordingScreen({
             paddingTop: "calc(1.25rem + var(--safe-area-top, 0px))"
           }}
         >
-          <Link
+          <button
+            type="button"
             className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rule bg-paper-deep text-ink-soft"
-            href={dashboardHref}
+            onClick={requestDashboardNavigation}
+            disabled={isRecorderBusy}
             aria-label="Back to dashboard"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </button>
           <div className="min-w-0 flex-1">
             <p className="font-body text-[11px] font-bold uppercase tracking-[0.18em] text-terracotta">
               New consultation
@@ -832,8 +914,8 @@ export function RecordingScreen({
 
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-rule bg-paper px-5 pb-4 pt-3">
           {!exactLoadFailed && (phase === "idle" || (phase === "failed" && !hasSavedAudio)) ? (
-            <BharatButton className="col-span-2" icon={<Mic className="h-4 w-4" />} onClick={startRecording}>
-              Start recording
+            <BharatButton className="col-span-2" icon={<Mic className="h-4 w-4" />} onClick={startRecording} disabled={isRecorderBusy}>
+              {isRecorderBusy ? "Starting…" : "Start recording"}
             </BharatButton>
           ) : null}
           {phase === "failed" && hasSavedAudio ? (
@@ -852,21 +934,21 @@ export function RecordingScreen({
           ) : null}
           {phase === "recording" ? (
             <>
-              <BharatButton variant="ghost" icon={<Pause className="h-4 w-4" />} onClick={pauseRecording}>
+              <BharatButton variant="ghost" icon={<Pause className="h-4 w-4" />} onClick={pauseRecording} disabled={isRecorderBusy}>
                 Pause
               </BharatButton>
-              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()}>
-                Stop
+              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()} disabled={isRecorderBusy}>
+                {isRecorderBusy ? "Saving…" : "Stop"}
               </BharatButton>
             </>
           ) : null}
           {phase === "paused" ? (
             <>
-              <BharatButton variant="ghost" icon={<Play className="h-4 w-4" />} onClick={resumeRecording}>
+              <BharatButton variant="ghost" icon={<Play className="h-4 w-4" />} onClick={resumeRecording} disabled={isRecorderBusy}>
                 Resume
               </BharatButton>
-              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()}>
-                Stop
+              <BharatButton icon={<Square className="h-4 w-4" />} onClick={() => void stopRecording()} disabled={isRecorderBusy}>
+                {isRecorderBusy ? "Saving…" : "Stop"}
               </BharatButton>
             </>
           ) : null}
@@ -904,6 +986,35 @@ export function RecordingScreen({
           ) : null}
         </footer>
       </section>
+      {showNavigationDecision ? (
+        <section
+          className="absolute inset-0 z-20 flex items-end bg-ink/40 p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="active-recording-navigation-title"
+          aria-describedby="active-recording-navigation-description"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !isRecorderBusy) setShowNavigationDecision(false);
+          }}
+        >
+          <div className="w-full rounded-xl border border-rule bg-paper p-5 shadow-warm">
+            <h2 id="active-recording-navigation-title" className="font-display text-2xl text-ink">
+              Recording in progress
+            </h2>
+            <p id="active-recording-navigation-description" className="mt-2 font-body text-sm text-ink-muted">
+              Stop and save the recording before returning to the dashboard.
+            </p>
+            <div className="mt-4 grid gap-2">
+              <BharatButton onClick={() => void stopAndNavigate()} disabled={isRecorderBusy}>
+                {isRecorderBusy ? "Saving…" : "Stop & Save"}
+              </BharatButton>
+              <BharatButton autoFocus variant="ghost" onClick={() => setShowNavigationDecision(false)} disabled={isRecorderBusy}>
+                Continue Recording
+              </BharatButton>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

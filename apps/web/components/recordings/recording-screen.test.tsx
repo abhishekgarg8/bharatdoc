@@ -32,6 +32,7 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
       mimeType: "audio/webm",
       durationSeconds: 42
     })),
+    dispose: vi.fn(async () => undefined),
     checkpoint: vi.fn(),
     onChunk: vi.fn((listener: (chunk: RecordedAudioChunk) => void | Promise<void>) => {
       listeners.add(listener);
@@ -49,9 +50,7 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
         durationSeconds
       };
 
-      for (const listener of listeners) {
-        await listener(chunk);
-      }
+      await Promise.allSettled([...listeners].map((listener) => listener(chunk)));
     }
   };
 }
@@ -144,6 +143,164 @@ describe("RecordingScreen", () => {
 
     await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
     expect(recorder.start).not.toHaveBeenCalled();
+    expect(recorder.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("disposes the recorder after a start failure", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder({ start: vi.fn(async () => { throw new Error("start failed"); }) });
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+
+    await expect(screen.findByText("Unable to start microphone recording.")).resolves.toBeInTheDocument();
+    expect(recorder.dispose).toHaveBeenCalledOnce();
+  });
+
+  it.each(["recording", "paused"] as const)("disposes the recorder when unmounted while %s", async (state) => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+    const view = render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    if (state === "paused") {
+      fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+      await waitFor(() => expect(recorder.pause).toHaveBeenCalledOnce());
+    }
+    await waitFor(() => expect(capacitor.addListener).toHaveBeenCalled());
+
+    view.unmount();
+
+    await waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
+    await waitFor(() => expect(capacitor.removeListener).toHaveBeenCalled());
+  });
+
+  it("disposes an in-flight stop on unmount without starting another stop", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder({ stop: vi.fn(() => new Promise<never>(() => undefined)) });
+    const view = render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+
+    view.unmount();
+
+    await waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
+    expect(recorder.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ignores duplicate stop controls while capture is settling", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    let finishStop!: () => void;
+    const { recorder } = createRecorder({
+      stop: vi.fn(async () => {
+        await new Promise<void>((resolve) => { finishStop = resolve; });
+        return { blob: new Blob(["audio"], { type: "audio/webm" }), mimeType: "audio/webm", durationSeconds: 1 };
+      })
+    });
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    const stop = screen.getByRole("button", { name: "Stop" });
+
+    fireEvent.click(stop);
+    fireEvent.click(stop);
+
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    finishStop();
+    await screen.findByText("Recording saved on this device.");
+  });
+
+  it.each(["pause", "resume"] as const)("disposes capture when %s fails", async (operation) => {
+    const repository = createMemoryLocalRecordingRepository();
+    const failure = vi.fn(async () => { throw new Error(`${operation} failed`); });
+    const { recorder } = createRecorder(operation === "pause" ? { pause: failure } : { resume: failure });
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    if (operation === "resume") {
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await waitFor(() => expect(recorder.pause).toHaveBeenCalledOnce());
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: operation === "pause" ? "Pause" : "Resume" }));
+
+    await screen.findByText(`${operation} failed`);
+    await waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
+  });
+
+  it("requires an explicit stop-and-save decision before leaving active capture", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+    const navigate = vi.fn();
+    render(
+      <RecordingScreen
+        localRepository={repository}
+        recorderFactory={async () => recorder}
+        onNavigate={navigate}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to dashboard" }));
+    expect(screen.getByRole("dialog", { name: "Recording in progress" })).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+    const continueRecording = screen.getByRole("button", { name: "Continue Recording" });
+    expect(continueRecording).toHaveFocus();
+    fireEvent.click(continueRecording);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(recorder.stop).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to dashboard" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop & Save" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
+    expect(recorder.stop).toHaveBeenCalledOnce();
+  });
+
+  it("guards active refresh but does not block navigation after Stop & Save settles", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+    let navigationBlocked: boolean | null = null;
+    let staleBeforeUnloadListener: EventListener | null = null;
+    const navigate = vi.fn(() => {
+      const event = new Event("beforeunload", { cancelable: true });
+      staleBeforeUnloadListener?.(event);
+      navigationBlocked = event.defaultPrevented;
+    });
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} onNavigate={navigate} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    staleBeforeUnloadListener = [...addListener.mock.calls].reverse().find(([type]) => type === "beforeunload")?.[1] as EventListener;
+    addListener.mockRestore();
+
+    const activeRefresh = new Event("beforeunload", { cancelable: true });
+    staleBeforeUnloadListener(activeRefresh);
+    expect(activeRefresh.defaultPrevented).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to dashboard" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop & Save" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard"));
+    expect(navigationBlocked).toBe(false);
+  });
+
+  it("keeps navigation on the recorder when stop-and-save persistence fails", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    repository.finalize = vi.fn(async () => { throw new Error("final persistence failed"); });
+    const { recorder } = createRecorder();
+    const navigate = vi.fn();
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} onNavigate={navigate} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    fireEvent.click(screen.getByRole("button", { name: "Back to dashboard" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop & Save" }));
+
+    await expect(screen.findByText("final persistence failed")).resolves.toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(recorder.dispose).toHaveBeenCalled();
   });
 
   it("keeps recording available offline and waits for reconnect before authenticated transcription", async () => {
@@ -308,7 +465,7 @@ describe("RecordingScreen", () => {
 
     await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
     expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
-    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+    await waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
   });
 
   it("retains earlier checkpoints when a mid-recording write fails", async () => {
@@ -331,7 +488,7 @@ describe("RecordingScreen", () => {
     expect((await repository.list())[0]?.audioChunkMetadata).toHaveLength(1);
     expect(repository.appendChunk).toHaveBeenCalledTimes(2);
     expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
-    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+    await waitFor(() => expect(recorder.dispose).toHaveBeenCalledOnce());
   });
 
   it("requests best-effort browser and Capacitor checkpoints while recording", async () => {
