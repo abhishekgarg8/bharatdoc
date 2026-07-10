@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { createDemoWavBlob } from "@/lib/client/audio-recorder";
 import {
   createMemoryLocalRecordingRepository,
+  isLocalRecordingQuotaError,
   localRecordingAudioBlob,
+  localRecordingStorageError,
   mapLocalRecordingsToDashboardRecords,
   mapQuarantinedLocalRecordings,
   recoverQuarantinedLocalRecordingForScope,
@@ -11,6 +14,15 @@ import {
 
 function audioBlob(): Blob {
   return new Blob(["audio"], { type: "audio/webm" });
+}
+
+function blobText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
 }
 
 const baseRecording: LocalRecording = {
@@ -79,6 +91,8 @@ describe("local recording repository", () => {
       audioChunk: audioBlob(),
       audioMimeType: "audio/webm",
       durationSeconds: 31,
+      sequence: 0,
+      startedAtSeconds: 0,
       patientId: "p-10482"
     });
 
@@ -88,8 +102,105 @@ describe("local recording repository", () => {
       captureState: "recording"
     });
     expect(recording.audioChunks).toHaveLength(1);
+    expect(recording.audioChunkMetadata).toEqual([
+      { sequence: 0, startedAtSeconds: 0, endedAtSeconds: 31, durationSeconds: 31 }
+    ]);
     expect(localRecordingAudioBlob(recording)).toBeInstanceOf(Blob);
     await expect(repository.getLatestRecoverable()).resolves.toMatchObject({ id: "draft-1" });
+  });
+
+  it("serializes concurrent chunk writes in monotonic sequence", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    await repository.createDraft({ id: "ordered" });
+    await repository.updateDraft({ id: "ordered", captureState: "recording" });
+
+    await Promise.all([
+      repository.appendChunk({
+        id: "ordered",
+        audioChunk: new Blob(["first"], { type: "audio/webm" }),
+        audioMimeType: "audio/webm",
+        durationSeconds: 20,
+        sequence: 0,
+        startedAtSeconds: 0
+      }),
+      repository.appendChunk({
+        id: "ordered",
+        audioChunk: new Blob(["second"], { type: "audio/webm" }),
+        audioMimeType: "audio/webm",
+        durationSeconds: 40,
+        sequence: 1,
+        startedAtSeconds: 20
+      })
+    ]);
+
+    const recording = await repository.get("ordered");
+    expect(recording?.audioChunks).toHaveLength(2);
+    expect(recording?.audioChunkMetadata).toEqual([
+      { sequence: 0, startedAtSeconds: 0, endedAtSeconds: 20, durationSeconds: 20 },
+      { sequence: 1, startedAtSeconds: 20, endedAtSeconds: 40, durationSeconds: 20 }
+    ]);
+    expect(await blobText(localRecordingAudioBlob(recording!)!)).toBe("firstsecond");
+  });
+
+  it("rejects gaps and non-monotonic chunk timing", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    await repository.createDraft({ id: "ordered" });
+    await repository.updateDraft({ id: "ordered", captureState: "recording" });
+
+    await expect(repository.appendChunk({
+      id: "ordered",
+      audioChunk: audioBlob(),
+      audioMimeType: "audio/webm",
+      durationSeconds: 20,
+      sequence: 1,
+      startedAtSeconds: 0
+    })).rejects.toThrow("chunk sequence");
+
+    await repository.appendChunk({
+      id: "ordered",
+      audioChunk: audioBlob(),
+      audioMimeType: "audio/webm",
+      durationSeconds: 20,
+      sequence: 0,
+      startedAtSeconds: 0
+    });
+    await expect(repository.appendChunk({
+      id: "ordered",
+      audioChunk: audioBlob(),
+      audioMimeType: "audio/webm",
+      durationSeconds: 40,
+      sequence: 1,
+      startedAtSeconds: 21
+    })).rejects.toThrow("chunk sequence");
+  });
+
+  it("preserves normalized quota identity for callers that provide recovery UX", () => {
+    const error = localRecordingStorageError(new DOMException("Quota exceeded", "QuotaExceededError"));
+
+    expect(error.name).toBe("QuotaExceededError");
+    expect(isLocalRecordingQuotaError(error)).toBe(true);
+    expect(localRecordingStorageError(error).message).toMatch(/device storage is full/i);
+  });
+
+  it("assembles fallback WAV checkpoints into a valid recoverable RIFF container", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const first = createDemoWavBlob(1);
+    const second = createDemoWavBlob(1);
+    await repository.createDraft({ id: "wav-fallback" });
+    await repository.updateDraft({ id: "wav-fallback", captureState: "recording" });
+    await repository.appendChunk({
+      id: "wav-fallback", audioChunk: first, audioMimeType: first.type,
+      durationSeconds: 20, sequence: 0, startedAtSeconds: 0
+    });
+    const recording = await repository.appendChunk({
+      id: "wav-fallback", audioChunk: second, audioMimeType: second.type,
+      durationSeconds: 40, sequence: 1, startedAtSeconds: 20
+    });
+    const recovered = localRecordingAudioBlob(recording)!;
+
+    expect(await blobText(recovered.slice(0, 4))).toBe("RIFF");
+    expect(await blobText(recovered.slice(8, 12))).toBe("WAVE");
+    expect(recovered.size).toBe(44 + (first.size - 44) + (second.size - 44));
   });
 
   it("finalizes recordings with audio and duration constraints", async () => {
@@ -113,6 +224,30 @@ describe("local recording repository", () => {
       syncState: "local"
     });
     expect(finalized.audioBlob).toBeInstanceOf(Blob);
+  });
+
+  it("uses the canonical finalized container instead of concatenated checkpoint fragments", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    await repository.createDraft({ id: "canonical" });
+    await repository.updateDraft({ id: "canonical", captureState: "recording" });
+    await repository.appendChunk({
+      id: "canonical",
+      audioChunk: new Blob(["fragment"], { type: "audio/webm" }),
+      audioMimeType: "audio/webm",
+      durationSeconds: 20,
+      sequence: 0,
+      startedAtSeconds: 0
+    });
+    const canonical = createDemoWavBlob(1);
+    const finalized = await repository.finalize({
+      id: "canonical",
+      durationSeconds: 21,
+      audioBlob: canonical,
+      audioMimeType: canonical.type
+    });
+
+    expect(await blobText(localRecordingAudioBlob(finalized)!.slice(0, 4))).toBe("RIFF");
+    expect(finalized.audioMimeType).toBe("audio/wav");
   });
 
   it("allows finalizing audio before Patient ID is assigned", async () => {

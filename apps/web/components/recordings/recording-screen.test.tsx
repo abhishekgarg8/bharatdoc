@@ -5,9 +5,21 @@ import { RecordingScreen } from "@/components/recordings/recording-screen";
 import type { AudioRecorder, RecordedAudioChunk } from "@/lib/client/audio-recorder";
 import {
   createMemoryLocalRecordingRepository,
+  localRecordingStorageError,
   type LocalRecording,
   type LocalRecordingScope
 } from "@/lib/client/local-recordings";
+
+const capacitor = vi.hoisted(() => ({
+  appStateListener: null as ((state: { isActive: boolean }) => void) | null,
+  removeListener: vi.fn(async () => undefined),
+  addListener: vi.fn(async (_event: string, listener: (state: { isActive: boolean }) => void) => {
+    capacitor.appStateListener = listener;
+    return { remove: capacitor.removeListener };
+  })
+}));
+
+vi.mock("@capacitor/app", () => ({ App: { addListener: capacitor.addListener } }));
 
 function createRecorder(overrides: Partial<AudioRecorder> = {}) {
   const listeners = new Set<(chunk: RecordedAudioChunk) => void | Promise<void>>();
@@ -20,6 +32,7 @@ function createRecorder(overrides: Partial<AudioRecorder> = {}) {
       mimeType: "audio/webm",
       durationSeconds: 42
     })),
+    checkpoint: vi.fn(),
     onChunk: vi.fn((listener: (chunk: RecordedAudioChunk) => void | Promise<void>) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -106,6 +119,10 @@ describe("RecordingScreen", () => {
     vi.unstubAllEnvs();
     window.localStorage.clear();
     Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
+    capacitor.appStateListener = null;
+    capacitor.addListener.mockClear();
+    capacitor.removeListener.mockClear();
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   });
 
   it("shows clinic context and current online state", () => {
@@ -113,6 +130,20 @@ describe("RecordingScreen", () => {
 
     expect(screen.getByText("Sunrise Hospital · Online")).toBeInTheDocument();
     expect(screen.getByText("Audio stays on this device until transcription.")).toBeInTheDocument();
+  });
+
+  it("surfaces quota failures while creating the first durable draft", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    repository.save = vi.fn(async () => {
+      throw localRecordingStorageError(new DOMException("Quota exceeded", "QuotaExceededError"));
+    });
+    const { recorder } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+
+    await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
+    expect(recorder.start).not.toHaveBeenCalled();
   });
 
   it("keeps recording available offline and waits for reconnect before authenticated transcription", async () => {
@@ -186,6 +217,144 @@ describe("RecordingScreen", () => {
     expect(records[0]!.audioChunks).toHaveLength(1);
   });
 
+  it("drains ordered checkpoint writes before reporting a successful stop", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const originalAppend = repository.appendChunk.bind(repository);
+    let releaseWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    repository.appendChunk = vi.fn(async (input) => {
+      await writeGate;
+      return originalAppend(input);
+    });
+    const { recorder, emitChunk } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    const chunkWrite = emitChunk(20);
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+
+    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+    expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
+    releaseWrite();
+    await act(async () => { await chunkWrite; });
+    await expect(screen.findByText("Recording saved on this device.")).resolves.toBeInTheDocument();
+    expect((await repository.list())[0]?.audioChunkMetadata).toHaveLength(1);
+  });
+
+  it("poisons pending writes and never claims saved after a quota failure", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const finalize = vi.spyOn(repository, "finalize");
+    let rejectWrite!: (reason: unknown) => void;
+    repository.appendChunk = vi.fn(() => new Promise<LocalRecording>((_resolve, reject) => {
+      rejectWrite = reject;
+    }));
+    const { recorder, emitChunk } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    void emitChunk(20);
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+    await waitFor(() => expect(repository.appendChunk).toHaveBeenCalledOnce());
+    rejectWrite(new DOMException("Quota exceeded", "QuotaExceededError"));
+
+    await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
+    expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
+    expect(finalize).not.toHaveBeenCalled();
+    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+    expect((await repository.list())[0]).toMatchObject({ captureState: "recording" });
+  });
+
+  it("stops the recorder only once when a write fails during an in-flight stop", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    let rejectWrite!: (reason: unknown) => void;
+    repository.appendChunk = vi.fn(() => new Promise<LocalRecording>((_resolve, reject) => {
+      rejectWrite = reject;
+    }));
+    let finishStop!: () => void;
+    const stopGate = new Promise<void>((resolve) => { finishStop = resolve; });
+    const { recorder, emitChunk } = createRecorder({
+      stop: vi.fn(async () => {
+        await stopGate;
+        return { blob: new Blob(["audio"], { type: "audio/webm" }), mimeType: "audio/webm", durationSeconds: 20 };
+      })
+    });
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    void emitChunk(20);
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+    await waitFor(() => expect(repository.appendChunk).toHaveBeenCalledOnce());
+    await act(async () => { rejectWrite(new DOMException("Quota exceeded", "QuotaExceededError")); });
+
+    await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
+    expect(recorder.stop).toHaveBeenCalledOnce();
+    await act(async () => { finishStop(); });
+  });
+
+  it("surfaces an immediate first-checkpoint quota failure", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    repository.appendChunk = vi.fn(async () => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    const { recorder, emitChunk } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    await act(async () => { await emitChunk(20); });
+
+    await expect(screen.findByText(/device storage is full/i)).resolves.toBeInTheDocument();
+    expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
+    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+  });
+
+  it("retains earlier checkpoints when a mid-recording write fails", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const originalAppend = repository.appendChunk.bind(repository);
+    repository.appendChunk = vi.fn(async (input) => {
+      if (input.sequence === 1) throw new Error("IndexedDB write rejected.");
+      return originalAppend(input);
+    });
+    const { recorder, emitChunk } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    await act(async () => { await emitChunk(20); });
+    await act(async () => { await emitChunk(40); });
+
+    await expect(screen.findByText("IndexedDB write rejected.")).resolves.toBeInTheDocument();
+    await act(async () => { await emitChunk(60); });
+    expect((await repository.list())[0]?.audioChunkMetadata).toHaveLength(1);
+    expect(repository.appendChunk).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Recording saved on this device.")).not.toBeInTheDocument();
+    await waitFor(() => expect(recorder.stop).toHaveBeenCalledOnce());
+  });
+
+  it("requests best-effort browser and Capacitor checkpoints while recording", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const { recorder } = createRecorder();
+
+    const { unmount } = render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    await waitFor(() => expect(capacitor.addListener).toHaveBeenCalledWith("appStateChange", expect.any(Function)));
+
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("pagehide"));
+    capacitor.appStateListener?.({ isActive: false });
+
+    expect(recorder.checkpoint).toHaveBeenCalledTimes(3);
+    unmount();
+    await waitFor(() => expect(capacitor.removeListener).toHaveBeenCalledOnce());
+    window.dispatchEvent(new Event("pagehide"));
+    expect(recorder.checkpoint).toHaveBeenCalledTimes(3);
+  });
+
   it("pauses and resumes the active recorder while persisting capture state", async () => {
     const repository = createMemoryLocalRecordingRepository();
     const { recorder } = createRecorder();
@@ -203,6 +372,34 @@ describe("RecordingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /resume/i }));
     await waitFor(() => expect(recorder.resume).toHaveBeenCalled());
     expect((await repository.list())[0]).toMatchObject({ captureState: "recording" });
+  });
+
+  it("serializes pause metadata after an in-flight audio checkpoint", async () => {
+    const repository = createMemoryLocalRecordingRepository();
+    const originalAppend = repository.appendChunk.bind(repository);
+    let releaseWrite!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    repository.appendChunk = vi.fn(async (input) => {
+      await gate;
+      return originalAppend(input);
+    });
+    const { recorder, emitChunk } = createRecorder();
+
+    render(<RecordingScreen localRepository={repository} recorderFactory={async () => recorder} />);
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    await screen.findByText("Recording started.");
+    void emitChunk(20);
+    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+    await waitFor(() => expect(repository.appendChunk).toHaveBeenCalledOnce());
+    expect((await repository.list())[0]).toMatchObject({ captureState: "recording", audioChunks: [] });
+
+    releaseWrite();
+    await waitFor(async () => {
+      await expect(repository.get((await repository.list())[0]!.id)).resolves.toMatchObject({
+        captureState: "paused",
+        audioChunks: [expect.any(Blob)]
+      });
+    });
   });
 
   it("recovers an interrupted chunked recording from local storage", async () => {

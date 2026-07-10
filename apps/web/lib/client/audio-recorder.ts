@@ -14,6 +14,7 @@ export interface AudioRecorder {
   start(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
+  checkpoint(): boolean;
   stop(): Promise<RecordedAudio>;
   onChunk(listener: (chunk: RecordedAudioChunk) => void | Promise<void>): () => void;
 }
@@ -26,6 +27,7 @@ interface RecordRtcInstance {
   resumeRecording(): void;
   stopRecording(callback: () => void): void;
   getBlob(): Blob;
+  getInternalRecorder?(): unknown;
 }
 
 interface RecordRtcConstructor {
@@ -34,15 +36,13 @@ interface RecordRtcConstructor {
     options: {
       type: "audio";
       mimeType: string;
-      recorderType?: unknown;
       timeSlice?: number;
       ondataavailable?: (blob: Blob) => void;
     }
   ): RecordRtcInstance;
-  StereoAudioRecorder?: unknown;
 }
 
-const CHUNK_INTERVAL_MS = 30_000;
+export const AUDIO_CHECKPOINT_INTERVAL_MS = 20_000;
 const DEMO_AUDIO_DURATION_SECONDS = 12;
 const DEMO_AUDIO_SAMPLE_RATE = 16_000;
 const RECORDING_MIME_CANDIDATES = [
@@ -143,8 +143,7 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
   const recorder = new RecordRTC(stream, {
     type: "audio",
     mimeType,
-    recorderType: RecordRTC.StereoAudioRecorder,
-    timeSlice: CHUNK_INTERVAL_MS,
+    timeSlice: AUDIO_CHECKPOINT_INTERVAL_MS,
     ondataavailable(blob: Blob) {
       if (!blob || blob.size === 0) {
         return;
@@ -152,7 +151,7 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
 
       const chunk: RecordedAudioChunk = {
         blob,
-        mimeType,
+        mimeType: blob.type || mimeType,
         durationSeconds: clock.elapsedSeconds()
       };
 
@@ -174,6 +173,18 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
     async resume() {
       clock.resume();
       recorder.resumeRecording();
+    },
+    checkpoint() {
+      try {
+        // RecordRTC's WAV fallback has no requestData; its 20-second timeSlice is the durability bound.
+        const wrapper = recorder.getInternalRecorder?.() as { getInternalRecorder?(): unknown } | undefined;
+        const nativeRecorder = wrapper?.getInternalRecorder?.() as { requestData?(): void; state?: string } | undefined;
+        if (!nativeRecorder?.requestData || (nativeRecorder.state && nativeRecorder.state !== "recording")) return false;
+        nativeRecorder.requestData();
+        return true;
+      } catch {
+        return false;
+      }
     },
     async stop() {
       clock.resume();
@@ -213,6 +224,9 @@ export async function createDemoAudioRecorder(): Promise<AudioRecorder> {
     },
     async resume() {
       return undefined;
+    },
+    checkpoint() {
+      return false;
     },
     async stop() {
       const blob = createDemoWavBlob(DEMO_AUDIO_DURATION_SECONDS);
