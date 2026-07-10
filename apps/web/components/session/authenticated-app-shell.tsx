@@ -323,14 +323,13 @@ export function AuthenticatedAppShell({
       try {
         let responseRequest: Promise<Response>;
         try {
+          const headers = new Headers(init.headers);
+          headers.set("Authorization", `Bearer ${token}`);
           responseRequest = Promise.resolve(
             fetcher(input, {
               ...init,
               cache: "no-store",
-              headers: {
-                ...Object.fromEntries(new Headers(init.headers)),
-                Authorization: `Bearer ${token}`,
-              },
+              headers,
               signal: controller.signal,
             }),
           );
