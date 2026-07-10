@@ -1,9 +1,22 @@
-import { normalizePatientId, type Doctor } from "@bharatdoc/shared";
+import { assertActiveDoctor, assertOwner, normalizePatientId, type Doctor } from "@bharatdoc/shared";
 import { z } from "zod";
 import type { VerifiedUser } from "@/lib/server/auth";
 import { AppError, toAppError } from "@/lib/server/errors";
 
 const LogLevelSchema = z.enum(["debug", "info", "warn", "error"]);
+const DeviceLogEventSchema = z.enum([
+  "recording.capture_started",
+  "recording.capture_start_failed",
+  "recording.capture_stopped",
+  "recording.capture_stop_failed",
+  "recording.metadata_synced",
+  "recording.transcription_started",
+  "recording.transcription_succeeded",
+  "recording.transcription_failed",
+  "recording.detail_transcription_started",
+  "recording.detail_transcription_succeeded",
+  "recording.detail_transcription_failed"
+]);
 const DeviceLogEntrySchema = z.object({
   id: z.string().min(1).max(120),
   level: LogLevelSchema,
@@ -47,6 +60,17 @@ export interface DiagnosticLogRow {
   url: string | null;
   client_created_at: string | null;
   metadata: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface DiagnosticLogView {
+  source: DiagnosticLogRow["source"];
+  level: DeviceLogLevel;
+  event: string;
+  doctor_id: string | null;
+  recording_id: string | null;
+  client_created_at: string | null;
+  created_at: string | null;
 }
 
 export interface DiagnosticLogListFilters {
@@ -59,7 +83,7 @@ export interface DiagnosticLogListFilters {
 export interface DiagnosticLogRepository {
   findDoctorByAuthUid(authUid: string): Promise<Doctor | null>;
   insertLogs(rows: DiagnosticLogRow[]): Promise<void>;
-  listLogsForClinic(clinicId: string, filters: DiagnosticLogListFilters): Promise<DiagnosticLogRow[]>;
+  listLogsForClinic(clinicId: string, filters: DiagnosticLogListFilters): Promise<DiagnosticLogView[]>;
 }
 
 function isUuid(value: string | null | undefined): value is string {
@@ -74,12 +98,33 @@ function optionalText(value: string | null | undefined, maxLength = 500): string
   return trimmed ? trimmed.slice(0, maxLength) : null;
 }
 
-function safeMetadata(value: Record<string, unknown> | undefined): Record<string, unknown> {
-  if (!value) {
-    return {};
+const SafeBooleanMetadataKeys = new Set(["can_edit", "has_transcript", "local_audio_available", "online"]);
+const SafeNumberMetadataKeys = new Set(["audio_size_bytes", "duration_seconds", "transcript_chars"]);
+const SafeRecordingStatuses = new Set(["recorded", "transcribed", "summary_ready", "pdf_saved"]);
+
+function safeMetadata(value: Record<string, unknown> | undefined, clientLogId: string): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
+
+  if (isUuid(clientLogId)) metadata.client_log_id = clientLogId;
+
+  for (const [key, candidate] of Object.entries(value ?? {})) {
+    if (SafeBooleanMetadataKeys.has(key) && typeof candidate === "boolean") metadata[key] = candidate;
+    if (SafeNumberMetadataKeys.has(key) && typeof candidate === "number" && Number.isFinite(candidate)) {
+      metadata[key] = candidate;
+    }
+    if (key === "audio_mime_type" && typeof candidate === "string" && /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(candidate)) {
+      metadata[key] = candidate;
+    }
+    if (key === "status" && typeof candidate === "string" && SafeRecordingStatuses.has(candidate)) {
+      metadata[key] = candidate;
+    }
   }
 
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  return metadata;
+}
+
+function safeDeviceLogEvent(event: string): string {
+  return DeviceLogEventSchema.safeParse(event).data ?? "diagnostic.unknown";
 }
 
 function requireDoctor(user: VerifiedUser, doctor: Doctor | null): Doctor {
@@ -94,6 +139,10 @@ function requireDoctor(user: VerifiedUser, doctor: Doctor | null): Doctor {
   return doctor;
 }
 
+function requireActiveDoctor(user: VerifiedUser, doctor: Doctor | null): Doctor {
+  return assertActiveDoctor(requireDoctor(user, doctor));
+}
+
 function requireClinicId(doctor: Doctor): string {
   if (!doctor.clinic_id) {
     throw new AppError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
@@ -104,28 +153,51 @@ function requireClinicId(doctor: Doctor): string {
 
 function toDiagnosticRows(doctor: Doctor, batch: DeviceLogBatch): DiagnosticLogRow[] {
   return batch.logs.map((log) => {
-    const metadata = safeMetadata(log.metadata);
-    metadata.client_log_id = log.id;
-
     return {
       source: "device",
       level: log.level,
-      event: log.event,
-      message: optionalText(log.message),
+      event: safeDeviceLogEvent(log.event),
+      message: null,
       doctor_id: doctor.id,
       clinic_id: doctor.clinic_id,
       recording_id: isUuid(log.recordingId) ? log.recordingId : null,
-      patient_id: optionalText(normalizePatientId(log.patientId ?? ""), 120),
-      request_id: optionalText(log.requestId, 120),
-      session_id: optionalText(log.sessionId ?? batch.session_id, 120),
-      device_id: optionalText(log.deviceId ?? batch.device_id, 120),
-      app_version: optionalText(log.appVersion, 120),
-      user_agent: optionalText(log.userAgent, 500),
-      url: optionalText(log.url, 1000),
+      patient_id: null,
+      request_id: isUuid(log.requestId) ? log.requestId : null,
+      session_id: isUuid(log.sessionId ?? batch.session_id) ? (log.sessionId ?? batch.session_id) : null,
+      device_id: isUuid(log.deviceId ?? batch.device_id) ? (log.deviceId ?? batch.device_id) : null,
+      app_version: /^(?:[a-f0-9]{7,40}|local)$/i.test(log.appVersion ?? "") ? log.appVersion! : null,
+      user_agent: null,
+      url: null,
       client_created_at: log.createdAt ?? null,
-      metadata
+      metadata: safeMetadata(log.metadata, log.id)
     };
   });
+}
+
+function toDiagnosticLogView(log: DiagnosticLogView): DiagnosticLogView {
+  return {
+    source: log.source,
+    level: log.level,
+    event: safeDeviceLogEvent(log.event),
+    doctor_id: log.doctor_id,
+    recording_id: log.recording_id,
+    client_created_at: log.client_created_at,
+    created_at: log.created_at ?? null
+  };
+}
+
+function safeListFilters(filters: DiagnosticLogListFilters): DiagnosticLogListFilters {
+  const safe: DiagnosticLogListFilters = {};
+  const recordingId = optionalText(filters.recordingId, 120);
+  const patientId = optionalText(filters.patientId, 120);
+  const deviceId = optionalText(filters.deviceId, 120);
+
+  if (recordingId) safe.recordingId = recordingId;
+  if (patientId) safe.patientId = normalizePatientId(patientId);
+  if (deviceId) safe.deviceId = deviceId;
+  if (typeof filters.limit === "number") safe.limit = filters.limit;
+
+  return safe;
 }
 
 export async function ingestDeviceLogsForUser(
@@ -133,7 +205,8 @@ export async function ingestDeviceLogsForUser(
   input: unknown,
   repository: DiagnosticLogRepository
 ): Promise<{ accepted: number }> {
-  const doctor = requireDoctor(user, await repository.findDoctorByAuthUid(user.uid));
+  const doctor = requireActiveDoctor(user, await repository.findDoctorByAuthUid(user.uid));
+  requireClinicId(doctor);
   const batch = DeviceLogBatchSchema.parse(input);
   const rows = toDiagnosticRows(doctor, batch);
 
@@ -146,14 +219,12 @@ export async function listDiagnosticLogsForUser(
   user: VerifiedUser,
   filters: DiagnosticLogListFilters,
   repository: DiagnosticLogRepository
-): Promise<DiagnosticLogRow[]> {
-  const doctor = requireDoctor(user, await repository.findDoctorByAuthUid(user.uid));
+): Promise<DiagnosticLogView[]> {
+  const doctor = assertOwner(requireDoctor(user, await repository.findDoctorByAuthUid(user.uid)));
   const clinicId = requireClinicId(doctor);
+  const logs = await repository.listLogsForClinic(clinicId, safeListFilters(filters));
 
-  return repository.listLogsForClinic(clinicId, {
-    ...filters,
-    patientId: filters.patientId ? normalizePatientId(filters.patientId) : null
-  });
+  return logs.map(toDiagnosticLogView);
 }
 
 export function apiErrorDiagnosticPayload(error: unknown): Record<string, unknown> {

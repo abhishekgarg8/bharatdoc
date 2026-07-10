@@ -4,7 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   DiagnosticLogListFilters,
   DiagnosticLogRepository,
-  DiagnosticLogRow
+  DiagnosticLogRow,
+  DiagnosticLogView
 } from "@/lib/server/diagnostic-logs";
 
 function clampLimit(limit: number | undefined): number {
@@ -35,7 +36,7 @@ export function createSupabaseDiagnosticLogRepository(supabase: SupabaseClient):
       }
     },
 
-    async listLogsForClinic(clinicId: string, filters: DiagnosticLogListFilters): Promise<DiagnosticLogRow[]> {
+    async listLogsForClinic(clinicId: string, filters: DiagnosticLogListFilters): Promise<DiagnosticLogView[]> {
       let query = supabase
         .from("diagnostic_logs")
         .select(
@@ -43,19 +44,9 @@ export function createSupabaseDiagnosticLogRepository(supabase: SupabaseClient):
             "source",
             "level",
             "event",
-            "message",
             "doctor_id",
-            "clinic_id",
             "recording_id",
-            "patient_id",
-            "request_id",
-            "session_id",
-            "device_id",
-            "app_version",
-            "user_agent",
-            "url",
             "client_created_at",
-            "metadata",
             "created_at"
           ].join(",")
         )
@@ -81,7 +72,7 @@ export function createSupabaseDiagnosticLogRepository(supabase: SupabaseClient):
         throw error;
       }
 
-      return (data ?? []) as unknown as DiagnosticLogRow[];
+      return (data ?? []) as unknown as DiagnosticLogView[];
     }
   };
 }
