@@ -29,7 +29,7 @@
     "with:current-supabase-anon": "node --env-file=.env scripts/with-current-supabase-anon-key.mjs --"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "15.5.20",
+    "@next/eslint-plugin-next": "16.2.10",
     "@railway/cli": "^4.42.1",
     "@types/node": "^22.15.3",
     "eslint": "^9.25.1",
