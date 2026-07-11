@@ -122,3 +122,12 @@ Merged PR #106 after the production-audit and Vercel checks passed.
 After the full three-minute deploy wait, verified the exact merge commit with the supplied authenticated production account.
 Production returned API 200/no-store/BYPASS, an activated worker, bounded 4/36 owned caches, and zero sensitive cache keys.
 Saved sanitized screenshots/video/JSON in testing/issue-63-production-security-upgrade; no patient identifiers or credentials were committed.
+
+2026-07-11 - Issue #64: Added durable record/account deletion receipts, full object manifests, retry leases, and scheduled retention cleanup.
+Purged verified local PHI, added device usage/manual cleanup, and excluded sensitive Android/iOS backups.
+Removed 566 tracked evidence artifacts and added PHI scanning plus encrypted seven-day CI evidence.
+Passed 480 web, 97 worker, and 56 shared tests; lint, typecheck, audit, two builds, 29 browser tests, and PWA smoke.
+Applied the production migration before merging PR #121 at commit da2a92c and waited the full deployment interval.
+Production synthetic audio, transcript, summary, and PDF deletion completed with 2/2 objects removed and a minimal receipt.
+Verified idempotent retry, record/search/log absence, a dead signed PDF, fail-closed auth, and zero local IndexedDB rows.
+Saved scrubbed screenshots/video only under ignored testing/issue-64-production-phi-retention; no account deletion was performed.
