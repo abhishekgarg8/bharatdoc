@@ -91,8 +91,11 @@ export function DashboardPageClient() {
   async function deleteDashboardRecording(
     record: DashboardRecord,
   ): Promise<void> {
-    if (token) await deleteRecording(token, record.id, app.request);
+    const result = token ? await deleteRecording(token, record.id, app.request) : null;
     setRecords((current) => current.filter((item) => item.id !== record.id));
+    if (result && result.deletion.state !== "completed") {
+      throw new Error(`Consultation data was removed; storage cleanup is ${result.deletion.state}. Receipt: ${result.deletion.id}`);
+    }
   }
 
   return (

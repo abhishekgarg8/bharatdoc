@@ -158,6 +158,7 @@ export function appendDeviceLog(input: DeviceLogInput): DeviceLogEntry {
     event: redactPatientIdentifiers(input.event).slice(0, 120),
     message: input.message ? redactPatientIdentifiers(input.message).slice(0, 500) : null,
     ...(metadata ? { metadata: safeMetadata(metadata) as Record<string, unknown> } : {}),
+    recordingId: null,
     patientId: null,
     id: safeRandomId("log"),
     createdAt: new Date().toISOString(),
@@ -178,6 +179,14 @@ export function appendDeviceLog(input: DeviceLogInput): DeviceLogEntry {
 
 export function listDeviceLogs(): DeviceLogEntry[] {
   return readStore().logs;
+}
+
+export function clearDeviceLogs(): void {
+  try {
+    storage()?.removeItem(STORE_KEY);
+  } catch {
+    return;
+  }
 }
 
 export async function flushDeviceLogs({

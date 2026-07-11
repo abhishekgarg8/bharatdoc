@@ -1,0 +1,9 @@
+# Keep legacy production/E2E evidence opaque in review diffs while its history is handled separately.
+/test/runs/** binary
+/test/screenshots/** binary
+/testing/** binary
+/.playwright-mcp/** binary
+/test/production-*.md binary
+/*-supabase-auth.png binary
+/prod-*.png binary
+/production-*.png binary

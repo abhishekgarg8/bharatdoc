@@ -96,6 +96,9 @@ export interface LocalRecordingRepository {
   get(id: string): Promise<LocalRecording | null>;
   list(): Promise<LocalRecording[]>;
   remove(id: string): Promise<void>;
+  getUsage(scope: LocalRecordingScope): Promise<{ recordings: number; bytes: number }>;
+  purge(scope: LocalRecordingScope): Promise<number>;
+  purgeAuthUser(authUserId: string | null): Promise<number>;
   updateDraft(input: UpdateLocalRecordingDraftInput): Promise<LocalRecording>;
   appendChunk(input: AppendAudioChunkInput): Promise<LocalRecording>;
   getLatestRecoverable(scope?: LocalRecordingScope | null): Promise<LocalRecording | null>;
@@ -251,6 +254,35 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
   abstract list(): Promise<LocalRecording[]>;
   abstract remove(id: string): Promise<void>;
 
+  async getUsage(scope: LocalRecordingScope): Promise<{ recordings: number; bytes: number }> {
+    const recordings = (await this.list()).filter(
+      (recording) => localRecordingMatchesScope(recording, scope) || isLegacyUnscopedLocalRecording(recording)
+    );
+    return {
+      recordings: recordings.length,
+      bytes: recordings.reduce(
+        (total, recording) => total + (recording.audioBlob?.size ?? recording.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0)),
+        0
+      )
+    };
+  }
+
+  async purge(scope: LocalRecordingScope): Promise<number> {
+    const ids = (await this.list())
+      .filter((recording) => localRecordingMatchesScope(recording, scope) || isLegacyUnscopedLocalRecording(recording))
+      .map((recording) => recording.id);
+    await Promise.all(ids.map((id) => this.remove(id)));
+    return ids.length;
+  }
+
+  async purgeAuthUser(authUserId: string | null): Promise<number> {
+    const ids = (await this.list())
+      .filter((recording) => (authUserId !== null && recording.authUserId === authUserId) || isLegacyUnscopedLocalRecording(recording))
+      .map((recording) => recording.id);
+    await Promise.all(ids.map((id) => this.remove(id)));
+    return ids.length;
+  }
+
   async createDraft(input: LocalRecordingDraftInput = {}): Promise<LocalRecording> {
     const timestamp = input.recordedAt ?? nowIso();
     return this.save({
@@ -392,16 +424,24 @@ abstract class BaseLocalRecordingRepository implements LocalRecordingRepository 
     });
   }
 
-  async markTranscribed(id: string, transcript: string): Promise<LocalRecording> {
+  async markTranscribed(id: string, _transcript: string): Promise<LocalRecording> {
     const current = requireExisting(await this.get(id), id);
-    return this.save({
+    const completed: LocalRecording = {
       ...current,
+      patientId: null,
+      label: null,
+      audioBlob: null,
+      audioChunks: [],
+      audioChunkMetadata: [],
+      audioMimeType: null,
       captureState: nextCaptureState(current.captureState, "transcribed"),
       syncState: "transcribed",
-      transcript: transcript.trim(),
+      transcript: null,
       updatedAt: nowIso(),
       error: null
-    });
+    };
+    await this.remove(id);
+    return completed;
   }
 
   async markFailed(id: string, error: string): Promise<LocalRecording> {
@@ -490,6 +530,13 @@ export function createIndexedDbLocalRecordingRepository(): LocalRecordingReposit
 
 export function createMemoryLocalRecordingRepository(initialRecords: LocalRecording[] = []): LocalRecordingRepository {
   return new MemoryLocalRecordingRepository(initialRecords);
+}
+
+export async function purgeLocalRecordingsForAuthUser(
+  authUserId: string | null,
+  repository: LocalRecordingRepository = createIndexedDbLocalRecordingRepository()
+): Promise<number> {
+  return repository.purgeAuthUser(authUserId);
 }
 
 export function localRecordingAudioBlob(recording: LocalRecording): Blob | null {

@@ -363,8 +363,10 @@ export function TranscriptSummaryScreen({
       } else {
         setMessage("Consultation deleted.");
       }
-    } catch {
-      setError("Unable to delete consultation.");
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message.startsWith("Consultation data was removed;")
+        ? caught.message
+        : "Unable to delete consultation.");
       setDeleting(false);
       return;
     }

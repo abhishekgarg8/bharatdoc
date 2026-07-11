@@ -16,6 +16,15 @@ export interface RecordingListItem extends Recording {
   doctor_name?: string | null;
 }
 
+export interface DeletionReceipt {
+  id: string;
+  state: "queued" | "running" | "completed" | "failed";
+  object_count: number;
+  deleted_object_count: number;
+  error_code: string | null;
+  completed_at: string | null;
+}
+
 export interface DashboardRecording {
   id: string;
   patient_id: string | null;
@@ -93,11 +102,7 @@ export interface RecordingsRepository {
     summary: string;
     expectedTranscript: string;
   }): Promise<RecordingListItem>;
-  deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null>;
-  removeRecordingStorageObjects(input: {
-    audioStoragePath: string | null;
-    pdfStoragePath: string | null;
-  }): Promise<void>;
+  deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<DeletionReceipt | null>;
   createPdfSignedUrl(path: string): Promise<string>;
 }
 
@@ -393,21 +398,17 @@ export async function deleteRecordingForDoctor(
   user: VerifiedUser,
   recordingId: string | null | undefined,
   repository: RecordingsRepository
-): Promise<{ recording_id: string }> {
+): Promise<{ recording_id: string; deletion: DeletionReceipt }> {
   const doctor = await requireActiveDoctorContext(user, repository);
   requireClinicId(doctor);
-  const deleted = await repository.deleteRecordingForDoctor(requireRecordingId(recordingId), doctor.id);
+  const recordingKey = requireRecordingId(recordingId);
+  const deletion = await repository.deleteRecordingForDoctor(recordingKey, doctor.id);
 
-  if (!deleted) {
+  if (!deletion) {
     throw new AppError(404, "Recording was not found.", "RECORDING_NOT_FOUND");
   }
 
-  await repository.removeRecordingStorageObjects({
-    audioStoragePath: deleted.audio_storage_path,
-    pdfStoragePath: deleted.pdf_storage_path
-  });
-
-  return { recording_id: deleted.id };
+  return { recording_id: recordingKey, deletion };
 }
 
 export async function createRecordingMetadataForDoctor(

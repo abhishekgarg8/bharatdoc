@@ -114,7 +114,16 @@ export function DashboardScreen({
     }
 
     if (localRecording.serverRecordingId && onDeleteRecording) {
-      await onDeleteRecording({ ...record, id: localRecording.serverRecordingId, offline: false });
+      let cleanupError: unknown;
+      try {
+        await onDeleteRecording({ ...record, id: localRecording.serverRecordingId, offline: false });
+      } catch (caught) {
+        cleanupError = caught;
+      }
+      await repository.remove(localRecording.id);
+      setLocalRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id));
+      if (cleanupError) throw cleanupError;
+      return true;
     }
 
     await repository.remove(localRecording.id);
@@ -156,8 +165,10 @@ export function DashboardScreen({
       }
 
       setConfirmingDeleteId(null);
-    } catch {
-      setDeleteError("Unable to delete consultation. Try again.");
+    } catch (caught) {
+      setDeleteError(caught instanceof Error && caught.message.startsWith("Consultation data was removed;")
+        ? caught.message
+        : "Unable to delete consultation. Try again.");
     } finally {
       setDeletingRecordId(null);
     }

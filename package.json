@@ -8,6 +8,7 @@
   "packageManager": "pnpm@10.8.0",
   "scripts": {
     "audit:prod": "pnpm audit --prod --audit-level high",
+    "check:phi-artifacts": "node scripts/check-phi-artifacts.mjs",
     "build": "pnpm -r build",
     "dev:web": "pnpm --filter @bharatdoc/web dev",
     "dev:worker": "pnpm --filter @bharatdoc/worker dev",

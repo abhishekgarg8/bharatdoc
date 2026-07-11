@@ -25,6 +25,7 @@ import {
   type LocalRecordingScope,
   type LocalRecordingRepository
 } from "@/lib/client/local-recordings";
+import { appendDeviceLog } from "@/lib/client/device-logs";
 
 interface RecordingDetailPageClientProps {
   recordingId: string;
@@ -189,7 +190,9 @@ export function RecordingDetailPageClient({
 
     await repository.markTranscribing(localRecording.id);
     const result = await transcribeRecordingAudio(idToken, recordingIdToTranscribe, audioBlob, audioMimeType, fetcher);
-    await repository.markTranscribed(localRecording.id, result.transcript);
+    await repository.markTranscribed(localRecording.id, result.transcript).catch(() => {
+      appendDeviceLog({ level: "warn", event: "recording.local_cleanup_retry_required" });
+    });
 
     return result;
   }
@@ -208,12 +211,16 @@ export function RecordingDetailPageClient({
 
   async function deleteCurrentRecording(recordingIdToDelete: string): Promise<void> {
     if (idToken) {
-      await deleteRecording(idToken, recordingIdToDelete, fetcher);
+      const result = await deleteRecording(idToken, recordingIdToDelete, fetcher);
+      await removeMatchingLocalRecording(recordingIdToDelete);
+      if (result.deletion.state !== "completed") {
+        throw new Error(`Consultation data was removed; storage cleanup is ${result.deletion.state}. Receipt: ${result.deletion.id}`);
+      }
     } else if (!allowDemoFallback) {
       throw new Error("Authentication is required.");
     }
 
-    await removeMatchingLocalRecording(recordingIdToDelete);
+    if (!idToken) await removeMatchingLocalRecording(recordingIdToDelete);
     clearSearchNavigationState();
     navigate(backNavigation.href);
   }

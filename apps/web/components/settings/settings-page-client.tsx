@@ -29,6 +29,7 @@ interface SettingsPageClientProps {
 function toSettingsDoctor(doctor: Doctor): SettingsDoctorProfile {
   return {
     id: doctor.id,
+    authUserId: doctor.firebase_uid,
     name: doctor.name,
     specialization: doctor.specialization,
     contact: doctor.phone,

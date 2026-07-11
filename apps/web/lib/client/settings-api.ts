@@ -92,3 +92,11 @@ export async function updateDoctorProfile(
 
   return payload.doctor;
 }
+
+export async function deleteAccount(idToken: string, fetcher: typeof fetch = fetch) {
+  const response = await fetcher("/api/account", { method: "DELETE", headers: authHeaders(idToken) });
+  return parseJsonOrThrow<{ deletion: { id: string; state: "completed" | "failed" | "queued" | "running" } }>(
+    response,
+    "Unable to delete account."
+  );
+}

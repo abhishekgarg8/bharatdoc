@@ -38,12 +38,34 @@ describe("server error mapping", () => {
     expect(body.error.request_id).toEqual(expect.any(String));
     expect(console.error).toHaveBeenCalledWith(
       "api.request.failed",
-      expect.objectContaining({
-        request_id: body.error.request_id,
-        error_message: "Internal server error.",
-        internal_error_message: "Supabase service role secret leaked"
+      expect.not.objectContaining({
+        internal_error_message: expect.anything(),
+        internal_error_stack: expect.anything()
       })
     );
+    expect(console.error).toHaveBeenCalledWith(
+      "api.request.failed",
+      expect.objectContaining({
+        request_id: body.error.request_id,
+        error_message: "Internal server error."
+      })
+    );
+  });
+
+  it("redacts clinical identifiers from dynamic request paths in privileged logs", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const recordingId = "3fb9431c-3d99-4073-8f6a-3e97c412643d";
+
+    errorResponse(
+      new AppError(404, "Consultation was not found.", "RECORDING_NOT_FOUND"),
+      new Request(`https://bharatdoc.test/api/recordings/${recordingId}?token=secret`)
+    );
+
+    expect(warning).toHaveBeenCalledWith(
+      "api.request.rejected",
+      expect.objectContaining({ path: "/api/recordings/[id]" })
+    );
+    expect(JSON.stringify(warning.mock.calls)).not.toMatch(new RegExp(`${recordingId}|token=secret`));
   });
 
   it("keeps expected app error responses user-readable", async () => {

@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { BharatButton } from "@/components/bharat-button";
 import { BottomNav } from "@/components/bottom-nav";
 import { SpecializationField } from "@/components/settings/specialization-field";
+import { DeviceStorageControls } from "@/components/settings/device-storage-controls";
 import {
   approvePendingDoctor,
   reapproveClinicDoctor,
@@ -14,12 +15,14 @@ import {
   updateClinicProfile,
   type PendingApproval
 } from "@/lib/client/clinic-admin-api";
-import { updateDoctorProfile } from "@/lib/client/settings-api";
+import { deleteAccount, updateDoctorProfile } from "@/lib/client/settings-api";
 import { CLINIC_CODE_LENGTH, DEFAULT_SUMMARY_PROMPT } from "@bharatdoc/shared";
 import { cn } from "@/lib/utils";
+import type { LocalRecordingRepository } from "@/lib/client/local-recordings";
 
 export interface SettingsDoctorProfile {
   id?: string;
+  authUserId?: string;
   name: string;
   specialization: string;
   contact: string;
@@ -60,6 +63,7 @@ interface SettingsScreenProps {
   allowLocalDemoWrites?: boolean;
   demoMode?: boolean;
   onSignOut?: () => void | Promise<void>;
+  localRepository?: LocalRecordingRepository;
 }
 
 const defaultDoctor: SettingsDoctorProfile = {
@@ -181,7 +185,8 @@ export function SettingsScreen({
   fetcher = fetch,
   allowLocalDemoWrites = false,
   demoMode = false,
-  onSignOut
+  onSignOut,
+  localRepository
 }: SettingsScreenProps) {
   const resolvedDoctor = doctor ?? (demoMode ? defaultDoctor : null);
   const resolvedClinic = clinic ?? (demoMode ? defaultClinic : null);
@@ -224,6 +229,8 @@ export function SettingsScreen({
   });
   const [clinicCodeForm, setClinicCodeForm] = useState(clinicForState.code);
   const [signingOut, setSigningOut] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ownerReviewRef = useRef<HTMLElement | null>(null);
@@ -536,6 +543,29 @@ export function SettingsScreen({
     } catch {
       setError("Unable to sign out. Please try again.");
       setSigningOut(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (!idToken || deletingAccount) return;
+    if (!window.confirm("Delete your BharatDoc account and every consultation you own? This cannot be undone.")) return;
+    if (!window.confirm("Final confirmation: permanently delete account data and stored files?")) return;
+    setDeletingAccount(true);
+    setDeletionStatus("Deletion in progress…");
+    try {
+      const result = await deleteAccount(idToken, fetcher);
+      if (result.deletion.state !== "completed") {
+        setDeletionStatus("Deletion cleanup is queued. Retry this action to continue safely.");
+        return;
+      }
+      setDeletionStatus("Account deletion completed.");
+      await onSignOut?.();
+    } catch {
+      setDeletionStatus(isOwner
+        ? "Unable to delete. Hospital owners must transfer ownership before deleting an account with other members."
+        : "Unable to delete account. No data was silently discarded; retry from this device.");
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -891,6 +921,13 @@ export function SettingsScreen({
             />
           </SettingsGroup>
 
+          {displayedDoctor.id && displayedDoctor.authUserId && resolvedClinic ? (
+            <DeviceStorageControls
+              scope={{ authUserId: displayedDoctor.authUserId, doctorId: displayedDoctor.id, clinicId: resolvedClinic.id }}
+              {...(localRepository ? { repository: localRepository } : {})}
+            />
+          ) : null}
+
           {canManageClinic ? (
             <section ref={ownerReviewRef} className="mb-5">
               <div className="mb-2 ml-1 font-body text-[11px] font-bold uppercase tracking-[0.16em] text-terracotta">
@@ -931,6 +968,9 @@ export function SettingsScreen({
 
           <SettingsGroup title="Account">
             <SettingsRow title={signingOut ? "Signing out..." : "Sign out"} danger onClick={handleSignOut} disabled={signingOut} />
+            {idToken ? (
+              <SettingsRow title={deletingAccount ? "Deleting account…" : "Delete account"} subtitle={deletionStatus ?? "Permanently delete owned consultations and account data"} danger onClick={handleDeleteAccount} disabled={deletingAccount} />
+            ) : null}
           </SettingsGroup>
         </div>
 

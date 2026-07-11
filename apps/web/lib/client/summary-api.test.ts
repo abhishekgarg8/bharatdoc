@@ -124,12 +124,14 @@ describe("summary client API", () => {
   it("deletes recordings through the recording endpoint", async () => {
     const fetcher = vi.fn(async () =>
       Response.json({
-        recording_id: apiRecording.id
+        recording_id: apiRecording.id,
+        deletion: { id: "receipt-1", state: "completed", error_code: null }
       })
     ) as unknown as typeof fetch;
 
     await expect(deleteRecording("id-token", apiRecording.id, fetcher)).resolves.toEqual({
-      recording_id: apiRecording.id
+      recording_id: apiRecording.id,
+      deletion: { id: "receipt-1", state: "completed", error_code: null }
     });
     expect(fetcher).toHaveBeenCalledWith(`/api/recordings/${apiRecording.id}`, {
       method: "DELETE",

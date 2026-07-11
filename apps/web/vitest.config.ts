@@ -7,7 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),
-      "@bharatdoc/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url))
+      "@bharatdoc/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
+      "server-only": fileURLToPath(new URL("test/server-only.ts", import.meta.url))
     }
   },
   test: {

@@ -703,16 +703,18 @@ export function RecordingScreen({
           audioMimeType,
           fetcher
         );
-        const updated = await repository.markTranscribed(workingRecording.id, result.transcript);
-        setRecording(updated);
+        const updated = await repository.markTranscribed(workingRecording.id, result.transcript).catch(() => {
+          logDeviceEvent({ level: "warn", event: "recording.local_cleanup_retry_required" });
+          return null;
+        });
+        if (updated) setRecording(updated);
         logDeviceEvent({
           level: "info",
           event: "recording.transcription_succeeded",
           recordingId: serverRecordingId,
-          patientId: updated.patientId,
+          patientId: null,
           metadata: {
-            transcript_chars: result.transcript.length,
-            audio_storage_path: result.audio_storage_path
+            transcript_chars: result.transcript.length
           }
         });
         navigate(`/recordings/${serverRecordingId}`);

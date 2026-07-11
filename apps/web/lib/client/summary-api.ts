@@ -33,6 +33,14 @@ export interface WorkerPdfResponse {
 
 export interface DeleteRecordingResponse {
   recording_id: string;
+  deletion: { id: string; state: "queued" | "running" | "completed" | "failed"; error_code: string | null };
+}
+
+export async function retryRecordingDeletion(idToken: string, receiptId: string, fetcher: typeof fetch = fetch) {
+  const response = await fetcher(`/api/deletions/${encodeURIComponent(receiptId)}`, {
+    method: "POST", headers: { Authorization: `Bearer ${idToken}` }
+  });
+  return parseJsonOrThrow<{ deletion: DeleteRecordingResponse["deletion"] }>(response, "Unable to retry deletion cleanup.");
 }
 
 export async function fetchRecordingDetail(

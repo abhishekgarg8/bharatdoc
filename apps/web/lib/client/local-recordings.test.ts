@@ -8,6 +8,7 @@ import {
   mapLocalRecordingsToDashboardRecords,
   mapQuarantinedLocalRecordings,
   recoverQuarantinedLocalRecordingForScope,
+  purgeLocalRecordingsForAuthUser,
   toLocalDashboardRecord,
   type LocalRecording
 } from "@/lib/client/local-recordings";
@@ -79,6 +80,39 @@ describe("local recording repository", () => {
       syncState: "local"
     });
     expect(updated.captureState).toBe("recording");
+  });
+
+  it("reports scoped device usage and purges only the signed-in doctor's recordings", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      baseRecording,
+      { ...baseRecording, id: "other", authUserId: "auth-user-2", doctorId: "doctor-2" }
+    ]);
+
+    await expect(repository.getUsage(baseScope)).resolves.toEqual({ recordings: 1, bytes: 5 });
+    await expect(repository.purge(baseScope)).resolves.toBe(1);
+    await expect(repository.list()).resolves.toEqual([expect.objectContaining({ id: "other" })]);
+  });
+
+  it("purges every former clinic scope for one auth user without touching another account", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      baseRecording,
+      { ...baseRecording, id: "former-clinic", clinicId: "clinic-old" },
+      { ...baseRecording, id: "legacy", authUserId: null, doctorId: null, clinicId: null },
+      { ...baseRecording, id: "other-user", authUserId: "auth-user-2" }
+    ]);
+
+    await expect(purgeLocalRecordingsForAuthUser("auth-user-1", repository)).resolves.toBe(3);
+    await expect(repository.list()).resolves.toEqual([expect.objectContaining({ id: "other-user" })]);
+  });
+
+  it("purges unattributable legacy PHI without a session and preserves every scoped account", async () => {
+    const repository = createMemoryLocalRecordingRepository([
+      baseRecording,
+      { ...baseRecording, id: "legacy", authUserId: null, doctorId: null, clinicId: null },
+      { ...baseRecording, id: "other-user", authUserId: "auth-user-2" }
+    ]);
+    await expect(purgeLocalRecordingsForAuthUser(null, repository)).resolves.toBe(1);
+    await expect(repository.list()).resolves.toHaveLength(2);
   });
 
   it("appends chunks and rebuilds audio for interrupted sessions", async () => {
@@ -226,6 +260,25 @@ describe("local recording repository", () => {
     expect(finalized.audioBlob).toBeInstanceOf(Blob);
   });
 
+  it("removes local audio, chunks, transcript, and patient identity after verified server transcription", async () => {
+    const repository = createMemoryLocalRecordingRepository([baseRecording]);
+    await repository.markTranscribing(baseRecording.id);
+
+    const completed = await repository.markTranscribed(baseRecording.id, "Patient reports fever.");
+
+    expect(completed).toMatchObject({
+      patientId: null,
+      label: null,
+      audioBlob: null,
+      audioChunks: [],
+      audioChunkMetadata: [],
+      audioMimeType: null,
+      transcript: null,
+      syncState: "transcribed"
+    });
+    await expect(repository.get(baseRecording.id)).resolves.toBeNull();
+  });
+
   it("uses the canonical finalized container instead of concatenated checkpoint fragments", async () => {
     const repository = createMemoryLocalRecordingRepository();
     await repository.createDraft({ id: "canonical" });
@@ -286,7 +339,9 @@ describe("local recording repository", () => {
     await expect(repository.markTranscribed(baseRecording.id, "Patient reports fever.")).resolves.toMatchObject({
       syncState: "transcribed",
       captureState: "transcribed",
-      transcript: "Patient reports fever."
+      transcript: null,
+      audioBlob: null,
+      audioChunks: []
     });
   });
 

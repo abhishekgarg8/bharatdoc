@@ -51,20 +51,17 @@ function requestPathFor(request: Request | undefined): string | null {
   }
 
   try {
-    return new URL(request.url).pathname;
+    return new URL(request.url).pathname.replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+      "[id]"
+    );
   } catch {
     return null;
   }
 }
 
-function boundedErrorText(value: string | undefined, maxLength: number): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed.slice(0, maxLength) : null;
-}
-
 export function errorResponse(error: unknown, request?: Request): Response {
   const appError = toAppError(error);
-  const internalError = error instanceof Error ? error : null;
   const requestId = requestIdFor(request);
   const logPayload = {
     request_id: requestId,
@@ -73,13 +70,7 @@ export function errorResponse(error: unknown, request?: Request): Response {
     error_code: appError.code,
     error_status: appError.status,
     error_name: error instanceof Error ? error.name : typeof error,
-    error_message: appError.status >= 500 ? "Internal server error." : appError.message,
-    ...(appError.status >= 500
-      ? {
-          internal_error_message: boundedErrorText(internalError?.message ?? String(error), 1000),
-          internal_error_stack: boundedErrorText(internalError?.stack, 4000)
-        }
-      : {})
+    error_message: appError.status >= 500 ? "Internal server error." : appError.message
   };
 
   if (appError.status >= 500) {

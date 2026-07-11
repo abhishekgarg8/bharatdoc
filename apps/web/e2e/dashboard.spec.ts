@@ -44,7 +44,7 @@ test("recording detail smoke generates and edits a summary", async ({ page }) =>
   await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
 });
 
-test("local recording flow saves for later, reloads, reopens, and transcribes the exact recording", async ({ page }) => {
+test("local recording flow saves, reopens, transcribes, and removes the exact local PHI", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/recordings/new?mockRecorder=1&demo=1");
 
@@ -61,6 +61,8 @@ test("local recording flow saves for later, reloads, reopens, and transcribes th
   await expect(page.getByLabel("Local recording P-10500: Awaiting transcription")).toBeVisible();
   const reopen = page.getByRole("link", { name: "Transcribe recording P-10500" });
   await expect(reopen).toHaveAttribute("href", /\/recordings\/new\?local_recording_id=.+&demo=1/);
+  const localRecordingId = new URL((await reopen.getAttribute("href"))!, page.url()).searchParams.get("local_recording_id");
+  expect(localRecordingId).toBeTruthy();
   await reopen.click({ noWaitAfter: true });
   await expect(page.getByText("Local recording ready to transcribe.")).toBeVisible({ timeout: 30_000 });
   await expect(page).toHaveURL(/local_recording_id=.+&demo=1/);
@@ -72,7 +74,21 @@ test("local recording flow saves for later, reloads, reopens, and transcribes th
   await expect(page.getByLabel("Label")).toHaveValue("Reopened fever review");
   await page.getByRole("button", { name: /transcribe/i }).click();
   await expect(page.getByText("Transcript ready.")).toBeVisible();
-  await expect(page.getByText(/mild cough/)).toBeVisible();
+  await expect.poll(() => page.evaluate((id) => new Promise<boolean>((resolve, reject) => {
+    const open = indexedDB.open("bharatdoc-local-recordings", 2);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const get = db.transaction("recordings").objectStore("recordings").get(id);
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => {
+        db.close();
+        resolve(Boolean(get.result));
+      };
+    };
+  }), localRecordingId!)).toBe(false);
+  await page.goto("/dashboard?demo=1");
+  await expect(page.getByLabel("Local recording P-10500: Awaiting transcription")).toHaveCount(0);
 });
 
 test("root landing page renders and links to onboarding", async ({ page }) => {

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreateRecordingRow, RecordingListItem, RecordingsRepository } from "@/lib/server/recordings";
 import { patientIdSearchPattern } from "@/lib/server/patient-id-search";
 import { AppError } from "@/lib/server/errors";
+import { processDeletionReceipt } from "@/lib/server/phi-deletion";
 
 interface RecordingWithDoctorRow extends Recording {
   doctors:
@@ -30,13 +31,6 @@ function toRecordingListItem(row: RecordingWithDoctorRow): RecordingListItem {
   return {
     ...recording,
     doctor_name: doctorNameFromRow(row)
-  };
-}
-
-function toDeletedRecordingListItem(row: Recording): RecordingListItem {
-  return {
-    ...row,
-    doctor_name: null
   };
 }
 
@@ -213,52 +207,20 @@ export function createSupabaseRecordingsRepository(supabase: SupabaseClient): Re
       return { ...result.recording, doctor_name: null };
     },
 
-    async deleteRecordingForDoctor(recordingId: string, doctorId: string): Promise<RecordingListItem | null> {
-      const { data, error } = await supabase
-        .from("recordings")
-        .delete()
-        .eq("id", recordingId)
-        .eq("doctor_id", doctorId)
-        .select("*")
-        .maybeSingle();
-
+    async deleteRecordingForDoctor(recordingId: string, doctorId: string) {
+      const { data, error } = await supabase.rpc("request_recording_deletion", {
+        p_recording_id: recordingId,
+        p_doctor_id: doctorId
+      });
       if (error) {
+        if (error.message?.includes("RECORDING_NOT_FOUND")) return null;
+        if (error.message?.includes("RECORDING_PROCESSING_ACTIVE")) {
+          throw new AppError(409, "This consultation is still processing. Try deletion again shortly.", "RECORDING_PROCESSING_ACTIVE");
+        }
         throw error;
       }
-
-      return data ? toDeletedRecordingListItem(data as Recording) : null;
-    },
-
-    async removeRecordingStorageObjects(input): Promise<void> {
-      const removals: PromiseLike<unknown>[] = [];
-
-      if (input.audioStoragePath) {
-        removals.push(
-          supabase.storage
-            .from("audio")
-            .remove([input.audioStoragePath])
-            .then(({ error }) => {
-              if (error) {
-                throw error;
-              }
-            })
-        );
-      }
-
-      if (input.pdfStoragePath) {
-        removals.push(
-          supabase.storage
-            .from("pdfs")
-            .remove([input.pdfStoragePath])
-            .then(({ error }) => {
-              if (error) {
-                throw error;
-              }
-            })
-        );
-      }
-
-      await Promise.all(removals);
+      const receipt = data as import("@/lib/server/recordings").DeletionReceipt;
+      return processDeletionReceipt(supabase, receipt.id);
     },
 
     async createPdfSignedUrl(path: string): Promise<string> {
