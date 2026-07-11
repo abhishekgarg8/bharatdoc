@@ -113,3 +113,12 @@ Passed 96 worker tests plus lint, typecheck, build, migration contracts, and ear
 After the full deploy wait, production returned concurrent PDF 200/200 and replay 200 with one provider call and one current artifact.
 Saved sanitized pre-fix and passing screenshots/JSON plus the passing video in testing/issue-62-production-ai-processing-controls.
 Removed the synthetic record, storage objects, processing rows, attempts, and matching diagnostic logs after verification.
+
+2026-07-11 - Issue #63: Upgraded unsupported Next.js 14 to 15.5.20 and unified React 19.2.7.
+Removed vulnerable Workbox dependencies and shipped a bounded owned worker that never caches API, auth, query, or private responses.
+Added dynamic API no-store policy tests, weekly/on-PR production audits, grouped Dependabot updates, and the security/performance report.
+Reduced 25 production advisories (11 high) to zero; 447 web tests, 96 worker tests, lint, typecheck, two builds, PWA smoke, and 29 browser tests passed.
+Merged PR #106 after the production-audit and Vercel checks passed.
+After the full three-minute deploy wait, verified the exact merge commit with the supplied authenticated production account.
+Production returned API 200/no-store/BYPASS, an activated worker, bounded 4/36 owned caches, and zero sensitive cache keys.
+Saved sanitized screenshots/video/JSON in testing/issue-63-production-security-upgrade; no patient identifiers or credentials were committed.
