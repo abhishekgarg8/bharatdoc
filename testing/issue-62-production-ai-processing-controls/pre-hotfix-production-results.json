@@ -1,0 +1,30 @@
+{
+  "tested_at": "2026-07-10T12:12:50.584Z",
+  "recording_id": "cb6b24be-2321-4c09-ade1-a95f86bcbb22",
+  "patient_id": "ISSUE6280440097",
+  "recovery_from_attempt_1": true,
+  "transcription_statuses": [
+    200,
+    200
+  ],
+  "transcription_same_result": true,
+  "transcript_length": 89,
+  "summary_statuses": [
+    200,
+    200
+  ],
+  "summary_same_result": true,
+  "summary_length": 384,
+  "pdf_statuses": [
+    500,
+    200
+  ],
+  "pdf_replay_status": 500,
+  "pdf_same_version": false,
+  "pdf_same_generated_at": false,
+  "pdf_urls_present": false,
+  "pdf_download_status": null,
+  "conflict_status": 409,
+  "conflict_code": "IDEMPOTENCY_KEY_REUSED",
+  "pass": false
+}

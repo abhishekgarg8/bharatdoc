@@ -104,3 +104,12 @@ Merged PR #100, caught a doubled bearer header in production, then fixed it test
 After the second deploy wait, production returned 200 for both bootstrap and dashboard with one identical bearer value.
 Verified minimal bootstrap/cache fields plus an offline dashboard reload without a server record request or error.
 Saved visually reviewed masked screenshots locally in testing/issue-77-authenticated-app-shell; no PHI was committed.
+
+2026-07-11 - Issue #62: Added durable idempotency, quotas, leases, retry recovery, and artifact accounting for AI work.
+Validated immutable transcription manifests, one active operation per recording, per-doctor/clinic limits, and PHI-free metrics.
+Merged PRs #99 and #101 with migrations, then found a stale PDF completion race during production verification.
+Fixed authoritative completed-job replay and artifact cleanup ownership test-first in PR #104.
+Passed 96 worker tests plus lint, typecheck, build, migration contracts, and earlier web/shared gates.
+After the full deploy wait, production returned concurrent PDF 200/200 and replay 200 with one provider call and one current artifact.
+Saved sanitized pre-fix and passing screenshots/JSON plus the passing video in testing/issue-62-production-ai-processing-controls.
+Removed the synthetic record, storage objects, processing rows, attempts, and matching diagnostic logs after verification.
