@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Figtree, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { NativeShellBridge } from "@/components/native-shell-bridge";
+import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${instrumentSerif.variable} ${figtree.variable} ${jetBrainsMono.variable}`}>
       <body>
+        <ServiceWorkerRegistration enabled={process.env.NODE_ENV === "production"} />
         <NativeShellBridge />
         {children}
         <SpeedInsights />

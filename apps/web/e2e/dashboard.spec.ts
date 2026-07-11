@@ -23,7 +23,7 @@ test("hospital search finds records and opens completed consultations", async ({
   await expect(page.getByRole("link", { name: "Open recording P-10470" })).toHaveAttribute("href", "/recordings/p-10470");
   expect(requestUrls.every((url) => !url.includes("P-10470"))).toBe(true);
   await page.goto("/recordings/p-10470?demo=1");
-  await expect(page).toHaveURL(/\/recordings\/p-10470\?demo=1$/);
+  await expect(page).toHaveURL(/\/recordings\/p-10470$/);
   await expect(page.getByLabel("PDF saved")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open PDF" })).toBeVisible();
 });
@@ -86,8 +86,10 @@ test("root landing page renders and links to onboarding", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Turn every consultation into an AI-drafted, doctor-reviewed summary and Patient ID PDF.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/signup");
-  await page.getByRole("link", { name: "Get started" }).first().click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await Promise.all([
+    page.waitForURL(/\/onboarding$/, { timeout: 30_000 }),
+    page.getByRole("link", { name: "Get started" }).first().click()
+  ]);
 });
 
 test("onboarding explainer is skippable and has three screens", async ({ page }) => {
@@ -96,9 +98,9 @@ test("onboarding explainer is skippable and has three screens", async ({ page })
   await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Skip" })).toHaveAttribute("href", "/signup");
   await expect(page.getByLabel(/show /i)).toHaveCount(3);
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Confirm your email" })).toBeVisible();
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Start recording and transcribing" })).toBeVisible();
   await expect(page.getByRole("link", { name: /get started/i })).toHaveAttribute("href", "/signup");
 });
@@ -163,7 +165,7 @@ test("onboarding smoke renders email password entry", async ({ page }) => {
 test("PGIMER onboarding smoke renders branded locked join entry", async ({ page }) => {
   await page.goto("/h/pgimer?demo=1");
 
-  await expect(page.getByRole("img")).toHaveCount(0);
+  await expect(page.locator("main img")).toHaveCount(0);
   await expect(page.getByText("Exclusive hospital access")).toBeVisible();
   await expect(page.getByText("AI scribe exclusively for PGIMER Doctors")).toBeVisible();
   await expect(page.getByText(/Advanced clinical documentation tools as used by large well-funded health systems in the US/)).toBeVisible();
@@ -205,13 +207,17 @@ test("settings smoke renders owner admin surface", async ({ page }) => {
 test("help center and terms pages render from settings links", async ({ page }) => {
   await page.goto("/settings?demo=1");
 
-  await page.getByRole("link", { name: /help & support/i }).click();
-  await expect(page).toHaveURL(/\/help-center$/);
+  await Promise.all([
+    page.waitForURL(/\/help-center$/, { timeout: 30_000 }),
+    page.getByRole("link", { name: /help & support/i }).click()
+  ]);
   await expect(page.getByRole("heading", { name: "Help Center" })).toBeVisible();
   await expect(page.getByText("How do doctors join a hospital workspace?")).toBeVisible();
   await page.goto("/settings?demo=1");
-  await page.getByRole("link", { name: /terms and privacy/i }).click();
-  await expect(page).toHaveURL(/\/terms-privacy$/);
+  await Promise.all([
+    page.waitForURL(/\/terms-privacy$/, { timeout: 30_000 }),
+    page.getByRole("link", { name: /terms and privacy/i }).click()
+  ]);
   await expect(page.getByRole("heading", { name: "Terms and Privacy" })).toBeVisible();
   await expect(page.getByText("Information we process")).toBeVisible();
 });

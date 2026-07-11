@@ -8,11 +8,12 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 export const preferredRegion = "bom1";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const repository = createSupabaseClinicAdminRepository(createSupabaseServerClient());
-    const result = await removeDoctorFromClinicForOwner(user, params.id, repository);
+    const result = await removeDoctorFromClinicForOwner(user, id, repository);
 
     return Response.json(result);
   } catch (error) {

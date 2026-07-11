@@ -14,6 +14,7 @@ import {
 import type { AuthClient } from "@/lib/client/auth-client";
 import { cacheLocalRecordingContext } from "@/lib/client/local-recording-context";
 import type { AuthenticatedBootstrap } from "@/lib/client/authenticated-app";
+import { DEMO_LOCAL_RECORDING_SCOPE } from "@/lib/client/local-recordings";
 
 const doctorId = "11111111-1111-4111-8111-111111111111";
 const clinicId = "22222222-2222-4222-8222-222222222222";
@@ -68,6 +69,17 @@ function Probe() {
   );
 }
 
+function DemoScopeProbe() {
+  const { state } = useAuthenticatedApp();
+  return (
+    <span>
+      {state.status === "active_demo"
+        ? [state.context.authUserId, state.context.doctorId, state.context.clinicId].join("|")
+        : state.status}
+    </span>
+  );
+}
+
 function RequestFailureProbe() {
   const app = useAuthenticatedApp();
   const [failure, setFailure] = useState("");
@@ -119,11 +131,35 @@ function AuthorizationProbe() {
 
 describe("AuthenticatedAppShell", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
+    window.history.replaceState(null, "", "/");
     window.localStorage.clear();
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,
       value: true,
     });
+  });
+
+  it("uses the recorder's demo scope for dashboard local-record filtering", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_MODE", "true");
+    window.history.replaceState(null, "", "/dashboard?demo=1");
+    const { authClient } = client(null);
+
+    render(
+      <AuthenticatedAppShell authClient={authClient} onNavigate={vi.fn()}>
+        <DemoScopeProbe />
+      </AuthenticatedAppShell>
+    );
+
+    await expect(
+      screen.findByText(
+        [
+          DEMO_LOCAL_RECORDING_SCOPE.authUserId,
+          DEMO_LOCAL_RECORDING_SCOPE.doctorId,
+          DEMO_LOCAL_RECORDING_SCOPE.clinicId
+        ].join("|")
+      )
+    ).resolves.toBeInTheDocument();
   });
 
   it("routes missing sessions without mounting active children", async () => {
