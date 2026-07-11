@@ -11,18 +11,19 @@ export const preferredRegion = "bom1";
 export const dynamic = "force-dynamic";
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
   try {
+    const { id } = await params;
     const bearerToken = extractBearerToken(request.headers.get("authorization"));
     await verifyRequestUser(request, createSupabaseAuthVerifier());
     const idempotencyKey = request.headers.get("idempotency-key");
     const result = await proxySummaryRequest({
-      recordingId: params.id,
+      recordingId: id,
       bearerToken,
       workerBaseUrl: getWebEnv().RAILWAY_WORKER_URL,
       ...(idempotencyKey ? { idempotencyKey } : {})
@@ -36,10 +37,11 @@ export async function POST(request: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
+    const { id } = await params;
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const body = (await request.json()) as { summary?: string };
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
-    const recording = await saveRecordingSummaryForDoctor(user, params.id, body.summary, repository);
+    const recording = await saveRecordingSummaryForDoctor(user, id, body.summary, repository);
 
     return Response.json({ recording });
   } catch (error) {

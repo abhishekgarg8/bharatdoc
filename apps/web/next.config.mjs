@@ -1,52 +1,19 @@
-import withPWAInit from "@ducanh2912/next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
-  runtimeCaching: [
-    {
-      urlPattern: ({ url, request }) =>
-        request.mode === "navigate" &&
-        ["/", "/dashboard", "/search", "/settings", "/settings/language", "/settings/prompt", "/recordings/new", "/onboarding", "/signup", "/h/pgimer", "/pending-approval"].includes(
-          url.pathname
-        ),
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "bharatdoc-app-shell",
-        networkTimeoutSeconds: 3,
-        matchOptions: {
-          ignoreSearch: true
-        },
-        expiration: {
-          maxEntries: 24,
-          maxAgeSeconds: 60 * 60 * 24
-        }
-      }
-    },
-    {
-      urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-      handler: "NetworkOnly"
-    },
-    {
-      urlPattern: ({ url }) => url.pathname.startsWith("/_next/static/"),
-      handler: "StaleWhileRevalidate",
-      options: {
-        cacheName: "bharatdoc-static-assets",
-        expiration: {
-          maxEntries: 96,
-          maxAgeSeconds: 60 * 60 * 24 * 7
-        }
-      }
-    }
-  ]
-});
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@bharatdoc/shared"]
+  transpilePackages: ["@bharatdoc/shared"],
+  async headers() {
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" }
+        ]
+      }
+    ];
+  }
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;

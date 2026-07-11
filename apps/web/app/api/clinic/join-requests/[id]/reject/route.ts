@@ -8,12 +8,13 @@ import { createSupabaseServerClient } from "@/lib/server/supabase";
 export const preferredRegion = "bom1";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const user = await verifyRequestUser(request, createSupabaseAuthVerifier());
     const body = (await request.json().catch(() => ({}))) as { reason?: string };
     const repository = createSupabaseClinicAdminRepository(createSupabaseServerClient());
-    const result = await rejectJoinRequestForOwner(user, params.id, body.reason ?? null, repository);
+    const result = await rejectJoinRequestForOwner(user, id, body.reason ?? null, repository);
 
     return Response.json(result);
   } catch (error) {

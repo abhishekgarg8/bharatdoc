@@ -155,8 +155,8 @@ export async function createRecordRtcAudioRecorder(): Promise<AudioRecorder> {
   const mimeType = selectSupportedAudioMimeType();
 
   try {
-    const module = await import("recordrtc");
-    const RecordRTC = module.default as RecordRtcConstructor;
+    const recordRtcModule = await import("recordrtc");
+    const RecordRTC = recordRtcModule.default as RecordRtcConstructor;
     recorder = new RecordRTC(stream, {
       type: "audio",
       mimeType,

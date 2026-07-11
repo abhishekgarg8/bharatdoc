@@ -33,7 +33,7 @@ describe("production demo route gate", () => {
     vi.unstubAllEnvs();
   });
 
-  it("keeps demo query handling out of static server page props", () => {
+  it("keeps demo query handling out of static server page props", async () => {
     expect(isExplicitDemoModeEnabled({ demo: "1" })).toBe(false);
 
     expect(propsFor(DashboardPage() as ReactElement).demoOnMissingToken).toBeUndefined();
@@ -44,9 +44,9 @@ describe("production demo route gate", () => {
     expect(propsFor(NewRecordingPage() as ReactElement).useDemoRecorder).toBeUndefined();
     expect(
       propsFor(
-        RecordingDetailPage({
-          params: { id: "p-10481" }
-        }) as ReactElement
+        await RecordingDetailPage({
+          params: Promise.resolve({ id: "p-10481" })
+        })
       ).demoOnMissingToken
     ).toBeUndefined();
     expect(propsFor(PromptSettingsPage() as ReactElement).demoOnMissingToken).toBeUndefined();

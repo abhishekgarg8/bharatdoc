@@ -10,19 +10,20 @@ export const preferredRegion = "bom1";
 export const dynamic = "force-dynamic";
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function GET(request: Request, { params }: RouteContext) {
   const timing = createServerTiming();
+  const { id } = await params;
 
   try {
     const user = await timing.measure("auth", () => verifyRequestUser(request, createSupabaseAuthVerifier()));
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
     const bootstrap = await timing.measure("recording_detail", () =>
-      getRecordingDetailBootstrapForDoctor(user, params.id, repository)
+      getRecordingDetailBootstrapForDoctor(user, id, repository)
     );
 
     return jsonWithServerTiming(bootstrap, timing);
@@ -33,11 +34,12 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   const timing = createServerTiming();
+  const { id } = await params;
 
   try {
     const user = await timing.measure("auth", () => verifyRequestUser(request, createSupabaseAuthVerifier()));
     const repository = createSupabaseRecordingsRepository(createSupabaseServerClient());
-    const result = await timing.measure("recording_delete", () => deleteRecordingForDoctor(user, params.id, repository));
+    const result = await timing.measure("recording_delete", () => deleteRecordingForDoctor(user, id, repository));
 
     return jsonWithServerTiming(result, timing);
   } catch (error) {

@@ -31,6 +31,7 @@ import {
   authUserIdFromToken,
   readCachedLocalRecordingContextEntry,
 } from "@/lib/client/local-recording-context";
+import { DEMO_LOCAL_RECORDING_SCOPE } from "@/lib/client/local-recordings";
 import { PageError, PageLoading } from "@/components/session/page-loading";
 
 interface AuthenticatedAppValue {
@@ -49,9 +50,7 @@ interface AuthenticatedAppShellProps {
 
 const AppContext = createContext<AuthenticatedAppValue | null>(null);
 const demoContext: ActiveAppContext = {
-  authUserId: "demo-user",
-  doctorId: "demo-doctor",
-  clinicId: "demo-clinic",
+  ...DEMO_LOCAL_RECORDING_SCOPE,
   clinicName: "Sunrise Hospital, Pune",
   doctorName: "Dr. Aparna Iyer",
   permissions: { canManageClinic: true, canRecord: true },
