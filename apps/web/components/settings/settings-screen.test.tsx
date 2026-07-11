@@ -448,4 +448,19 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1));
   });
+
+  it("double-confirms account deletion and signs out only after completed cleanup", async () => {
+    const onSignOut = vi.fn(async () => undefined);
+    const fetcher = vi.fn(async () => Response.json({ deletion: { id: "receipt", state: "completed" } })) as unknown as typeof fetch;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SettingsScreen doctor={doctorProfile} idToken="token" fetcher={fetcher} onSignOut={onSignOut} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /delete account/i }));
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/account", {
+      method: "DELETE", headers: { Authorization: "Bearer token" }
+    }));
+    expect(window.confirm).toHaveBeenCalledTimes(2);
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
 });

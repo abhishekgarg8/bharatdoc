@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { appendDeviceLog, flushDeviceLogs, listDeviceLogs } from "@/lib/client/device-logs";
+import { appendDeviceLog, clearDeviceLogs, flushDeviceLogs, listDeviceLogs } from "@/lib/client/device-logs";
 
 function installLocalStorage() {
   const values = new Map<string, string>();
@@ -48,6 +48,8 @@ describe("device logs", () => {
 
     expect(listDeviceLogs()).toHaveLength(2);
     expect(first.patientId).toBeNull();
+    expect(second.recordingId).toBeNull();
+    expect(JSON.stringify(second)).not.toContain("11111111-1111-4111-8111-111111111111");
     expect(second.deviceId).toBe(first.deviceId);
     expect(second.sessionId).toBe(first.sessionId);
     expect(first.url).toBe(`${window.location.origin}/search`);
@@ -100,5 +102,12 @@ describe("device logs", () => {
     await expect(flushDeviceLogs({ idToken: "token", fetcher })).resolves.toBe(0);
 
     expect(listDeviceLogs()).toHaveLength(1);
+  });
+
+  it("clears device and session diagnostics on sign-out", () => {
+    appendDeviceLog({ level: "info", event: "recording.capture_started", recordingId: "secret" });
+    clearDeviceLogs();
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith("bharatdoc-device-logs-v1");
+    expect(listDeviceLogs()).toEqual([]);
   });
 });

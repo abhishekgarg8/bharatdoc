@@ -279,11 +279,7 @@ describe("RecordingDetailPageClient", () => {
       },
       body: expect.any(FormData)
     }));
-    await expect(repository.get("local-recording")).resolves.toMatchObject({
-      captureState: "transcribed",
-      syncState: "transcribed",
-      transcript: "Generated transcript from local audio."
-    });
+    await expect(repository.get("local-recording")).resolves.toBeNull();
   });
 
   it("does not retry transcription from foreign scoped local audio", async () => {
@@ -528,7 +524,9 @@ describe("RecordingDetailPageClient", () => {
       const url = _input.toString();
 
       if (url === `/api/recordings/${apiRecording.id}` && init?.method === "DELETE") {
-        return Response.json({ recording_id: apiRecording.id });
+        return Response.json({ recording_id: apiRecording.id, deletion: {
+          id: "receipt-1", state: "completed", error_code: null
+        } });
       }
 
       if (url === `/api/recordings/${apiRecording.id}`) {
@@ -595,7 +593,9 @@ describe("RecordingDetailPageClient", () => {
       const url = _input.toString();
 
       if (url === `/api/recordings/${apiRecording.id}` && init?.method === "DELETE") {
-        return Response.json({ recording_id: apiRecording.id });
+        return Response.json({ recording_id: apiRecording.id, deletion: {
+          id: "receipt-1", state: "completed", error_code: null
+        } });
       }
 
       if (url === `/api/recordings/${apiRecording.id}`) {

@@ -75,6 +75,10 @@ const manifestHotfixPath = resolve(
   dirname,
   "../../../supabase/migrations/202607100002_fix_transcription_manifest_ambiguity.sql",
 );
+const retentionMigrationPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607110001_phi_retention_and_deletion.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -320,5 +324,58 @@ describe("initial Supabase migration contract", () => {
     expect(hotfix).toMatch(
       /grant execute on function public\.save_transcription_chunk_manifest\(uuid,uuid,uuid,jsonb\)\s+to service_role/,
     );
+  });
+
+  it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {
+    const retention = readFileSync(retentionMigrationPath, "utf8");
+    for (const table of ["deletion_receipts", "deletion_object_queue"]) {
+      expect(retention).toContain(`public.${table}`);
+      expect(retention).toContain(`alter table public.${table} enable row level security`);
+    }
+    for (const rpc of [
+      "request_recording_deletion", "request_account_deletion", "claim_deletion_objects",
+      "complete_deletion_object", "release_deletion_object", "finalize_deletion_receipt",
+      "reconcile_retention_and_orphans"
+    ]) expect(retention).toContain(`public.${rpc}`);
+    expect(retention).toContain("storage.objects");
+    expect(retention).toContain("public.transcription_attempts t where t.audio_storage_path = o.name");
+    expect(retention).toContain("digest(");
+    expect(retention).toContain("for update skip locked");
+    expect(retention).toContain("select distinct c.receipt_id from claimed c");
+    expect(retention).toContain("r.error_code is distinct from 'AUTH_DELETE_PENDING'");
+    expect(retention).toContain("q.lease_expires_at > now()");
+    expect(retention).toContain("interval '5 minutes'");
+    expect(retention).toContain("interval '30 days'");
+    expect(retention).toContain("interval '90 days'");
+    expect(retention.match(/PROCESSING_LEASE_EXPIRED/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(retention.match(/state = 'running' and lease_expires_at <= now\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(retention).toContain("r.error_code is distinct from 'AUTH_DELETE_PENDING'");
+    expect(retention).toContain("q.state = 'deleting' and q.lease_expires_at > now()");
+    expect(retention).toContain("grant execute on function public.request_recording_deletion(uuid,uuid) to service_role");
+    expect(retention).not.toContain("grant execute on function public.request_recording_deletion(uuid,uuid) to authenticated");
+  });
+
+  it("excludes sensitive mobile data from Android cloud/transfer and iOS backups", () => {
+    const root = resolve(dirname, "../../..");
+    const manifest = readFileSync(resolve(root, "apps/mobile/android/app/src/main/AndroidManifest.xml"), "utf8");
+    const extraction = readFileSync(resolve(root, "apps/mobile/android/app/src/main/res/xml/data_extraction_rules.xml"), "utf8");
+    const ios = readFileSync(resolve(root, "apps/mobile/ios/App/App/AppDelegate.swift"), "utf8");
+    expect(manifest).toContain('android:allowBackup="false"');
+    expect(manifest).toContain('android:fullBackupContent="@xml/backup_rules"');
+    expect(manifest).toContain('android:dataExtractionRules="@xml/data_extraction_rules"');
+    const legacy = readFileSync(resolve(root, "apps/mobile/android/app/src/main/res/xml/backup_rules.xml"), "utf8");
+    for (const domain of ["root", "file", "database", "sharedpref", "external"]) {
+      expect(legacy).toContain(`domain="${domain}"`);
+      expect(extraction.match(new RegExp(`domain="${domain}"`, "g"))?.length).toBe(2);
+    }
+    for (const domain of ["device_root", "device_file", "device_database", "device_sharedpref"]) {
+      expect(extraction.match(new RegExp(`domain="${domain}"`, "g"))?.length).toBe(2);
+    }
+    expect(extraction).toContain("<cloud-backup");
+    expect(extraction).toContain("<device-transfer>");
+    expect(ios).toContain("values.isExcludedFromBackup = true");
+    expect(ios).toContain("applicationSupportDirectory");
+    expect(ios).toContain(".libraryDirectory");
+    expect(ios.match(/excludeSensitiveWebDataFromBackup\(\)/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });

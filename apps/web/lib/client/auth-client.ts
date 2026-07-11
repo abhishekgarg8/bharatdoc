@@ -4,6 +4,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail, PasswordCredentialsSchema, type PasswordCredentials } from "@bharatdoc/shared";
 import { ZodError } from "zod";
 import { clearSearchNavigationState } from "@/lib/client/search-navigation-state";
+import { authUserIdFromToken } from "@/lib/client/local-recording-context";
+import { purgeLocalRecordingsForAuthUser } from "@/lib/client/local-recordings";
+import { clearDeviceLogs } from "@/lib/client/device-logs";
 
 export interface AuthClient {
   signUpWithPassword(credentials: PasswordCredentials): Promise<string>;
@@ -334,7 +337,12 @@ export function createSupabaseAuthClient(): AuthClient {
 
     async signOut(): Promise<void> {
       clearSearchNavigationState();
-      await getSupabaseBrowserClient().auth.signOut();
+      clearDeviceLogs();
+      const supabase = getSupabaseBrowserClient();
+      const token = await getAccessTokenFromSession(supabase).catch(() => null);
+      const authUserId = token ? authUserIdFromToken(token) : null;
+      await purgeLocalRecordingsForAuthUser(authUserId).catch(() => undefined);
+      await supabase.auth.signOut();
     }
   };
 }

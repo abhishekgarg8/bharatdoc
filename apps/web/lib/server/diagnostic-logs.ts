@@ -13,6 +13,7 @@ const DeviceLogEventSchema = z.enum([
   "recording.transcription_started",
   "recording.transcription_succeeded",
   "recording.transcription_failed",
+  "recording.local_cleanup_retry_required",
   "recording.detail_transcription_started",
   "recording.detail_transcription_succeeded",
   "recording.detail_transcription_failed"

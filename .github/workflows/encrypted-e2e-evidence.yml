@@ -1,0 +1,38 @@
+name: Encrypted evidence mechanism self-test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require evidence encryption key
+        env:
+          E2E_EVIDENCE_KEY: ${{ secrets.E2E_EVIDENCE_KEY }}
+        run: test -n "$E2E_EVIDENCE_KEY"
+      - name: Encryption self-test with synthetic evidence
+        env:
+          E2E_EVIDENCE_KEY: ${{ secrets.E2E_EVIDENCE_KEY }}
+        run: |
+          mkdir -p encrypted-evidence/input encrypted-evidence/decrypted
+          printf 'synthetic-evidence-never-upload-plaintext' > encrypted-evidence/input/assertion.txt
+          bash scripts/encrypt-test-evidence.sh encrypted-evidence/input encrypted-evidence/evidence.tar.gz.enc
+          ! strings encrypted-evidence/evidence.tar.gz.enc | grep 'synthetic-evidence-never-upload-plaintext'
+          openssl dgst -sha256 -hmac "$E2E_EVIDENCE_KEY" -binary encrypted-evidence/evidence.tar.gz.enc |
+            base64 | cmp - encrypted-evidence/evidence.tar.gz.enc.hmac
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:E2E_EVIDENCE_KEY -in encrypted-evidence/evidence.tar.gz.enc |
+            tar -C encrypted-evidence/decrypted -xzf -
+          cmp encrypted-evidence/input/assertion.txt encrypted-evidence/decrypted/assertion.txt
+          rm -rf encrypted-evidence/input encrypted-evidence/decrypted
+      - name: Upload ciphertext only
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-e2e-evidence-${{ github.run_id }}
+          path: |
+            encrypted-evidence/evidence.tar.gz.enc
+            encrypted-evidence/evidence.tar.gz.enc.hmac
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7

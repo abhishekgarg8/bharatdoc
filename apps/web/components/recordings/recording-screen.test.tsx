@@ -361,17 +361,7 @@ describe("RecordingScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
-    expect(screen.getByText(/I have had fever for two days/)).toBeInTheDocument();
-
-    const records = await repository.list();
-    expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({
-      patientId: "P-10482",
-      durationSeconds: 42,
-      captureState: "transcribed",
-      syncState: "transcribed"
-    });
-    expect(records[0]!.audioChunks).toHaveLength(1);
+    await expect(repository.list()).resolves.toEqual([]);
   });
 
   it("drains ordered checkpoint writes before reporting a successful stop", async () => {
@@ -743,7 +733,7 @@ describe("RecordingScreen", () => {
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
     expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === RECORDINGS_URL)).toHaveLength(0);
     expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === WORKER_TRANSCRIBE_URL)).toHaveLength(1);
-    await expect(repository.list()).resolves.toHaveLength(1);
+    await expect(repository.list()).resolves.toHaveLength(0);
   });
 
   it("saves stopped audio without Patient ID and blocks transcription until Patient ID is added", async () => {
@@ -774,11 +764,7 @@ describe("RecordingScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /transcribe/i }));
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
-    expect((await repository.list())[0]).toMatchObject({
-      patientId: "P-10483",
-      captureState: "transcribed",
-      syncState: "transcribed"
-    });
+    await expect(repository.list()).resolves.toEqual([]);
   });
 
   it("syncs authenticated recordings with Patient ID and navigates to the server detail page", async () => {
@@ -999,10 +985,6 @@ describe("RecordingScreen", () => {
     await expect(screen.findByText("Transcript ready.")).resolves.toBeInTheDocument();
     expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === RECORDINGS_URL)).toHaveLength(1);
     expect(fetcher.mock.calls.filter((call) => fetchUrl(call) === WORKER_TRANSCRIBE_URL)).toHaveLength(2);
-    expect((await repository.list())[0]).toMatchObject({
-      serverRecordingId: "server-recording",
-      syncState: "transcribed",
-      transcript: "Retry transcript."
-    });
+    await expect(repository.list()).resolves.toEqual([]);
   });
 });

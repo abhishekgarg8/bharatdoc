@@ -1,6 +1,0 @@
-- generic [active] [ref=e1]:
-  - alert [ref=e7]
-  - main [ref=e99]:
-    - generic [ref=e100]:
-      - img [ref=e101]
-      - paragraph [ref=e103]: Loading settings

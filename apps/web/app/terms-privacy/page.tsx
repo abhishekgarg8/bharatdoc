@@ -35,7 +35,7 @@ const policySections = [
   },
   {
     title: "Retention and deletion",
-    body: "Hospitals should retain consultation records according to their own clinical, legal, and operational requirements. Account or record deletion requests should be routed through the hospital owner."
+    body: "Hospitals choose how long consultation records are retained for clinical and legal needs. A doctor can permanently delete a consultation they own; account deletion removes consultations owned by that account after storage cleanup. Device audio is removed after verified transcription and can be purged in Settings. Diagnostic data expires within 30 days and processing records within 90 days. Hospital owners must transfer ownership before deleting an account while other members remain."
   },
   {
     title: "Changes to these terms",
@@ -49,7 +49,7 @@ export default function TermsPrivacyPage() {
       eyebrow="Policy"
       title="Terms and Privacy"
       description="Terms of use and privacy policy for BharatDoc doctors, hospital owners, and administrators."
-      updatedAt="June 28, 2026"
+      updatedAt="July 11, 2026 · reviewed by Privacy & Security Lead"
       sections={policySections}
     />
   );
