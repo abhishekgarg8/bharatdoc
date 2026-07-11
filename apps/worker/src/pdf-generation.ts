@@ -104,11 +104,16 @@ export async function generateRecordingPdf(
     : null;
   if (claim?.disposition === "completed") {
     const result = claim.job.result as Partial<PdfResponse> | null;
-    if (result?.pdf_storage_path && pdfReadyRecording.pdf_storage_path !== result.pdf_storage_path && deps.processingJobs) {
-      await deps.processingJobs.invalidateCompleted({
-        jobId: claim.job.id, inputHash, errorCode: "PROCESSING_ARTIFACT_SUPERSEDED"
-      });
-      claim = await claimProcessingJob(deps.processingJobs, claimInput);
+    if (result?.pdf_storage_path && deps.processingJobs) {
+      const currentRecording = requirePdfReadyRecording(
+        await deps.recordings.findRecordingForDoctor(recordingId, auth.doctor.id)
+      );
+      if (currentRecording.pdf_storage_path !== result.pdf_storage_path) {
+        await deps.processingJobs.invalidateCompleted({
+          jobId: claim.job.id, inputHash, errorCode: "PROCESSING_ARTIFACT_SUPERSEDED"
+        });
+        claim = await claimProcessingJob(deps.processingJobs, claimInput);
+      }
     }
   }
   if (claim?.disposition === "completed") {
@@ -168,15 +173,16 @@ export async function generateRecordingPdf(
       }
     }
     if (!pdfStoragePath) {
-      artifactPath = lease
+      const candidateArtifactPath = lease
         ? deps.pdfStorage.recordingPdfPath?.({
             clinicId, doctorId: auth.doctor.id, recordingId: pdfReadyRecording.id, artifactKey: inputHash
           }) ?? null
         : null;
-      if (lease && deps.processingJobs && artifactPath) {
+      if (lease && deps.processingJobs && candidateArtifactPath) {
         await deps.processingJobs.recordArtifact({
-          ...lease, kind: "pdf", storagePath: artifactPath, byteSize: pdf.byteLength, checksum, state: "pending"
+          ...lease, kind: "pdf", storagePath: candidateArtifactPath, byteSize: pdf.byteLength, checksum, state: "pending"
         });
+        artifactPath = candidateArtifactPath;
       }
       pdfStoragePath = uploadedPath = await deps.pdfStorage.uploadRecordingPdf({
         pdf, clinicId, doctorId: auth.doctor.id, recordingId: pdfReadyRecording.id,

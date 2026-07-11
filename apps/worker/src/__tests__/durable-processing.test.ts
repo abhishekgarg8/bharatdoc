@@ -299,6 +299,76 @@ describe("durable AI workflows", () => {
     expect(jobs.jobs[0]!.result).not.toHaveProperty("signed_url");
   });
 
+  it("replays a concurrently completed PDF without invalidating it from a stale recording snapshot", async () => {
+    const jobs = new MemoryProcessingJobs();
+    const invalidateCompleted = vi.spyOn(jobs, "invalidateCompleted");
+    const recordings = mutableRecordings({ ...baseRecording, summary: "Summary", status: "summary_ready" }, jobs);
+    const pending = deferred<Buffer>();
+    const pdf = Buffer.from("%PDF-1.4");
+    const renderer = { render: vi.fn(() => pending.promise) };
+    let signs = 0;
+    const storage = {
+      recordingPdfPath: () => "clinic/doctor/concurrent.pdf",
+      uploadRecordingPdf: vi.fn(async () => "clinic/doctor/concurrent.pdf"),
+      downloadRecordingPdf: vi.fn(async () => pdf),
+      createSignedUrl: vi.fn(async () => `https://signed/concurrent/${++signs}`)
+    };
+    const deps = {
+      recordings: recordings.repository, clinics: { findClinicById: vi.fn(async () => clinic) },
+      pdfRenderer: renderer, pdfStorage: storage, processingJobs: jobs
+    };
+    const auth = { doctor, token: { uid: doctor.firebase_uid } };
+
+    const leader = generateRecordingPdf(auth, { recordingId: baseRecording.id }, deps);
+    await vi.waitFor(() => expect(renderer.render).toHaveBeenCalledOnce());
+    const waiter = generateRecordingPdf(auth, { recordingId: baseRecording.id }, deps);
+    await vi.waitFor(() => expect(recordings.repository.findRecordingForDoctor).toHaveBeenCalledTimes(2));
+    pending.resolve(pdf);
+
+    const [first, second] = await Promise.all([leader, waiter]);
+    expect({ ...second, signed_url: first.signed_url }).toEqual(first);
+    expect(second.signed_url).not.toBe(first.signed_url);
+    expect(renderer.render).toHaveBeenCalledOnce();
+    expect(storage.uploadRecordingPdf).toHaveBeenCalledOnce();
+    expect(jobs.providerCalls).toBe(1);
+    expect(invalidateCompleted).not.toHaveBeenCalled();
+    expect(jobs.jobs[0]).toMatchObject({ state: "completed", attempt: 1 });
+  });
+
+  it("does not orphan a canonical artifact when artifact registration rejects the attempt", async () => {
+    const jobs = new MemoryProcessingJobs();
+    const path = "clinic/doctor/owned-by-canonical-job.pdf";
+    jobs.artifacts.set(path, {
+      jobId: "canonical-job", kind: "pdf", checksum: "canonical-checksum", state: "current"
+    });
+    vi.spyOn(jobs, "recordArtifact").mockRejectedValueOnce(
+      new HttpError(409, "conflict", "PROCESSING_ARTIFACT_CONFLICT")
+    );
+    const markArtifactOrphaned = vi.spyOn(jobs, "markArtifactOrphaned");
+    const recordings = mutableRecordings({ ...baseRecording, summary: "Summary", status: "summary_ready" }, jobs);
+    const deleteRecordingPdf = vi.fn(async () => undefined);
+    const uploadRecordingPdf = vi.fn(async () => path);
+    const deps = {
+      recordings: recordings.repository, clinics: { findClinicById: vi.fn(async () => clinic) },
+      pdfRenderer: { render: vi.fn(async () => Buffer.from("%PDF-1.4")) },
+      pdfStorage: {
+        recordingPdfPath: () => path,
+        uploadRecordingPdf,
+        createSignedUrl: vi.fn(async () => "https://signed/conflict"),
+        deleteRecordingPdf
+      },
+      processingJobs: jobs
+    };
+
+    await expect(generateRecordingPdf(
+      { doctor, token: { uid: doctor.firebase_uid } }, { recordingId: baseRecording.id }, deps
+    )).rejects.toMatchObject({ code: "PROCESSING_ARTIFACT_CONFLICT" });
+    expect(markArtifactOrphaned).not.toHaveBeenCalled();
+    expect(jobs.artifacts.get(path)?.state).toBe("current");
+    expect(uploadRecordingPdf).not.toHaveBeenCalled();
+    expect(deleteRecordingPdf).not.toHaveBeenCalled();
+  });
+
   it("reuses the durable job timestamp when PDF rendering resumes after failure", async () => {
     const jobs = new MemoryProcessingJobs();
     const recordings = mutableRecordings({ ...baseRecording, summary: "Summary", status: "summary_ready" }, jobs);
