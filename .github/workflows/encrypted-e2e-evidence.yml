@@ -27,7 +27,7 @@ jobs:
           cmp encrypted-evidence/input/assertion.txt encrypted-evidence/decrypted/assertion.txt
           rm -rf encrypted-evidence/input encrypted-evidence/decrypted
       - name: Upload ciphertext only
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: encrypted-e2e-evidence-${{ github.run_id }}
           path: |
