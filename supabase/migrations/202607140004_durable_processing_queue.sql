@@ -286,7 +286,13 @@ begin
           )
         )
         and (
-          select coalesce(sum(artifact.byte_size), 0)
+          select coalesce(sum(artifact.byte_size), 0) + coalesce((
+            select sum(usage.storage_bytes) from public.processing_usage_reservations usage
+            join public.recording_processing_jobs reserved_job on reserved_job.id=usage.job_id
+            where usage.doctor_key=job.doctor_key and reserved_job.state='running'
+              and not exists(select 1 from public.processing_artifacts pending where pending.job_id=usage.job_id
+                and pending.state in ('pending','current'))
+          ),0)
           from public.processing_artifacts artifact
           join public.recording_processing_jobs artifact_job on artifact_job.id = artifact.job_id
           where artifact_job.doctor_key = job.doctor_key and artifact.state in ('pending', 'current')
@@ -299,7 +305,13 @@ begin
           )
         ) then 0 else job.storage_bytes end <= 2147483648
         and (
-          select coalesce(sum(artifact.byte_size), 0)
+          select coalesce(sum(artifact.byte_size), 0) + coalesce((
+            select sum(usage.storage_bytes) from public.processing_usage_reservations usage
+            join public.recording_processing_jobs reserved_job on reserved_job.id=usage.job_id
+            where usage.clinic_key=job.clinic_key and reserved_job.state='running'
+              and not exists(select 1 from public.processing_artifacts pending where pending.job_id=usage.job_id
+                and pending.state in ('pending','current'))
+          ),0)
           from public.processing_artifacts artifact
           join public.recording_processing_jobs artifact_job on artifact_job.id = artifact.job_id
           where artifact_job.clinic_key = job.clinic_key and artifact.state in ('pending', 'current')
@@ -405,11 +417,15 @@ begin
     state = 'failed',
     job_state = case when job.job_state='cancel_requested' then 'cancelled'
       when retryable then 'retry_wait' else 'failed_terminal' end,
-    error_code = left(coalesce(p_error_code, 'INTERNAL_ERROR'), 120),
+    error_code = case when job.job_state='cancel_requested' then 'PROCESSING_CANCELLED'
+      when retryable then 'PROVIDER_RETRYABLE'
+      else coalesce(public.processing_job_safe_error_code(p_error_code), 'PROCESSING_FAILED') end,
     terminal_error_code = case when job.job_state='cancel_requested' then 'PROCESSING_CANCELLED'
+      when retryable then 'PROVIDER_RETRYABLE'
       else coalesce(public.processing_job_safe_error_code(p_error_code), 'PROCESSING_FAILED') end,
     terminal_error_message = public.processing_job_safe_error_message(
       case when job.job_state='cancel_requested' then 'PROCESSING_CANCELLED'
+        when retryable then 'PROVIDER_RETRYABLE'
         else coalesce(public.processing_job_safe_error_code(p_error_code), 'PROCESSING_FAILED') end
     ),
     next_retry_at = case when retryable then public.processing_job_retry_at(job.attempt) else null end,

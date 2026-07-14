@@ -366,13 +366,13 @@ export async function transcribeRecording(
       }
       activeChunkIndex = index;
       const startedAt = Date.now();
-      const providerWork = () => runWithProcessingDeadline((signal) => deps.transcriptionClient.transcribe({
+      const providerWork = (leaseSignal?: AbortSignal) => runWithProcessingDeadline((signal) => deps.transcriptionClient.transcribe({
           audio: part.buffer,
           mimeType: audio.mimetype,
           filename: part.filename,
           language: auth.doctor.transcription_lang,
           ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {}), signal
-        }), PROVIDER_PROCESSING_TIMEOUT_MS);
+        }), PROVIDER_PROCESSING_TIMEOUT_MS, "PROVIDER_TIMEOUT", leaseSignal);
       const transcriptPart = (
         lease && deps.processingJobs
           ? await withProcessingHeartbeat(deps.processingJobs, lease, providerWork)

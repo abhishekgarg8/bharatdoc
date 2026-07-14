@@ -144,9 +144,9 @@ export async function generateRecordingPdf(
       await deps.processingJobs.markProviderSubmitted({ ...lease, providerRequestKey: providerRequestKey! });
     }
     const startedAt = Date.now();
-    const render = () => runWithProcessingDeadline((signal) => deps.pdfRenderer.render({
+    const render = (leaseSignal?: AbortSignal) => runWithProcessingDeadline((signal) => deps.pdfRenderer.render({
       clinic: requireClinic(clinic), doctor: auth.doctor, recording: pdfReadyRecording, generatedAt, signal
-    }), PDF_RENDER_TIMEOUT_MS, "PDF_RENDER_TIMEOUT");
+    }), PDF_RENDER_TIMEOUT_MS, "PDF_RENDER_TIMEOUT", leaseSignal);
     const pdf = requireRenderedPdf(
       lease && deps.processingJobs
         ? await withProcessingHeartbeat(deps.processingJobs, lease, render)

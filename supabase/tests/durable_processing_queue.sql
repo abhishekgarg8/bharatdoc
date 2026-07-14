@@ -15,7 +15,9 @@ from (values
   ('f6800000-0000-4000-8000-000000000103','f6800000-0000-4000-8000-000000000012','f6800000-0000-4000-8000-000000000002','Transcript',null,'transcribed'),
   ('f6800000-0000-4000-8000-000000000104','f6800000-0000-4000-8000-000000000011','f6800000-0000-4000-8000-000000000001',null,null,'recorded'),
   ('f6800000-0000-4000-8000-000000000105','f6800000-0000-4000-8000-000000000011','f6800000-0000-4000-8000-000000000001',null,null,'recorded'),
-  ('f6800000-0000-4000-8000-000000000106','f6800000-0000-4000-8000-000000000011','f6800000-0000-4000-8000-000000000001',null,null,'recorded')
+  ('f6800000-0000-4000-8000-000000000106','f6800000-0000-4000-8000-000000000011','f6800000-0000-4000-8000-000000000001',null,null,'recorded'),
+  ('f6800000-0000-4000-8000-000000000107','f6800000-0000-4000-8000-000000000012','f6800000-0000-4000-8000-000000000002','Transcript','Summary','summary_ready'),
+  ('f6800000-0000-4000-8000-000000000108','f6800000-0000-4000-8000-000000000012','f6800000-0000-4000-8000-000000000002','Transcript','Summary','summary_ready')
 ) fixture(id,doctor_id,clinic_id,transcript,summary,status);
 
 do $$
@@ -90,6 +92,24 @@ begin
   perform public.fail_recording_processing_job(claimed.id,claimed.lease_token,'PROVIDER_TERMINAL');
   if not exists(select 1 from public.recording_processing_jobs where id=job.id and job_state='failed_terminal')
     then raise exception 'terminal failure was retried'; end if;
+  insert into public.processing_artifacts(job_id,recording_key,kind,storage_path,byte_size,checksum,state)
+    values(job.id,job.recording_key,'pdf','queue/quota-baseline.pdf',2140143616,repeat('1',64),'current');
+  select * into job from public.enqueue_recording_processing_job('pdf','pdf-reserved',repeat('2',64),
+    'f6800000-0000-4000-8000-000000000107','f6800000-0000-4000-8000-000000000012',
+    'f6800000-0000-4000-8000-000000000002',1,0,5242880,null);
+  select * into claimed from public.claim_ready_recording_processing_jobs('worker-b',array['pdf'],1);
+  if claimed.id<>job.id then raise exception 'first storage reservation was not admitted'; end if;
+  insert into public.processing_artifacts(job_id,recording_key,kind,storage_path,byte_size,checksum,state)
+    values(claimed.id,claimed.recording_key,'pdf','queue/orphan-only.pdf',1,repeat('4',64),'orphaned');
+  perform public.enqueue_recording_processing_job('pdf','pdf-over-quota',repeat('3',64),
+    'f6800000-0000-4000-8000-000000000108','f6800000-0000-4000-8000-000000000012',
+    'f6800000-0000-4000-8000-000000000002',1,0,5242880,null);
+  if exists(select 1 from public.claim_ready_recording_processing_jobs('worker-b',array['pdf'],1))
+    then raise exception 'running storage reservation was omitted from quota'; end if;
+  perform public.fail_recording_processing_job(claimed.id,claimed.lease_token,'patient P-68 secret');
+  if not exists(select 1 from public.recording_processing_jobs where id=claimed.id
+    and error_code='PROVIDER_RETRYABLE' and terminal_error_code='PROVIDER_RETRYABLE')
+    then raise exception 'raw retry error was persisted'; end if;
 end$$;
 
 do $$begin

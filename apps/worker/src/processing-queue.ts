@@ -9,7 +9,9 @@ import {
 } from "@bharatdoc/shared";
 import { HttpError, sanitizeErrorForTelemetry, toHttpError } from "./http-errors.js";
 import { generateRecordingPdf, PDF_STORAGE_RESERVATION_BYTES } from "./pdf-generation.js";
-import { pdfProcessingInputHash, processingIdempotencyKey, sha256 } from "./processing.js";
+import {
+  pdfProcessingInputHash, processingIdempotencyKey, PROVIDER_PROCESSING_TIMEOUT_MS, sha256
+} from "./processing.js";
 import { summarizeRecording } from "./summary.js";
 import {
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
@@ -356,7 +358,7 @@ async function transitionQueuedFailure(
       expectedVersion: job.stateVersion,
       leaseToken: job.leaseToken,
       retryAt: new Date(Date.now() + getProcessingJobRetryDelaySeconds(job.attempt) * 1000).toISOString(),
-      errorCode: http.code
+      errorCode: "PROVIDER_RETRYABLE"
     });
     return;
   }
@@ -460,6 +462,7 @@ export async function runProcessingQueueOnce(
     claimLimit?: number;
     recoverLimit?: number;
     now?: Date;
+    onQueueHealthy?: () => void;
   }
 ): Promise<QueueRunResult> {
   const queue = requireQueue(deps.processingJobs);
@@ -474,6 +477,7 @@ export async function runProcessingQueueOnce(
     operations: options.operations ?? ["transcription", "summary", "pdf"],
     limit: options.claimLimit ?? 1
   });
+  options.onQueueHealthy?.();
   if (!jobs.length) return { claimed: false, recovered };
   const results = await Promise.all(jobs.map((job) => executeQueuedProcessingJob(deps, job)));
   return {
@@ -518,26 +522,33 @@ export function startProcessingQueueWorker(
     operations: ProcessingOperation[];
     pollMs?: number;
     batchSize?: number;
+    activeHealthMs?: number;
   }
 ): { stop(): Promise<void>; done: Promise<void>; isReady(): boolean } {
   const controller = new AbortController();
   const pollMs = options.pollMs ?? 2_000;
   let failures = 0;
   let lastSuccess = 0;
+  let activeSince = 0;
   let running = true;
   const done = (async () => {
     if (!options.operations.length) return;
     while (!controller.signal.aborted) {
       try {
+        activeSince = Date.now();
         const claimed = (await runProcessingQueueOnce(deps, {
           workerId: options.workerId,
           operations: options.operations,
-          claimLimit: options.batchSize ?? 1
+          claimLimit: options.batchSize ?? 1,
+          onQueueHealthy: () => {
+            failures = 0;
+            lastSuccess = Date.now();
+          }
         })).claimed;
-        failures = 0;
-        lastSuccess = Date.now();
+        activeSince = 0;
         if (!claimed) await wait(pollMs, controller.signal);
       } catch (error) {
+        activeSince = 0;
         failures += 1;
         deps.logger?.error("processing_queue.loop_failed", { ...sanitizeErrorForTelemetry(error) });
         const backoff = Math.min(30_000, pollMs * 2 ** Math.min(failures - 1, 5));
@@ -547,7 +558,9 @@ export function startProcessingQueueWorker(
   })().finally(() => { running = false; });
   return {
     done,
-    isReady: () => running && lastSuccess > 0 && failures < 3 && Date.now() - lastSuccess <= Math.max(30_000, pollMs * 10),
+    isReady: () => running && lastSuccess > 0 && failures < 3 && (activeSince > 0
+      ? Date.now() - activeSince <= (options.activeHealthMs ?? PROVIDER_PROCESSING_TIMEOUT_MS * 10)
+      : Date.now() - lastSuccess <= Math.max(30_000, pollMs * 10)),
     async stop() {
       controller.abort();
       await done;

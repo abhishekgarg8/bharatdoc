@@ -67,22 +67,25 @@ export function pdfProcessingInputHash(input: {
 export async function runWithProcessingDeadline<T>(
   work: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
-  code = "PROVIDER_TIMEOUT"
+  code = "PROVIDER_TIMEOUT",
+  parentSignal?: AbortSignal
 ): Promise<T> {
   const controller = new AbortController();
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const error = new HttpError(504, "Processing exceeded its deadline.", code);
-      controller.abort(error);
-      reject(error);
-    }, timeoutMs);
-    timer.unref?.();
+  const abort = new Promise<never>((_resolve, reject) => {
+    controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
   });
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortFromParent();
+  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => controller.abort(
+    new HttpError(504, "Processing exceeded its deadline.", code)
+  ), timeoutMs);
+  timer.unref?.();
   try {
-    return await Promise.race([work(controller.signal), timeout]);
+    return await Promise.race([work(controller.signal), abort]);
   } finally {
-    if (timer) clearTimeout(timer);
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortFromParent);
   }
 }
 
@@ -201,20 +204,27 @@ export function requireLease(claim: ProcessingJobClaim): { jobId: string; leaseT
 export async function withProcessingHeartbeat<T>(
   repository: ProcessingJobRepository,
   lease: { jobId: string; leaseToken: string },
-  work: () => Promise<T>
+  work: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   let heartbeatError: unknown;
   let heartbeat = Promise.resolve();
+  const controller = new AbortController();
   const timer = setInterval(() => {
-    heartbeat = repository.heartbeat(lease).catch((error) => { heartbeatError = error; });
+    heartbeat = heartbeat.then(async () => {
+      if (!heartbeatError) await repository.heartbeat(lease);
+    }).catch((error) => {
+      heartbeatError = error;
+      controller.abort(error);
+    });
   }, 30_000);
   timer.unref?.();
   try {
-    const result = await work();
+    const result = await work(controller.signal);
     await heartbeat;
     if (heartbeatError) throw heartbeatError;
     return result;
   } finally {
     clearInterval(timer);
+    await heartbeat;
   }
 }

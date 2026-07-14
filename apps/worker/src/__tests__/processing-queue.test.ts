@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderSummaryPrompt, type Doctor, type Recording } from "@bharatdoc/shared";
 import { HttpError } from "../http-errors.js";
-import { runWithProcessingDeadline, sha256 } from "../processing.js";
+import { runWithProcessingDeadline, sha256, withProcessingHeartbeat } from "../processing.js";
 import {
   enqueueTranscriptionProcessingJob,
   enqueueSummaryProcessingJob,
@@ -363,14 +363,16 @@ describe("processing queue", () => {
   it("aborts provider work at the configured deadline", async () => {
     vi.useFakeTimers();
     try {
-      const work = vi.fn((signal: AbortSignal) => new Promise<never>((_resolve, reject) => {
+      const provider = vi.fn((signal: AbortSignal) => new Promise<never>((_resolve, reject) => {
         signal.addEventListener("abort", () => reject(signal.reason), { once: true });
       }));
+      const work = vi.fn((signal: AbortSignal) =>
+        runWithProcessingDeadline(provider, 120_000, "PROVIDER_TIMEOUT", signal));
       const result = runWithProcessingDeadline(work, 50);
       const assertion = expect(result).rejects.toMatchObject({ code: "PROVIDER_TIMEOUT", status: 504 });
       await vi.advanceTimersByTimeAsync(50);
       await assertion;
-      expect(work.mock.calls[0]?.[0].aborted).toBe(true);
+      expect(provider.mock.calls[0]?.[0].aborted).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -386,7 +388,7 @@ describe("processing queue", () => {
 
     expect(queue.transitions).toEqual([expect.objectContaining({
       nextState: "retry_wait",
-      errorCode: "PROVIDER_TIMEOUT",
+      errorCode: "PROVIDER_RETRYABLE",
       retryAt: expect.any(String),
     })]);
   });
@@ -430,5 +432,55 @@ describe("processing queue", () => {
     }));
     await worker.stop();
     expect(worker.isReady()).toBe(false);
+  });
+
+  it("stays ready while a healthy claimed job runs longer than the idle readiness window", async () => {
+    vi.useFakeTimers();
+    let finish!: (summary: string) => void;
+    try {
+      const queue = new MemoryQueue();
+      const summarize = vi.fn(() => new Promise<string>((resolve) => { finish = resolve; }));
+      const worker = startProcessingQueueWorker(depsFor(queue, summarize), {
+        workerId: "worker-a", operations: ["summary"], pollMs: 1, batchSize: 1,
+        activeHealthMs: 61_000
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(summarize).toHaveBeenCalledOnce();
+      expect(worker.isReady()).toBe(true);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(worker.isReady()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect(worker.isReady()).toBe(false);
+      finish("Plan: hydrate.");
+      await vi.advanceTimersByTimeAsync(0);
+      await worker.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("serializes heartbeats and aborts provider work on the first lease loss", async () => {
+    vi.useFakeTimers();
+    let rejectHeartbeat!: (error: Error) => void;
+    try {
+      const queue = new MemoryQueue();
+      queue.heartbeat = vi.fn()
+        .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { rejectHeartbeat = reject; }))
+        .mockResolvedValue(undefined);
+      const work = vi.fn((signal: AbortSignal) => new Promise<never>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }));
+      const result = withProcessingHeartbeat(queue, { jobId: "job-1", leaseToken: "lease-1" }, work);
+      const settled = result.then(() => null, (error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(queue.heartbeat).toHaveBeenCalledOnce();
+      rejectHeartbeat(new Error("lease lost"));
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(settled).resolves.toMatchObject({ message: "lease lost" });
+      expect(work.mock.calls[0]?.[0].aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

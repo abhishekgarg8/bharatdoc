@@ -101,10 +101,10 @@ export async function summarizeRecording(
       await deps.processingJobs.markProviderSubmitted({ ...lease, providerRequestKey: providerRequestKey! });
     }
     const startedAt = Date.now();
-    const providerWork = () => runWithProcessingDeadline((signal) => deps.summaryClient.summarize({
+    const providerWork = (leaseSignal?: AbortSignal) => runWithProcessingDeadline((signal) => deps.summaryClient.summarize({
       prompt, recording, doctor: auth.doctor,
       ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {}), signal
-    }), PROVIDER_PROCESSING_TIMEOUT_MS);
+    }), PROVIDER_PROCESSING_TIMEOUT_MS, "PROVIDER_TIMEOUT", leaseSignal);
     const summary = sanitizeClinicalSummaryText(
       lease && deps.processingJobs
         ? await withProcessingHeartbeat(deps.processingJobs, lease, providerWork)
