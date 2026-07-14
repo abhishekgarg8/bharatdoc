@@ -149,3 +149,12 @@ Merged PR #127, applied the migration, waited three minutes, and verified tamper
 Production exposed plain PostgREST conflicts mapping to 500; fixed safe response/telemetry mapping in PR #128 and re-soaked.
 Retest returned safe 409, stable 200/200 replay, and a Transcribed record; authenticated deletion removed record and manifest.
 Saved scrubbed screenshots/video/JSON under ignored testing/issue-66 with no transcript, token, paths, provider IDs, or UUIDs.
+
+2026-07-14 - Issue #67: Defined the durable queued/running/retry/cancel/terminal state machine for transcription, summary, and PDF jobs.
+Added idempotent versioned creation, one-active serialization, lease/heartbeat CAS, stale recovery, safe errors/status DTOs, and minimal history.
+Preserved request-path compatibility, monotonic artifact milestones, deletion guards, tenant isolation, and deterministic legacy backfill.
+Passed 210 application tests, lint, typecheck, worker build, clean PostgreSQL 16 migration, lifecycle/backfill matrices, and concurrency races.
+Merged PR #130 at ded8556 after all GitHub/Vercel checks passed and applied production migration 202607140003.
+After a 188-second soak, concurrent transcription, summary, and PDF requests returned stable canonical results through the existing Chrome session.
+The synthetic record advanced Transcribed -> Summary ready -> PDF saved; replayed PDF stayed at version v1.
+Deleted the synthetic consultation and verified detail 404/dashboard restoration; scrubbed evidence is under ignored testing/issue-67.
