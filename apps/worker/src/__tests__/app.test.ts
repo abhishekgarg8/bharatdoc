@@ -304,6 +304,57 @@ describe("worker app", () => {
     });
   });
 
+  it("finalizes a session with only server scope and an idempotency header", async () => {
+    const deps = depsFor(activeDoctor);
+    const result = { recording_id: recording.id,
+      session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", status: "transcribed" as const,
+      transcript_hash: "a".repeat(64), generation: 1, finalized_at: "2026-07-14T00:00:00.000Z" };
+    deps.transcriptionSessions = { finalize: vi.fn(async () => result) } as unknown as NonNullable<WorkerDependencies["transcriptionSessions"]>;
+
+    await request(createApp(deps, { transcriptionSessionsEnabled: true }))
+      .post(`/api/transcription-sessions/${result.session_id}/finalize`)
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "finalize-1")
+      .send({}).expect(200).expect(({ body }) => expect(body.finalization).toEqual(result));
+    expect(deps.transcriptionSessions.finalize).toHaveBeenCalledWith({
+      sessionId: result.session_id, doctorId: activeDoctor.id,
+      clinicId: activeDoctor.clinic_id, idempotencyKey: "finalize-1"
+    });
+  });
+
+  it("rejects client-authored finalization data and missing idempotency keys", async () => {
+    const deps = depsFor(activeDoctor);
+    deps.transcriptionSessions = { finalize: vi.fn() } as unknown as NonNullable<WorkerDependencies["transcriptionSessions"]>;
+    const app = createApp(deps, { transcriptionSessionsEnabled: true });
+    const path = "/api/transcription-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/finalize";
+
+    await request(app).post(path).set("Authorization", "Bearer valid-token")
+      .send({ transcript: "client-authored", audio_storage_path: "client/path" })
+      .expect(400).expect(({ body }) => expect(body.error.code).toBe("VALIDATION_ERROR"));
+    await request(app).post(path).set("Authorization", "Bearer valid-token").set("Idempotency-Key", "finalize-1")
+      .type("text").send("transcript=client-authored")
+      .expect(400).expect(({ body }) => expect(body.error.code).toBe("VALIDATION_ERROR"));
+    await request(app).post(path).set("Authorization", "Bearer valid-token")
+      .send({}).expect(400).expect(({ body }) => expect(body.error.code).toBe("IDEMPOTENCY_KEY_REQUIRED"));
+    expect(deps.transcriptionSessions.finalize).not.toHaveBeenCalled();
+  });
+
+  it("hides session finalization when the feature is disabled", async () => {
+    await request(createApp(depsFor(activeDoctor)))
+      .post("/api/transcription-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/finalize")
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "finalize-1")
+      .send({}).expect(404).expect(({ body }) => expect(body.error.code).toBe("TRANSCRIPTION_SESSIONS_DISABLED"));
+  });
+
+  it("rejects a malformed finalization session ID before calling storage", async () => {
+    const deps = depsFor(activeDoctor);
+    deps.transcriptionSessions = { finalize: vi.fn() } as unknown as NonNullable<WorkerDependencies["transcriptionSessions"]>;
+    await request(createApp(deps, { transcriptionSessionsEnabled: true }))
+      .post("/api/transcription-sessions/not-a-uuid/finalize")
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "finalize-1")
+      .send({}).expect(400).expect(({ body }) => expect(body.error.code).toBe("VALIDATION_ERROR"));
+    expect(deps.transcriptionSessions.finalize).not.toHaveBeenCalled();
+  });
+
   it("rejects transcription requests without bearer tokens before audio work", async () => {
     const deps = depsFor(activeDoctor);
 

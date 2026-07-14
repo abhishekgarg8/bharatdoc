@@ -16,6 +16,15 @@ export const AccountStatusSchema = z.enum(ACCOUNT_STATUSES);
 export const JoinRequestStatusSchema = z.enum(JOIN_REQUEST_STATUSES);
 export const RecordingStatusSchema = z.enum(RECORDING_STATUSES);
 export const TranscriptionLanguageSchema = z.enum(TRANSCRIPTION_LANGUAGES);
+export const TranscriptionSessionFinalizeRequestSchema = z.strictObject({});
+export const TranscriptionSessionFinalizationSchema = z.strictObject({
+  recording_id: UuidSchema,
+  session_id: UuidSchema,
+  status: z.literal("transcribed"),
+  transcript_hash: z.string().regex(/^[a-f0-9]{64}$/),
+  generation: z.number().int().positive(),
+  finalized_at: z.iso.datetime({ offset: true })
+});
 
 export const ClinicSchema = z.object({
   id: UuidSchema,
@@ -54,6 +63,7 @@ export const RecordingSchema = z.object({
   pdf_storage_path: z.string().nullable(),
   pdf_generated_at: z.string().datetime().nullable(),
   pdf_version: z.string().nullable(),
+  ai_provenance: z.record(z.string(), z.unknown()).nullable().optional(),
   status: RecordingStatusSchema,
   recorded_at: z.string().datetime(),
   created_at: z.string().datetime()
@@ -144,3 +154,4 @@ export type CreateHospitalRegistrationInput = z.infer<typeof CreateHospitalRegis
 export type JoinHospitalRegistrationInput = z.infer<typeof JoinHospitalRegistrationInputSchema>;
 export type RegistrationInput = z.infer<typeof RegistrationInputSchema>;
 export type RecordingCreate = z.infer<typeof RecordingCreateSchema>;
+export type TranscriptionSessionFinalization = z.infer<typeof TranscriptionSessionFinalizationSchema>;

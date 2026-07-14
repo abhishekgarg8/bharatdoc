@@ -1,4 +1,4 @@
-import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
+import type { Clinic, Doctor, Recording, TranscriptionSessionFinalization } from "@bharatdoc/shared";
 import type { StructuredLogger } from "./logger.js";
 
 export type TranscriptionAttemptStage =
@@ -257,6 +257,9 @@ export interface TranscriptionSessionRepository {
   markProviderSubmitted(input: { sessionId: string; index: number; providerRequestKey: string }): Promise<boolean>;
   completeChunk(input: { sessionId: string; index: number; transcript: string }): Promise<void>;
   failChunk(input: { sessionId: string; index: number; errorCode: string; errorMessage: string }): Promise<void>;
+  finalize(input: {
+    sessionId: string; doctorId: string; clinicId: string; idempotencyKey: string;
+  }): Promise<TranscriptionSessionFinalization>;
 }
 
 export interface ProcessingJobRepository {

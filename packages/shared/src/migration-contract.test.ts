@@ -87,6 +87,10 @@ const durableSessionsPath = resolve(
   dirname,
   "../../../supabase/migrations/202607140001_transcription_manifest_status.sql",
 );
+const sessionFinalizationPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140002_transcription_session_finalization.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -367,6 +371,41 @@ describe("initial Supabase migration contract", () => {
     expect(migration).toContain("alter table public.transcription_sessions enable row level security");
     expect(migration).toContain("from public,anon,authenticated");
     expect(migration).toContain("to service_role");
+  });
+
+  it("finalizes complete session manifests atomically with immutable provenance", () => {
+    const finalization = readFileSync(sessionFinalizationPath, "utf8");
+    expect(finalization).toContain("add column if not exists ai_provenance jsonb");
+    expect(finalization).toContain("create or replace function public.finalize_transcription_session");
+    expect(finalization).toContain("pg_advisory_xact_lock");
+    expect(finalization).toContain("for update");
+    expect(finalization).toContain("generate_series(0,session_row.expected_chunk_count-1)");
+    expect(finalization).toContain("string_agg(chunk.transcript,E'\\n\\n' order by chunk.chunk_index)");
+    expect(finalization).toContain("count(distinct chunk.storage_path)");
+    expect(finalization).toContain("artifact.state='current'");
+    expect(finalization).toContain("artifact.checksum=chunk.checksum");
+    expect(finalization).toContain("artifact.storage_path=chunk.storage_path");
+    expect(finalization).toContain("where recording.id=session_row.recording_id and recording.status='recorded'");
+    expect(finalization).toContain("finalization_idempotency_key");
+    expect(finalization).toContain("'transcript_hash'");
+    expect(finalization).toContain("'chunk_hashes'");
+    expect(finalization).toContain("'provider_request_hashes'");
+    expect(finalization).toMatch(
+      /select session\.recording_id[\s\S]+pg_advisory_xact_lock\(hashtextextended\(session_recording_id::text,0\)\)[\s\S]+where session\.id=p_session_id for update/,
+    );
+    expect(finalization).toMatch(
+      /recording_row\.audio_storage_path is not null[\s\S]+values\(session_row\.recording_id,'audio',recording_row\.audio_storage_path,'superseded','legacy'\)[\s\S]+audio_storage_path=null/,
+    );
+    expect(finalization).toContain("recording_row.doctor_id<>p_doctor_id or recording_row.clinic_id<>p_clinic_id");
+    expect(finalization).toContain("chunk.recording_key<>session_row.recording_id");
+    expect(finalization).toContain("artifact.recording_key<>session_row.recording_id or artifact.kind<>'audio'");
+    expect(finalization).toMatch(
+      /if recording_row\.audio_storage_path is not null[\s\S]+if not exists\([\s\S]+artifact\.session_id=session_row\.id/,
+    );
+    expect(finalization).not.toContain("drop index if exists public.transcription_sessions_one_active_recording");
+    expect(finalization).toContain("session.state='completed' and session.finalized_at is null");
+    expect(finalization).toContain("from public,anon,authenticated");
+    expect(finalization).toContain("to service_role");
   });
 
   it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {
