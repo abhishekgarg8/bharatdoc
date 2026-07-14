@@ -43,13 +43,14 @@ describe("createTranscriptionSessionRepository", () => {
       .rejects.toMatchObject({ status, code: message });
   });
 
-  it("rethrows unknown plain PostgREST errors unchanged", async () => {
+  it("maps unknown PostgREST errors to a generic internal error", async () => {
     const error = { message: "UNRECOGNIZED_DATABASE_FAILURE", code: "XX000", details: "private" };
     const repository = createTranscriptionSessionRepository({
       rpc: vi.fn(async () => ({ data: null, error }))
     } as unknown as SupabaseClient);
     await expect(repository.finalize({ sessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" })).rejects.toBe(error);
+      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" }))
+      .rejects.toMatchObject({ status: 500, code: "INTERNAL_ERROR", message: "Internal server error." });
   });
 
   it("preserves native Error mapping and safely ignores hostile message shapes", async () => {
@@ -78,7 +79,21 @@ describe("createTranscriptionSessionRepository", () => {
       } as unknown as SupabaseClient);
       let caught: unknown;
       try { await repository.finalize(input); } catch (candidate) { caught = candidate; }
-      expect(caught).toBe(error);
+      expect(caught).toMatchObject({ status: 500, code: "INTERNAL_ERROR", message: "Internal server error." });
+    }
+  });
+
+  it("maps safe primitive strings without stringifying arbitrary values", async () => {
+    const input = { sessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" };
+    for (const [error, expected] of [
+      ["TRANSCRIPTION_SESSION_NOT_FOUND", { status: 404, code: "TRANSCRIPTION_SESSION_NOT_FOUND" }],
+      ["unknown database failure", { status: 500, code: "INTERNAL_ERROR" }]
+    ] as const) {
+      const repository = createTranscriptionSessionRepository({
+        rpc: vi.fn(async () => ({ data: null, error }))
+      } as unknown as SupabaseClient);
+      await expect(repository.finalize(input)).rejects.toMatchObject(expected);
     }
   });
 });

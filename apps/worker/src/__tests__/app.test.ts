@@ -343,7 +343,8 @@ describe("worker app", () => {
 
   it("returns a generic 500 without inspecting or exposing malformed database errors", async () => {
     const deps = depsFor(activeDoctor);
-    const databaseError = { message: null, code: "P0001", details: "patient transcript", hint: "private path" };
+    const databaseError = { message: "patient transcript must never leak", code: "P0001",
+      details: "private clinical detail", hint: "private path" };
     deps.transcriptionSessions = createTranscriptionSessionRepository({
       rpc: vi.fn(async () => ({ data: null, error: databaseError }))
     } as unknown as SupabaseClient);
@@ -355,6 +356,9 @@ describe("worker app", () => {
         expect(body).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error." } });
         expect(JSON.stringify(body)).not.toContain("patient transcript");
       });
+    const telemetry = JSON.stringify((deps.logger!.error as ReturnType<typeof vi.fn>).mock.calls);
+    expect(telemetry).not.toContain("patient transcript");
+    expect(telemetry).not.toContain("private path");
   });
 
   it("rejects client-authored finalization data and missing idempotency keys", async () => {
