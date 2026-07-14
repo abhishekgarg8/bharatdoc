@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RequestHandler } from "express";
 import { createApp } from "../app.js";
+import { createTranscriptionSessionRepository } from "../repositories.js";
 import type { PersistedTranscriptionChunk, ProcessingJob, WorkerDependencies } from "../types.js";
 
 const activeDoctor: Doctor = {
@@ -319,6 +321,44 @@ describe("worker app", () => {
       sessionId: result.session_id, doctorId: activeDoctor.id,
       clinicId: activeDoctor.clinic_id, idempotencyKey: "finalize-1"
     });
+  });
+
+  it("returns a safe conflict for a different finalization key from PostgREST", async () => {
+    const deps = depsFor(activeDoctor);
+    deps.transcriptionSessions = createTranscriptionSessionRepository({ rpc: vi.fn(async () => ({
+      data: null, error: { message: "TRANSCRIPTION_FINALIZATION_IMMUTABLE", code: "P0001",
+        details: "patient transcript must never leak", hint: "private storage path" }
+    })) } as unknown as SupabaseClient);
+
+    await request(createApp(deps, { transcriptionSessionsEnabled: true }))
+      .post("/api/transcription-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/finalize")
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "different-key")
+      .send({}).expect(409).expect(({ body }) => {
+        expect(body).toEqual({ error: { code: "TRANSCRIPTION_FINALIZATION_IMMUTABLE",
+          message: "AI processing request conflicts with existing work." } });
+        expect(JSON.stringify(body)).not.toContain("patient transcript");
+        expect(JSON.stringify(body)).not.toContain("private storage path");
+      });
+  });
+
+  it("returns a generic 500 without inspecting or exposing malformed database errors", async () => {
+    const deps = depsFor(activeDoctor);
+    const databaseError = { message: "patient transcript must never leak", code: "P0001",
+      details: "private clinical detail", hint: "private path" };
+    deps.transcriptionSessions = createTranscriptionSessionRepository({
+      rpc: vi.fn(async () => ({ data: null, error: databaseError }))
+    } as unknown as SupabaseClient);
+
+    await request(createApp(deps, { transcriptionSessionsEnabled: true }))
+      .post("/api/transcription-sessions/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/finalize")
+      .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "different-key")
+      .send({}).expect(500).expect(({ body }) => {
+        expect(body).toEqual({ error: { code: "INTERNAL_ERROR", message: "Internal server error." } });
+        expect(JSON.stringify(body)).not.toContain("patient transcript");
+      });
+    const telemetry = JSON.stringify((deps.logger!.error as ReturnType<typeof vi.fn>).mock.calls);
+    expect(telemetry).not.toContain("patient transcript");
+    expect(telemetry).not.toContain("private path");
   });
 
   it("rejects client-authored finalization data and missing idempotency keys", async () => {

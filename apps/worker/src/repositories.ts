@@ -417,8 +417,17 @@ function sessionManifest(row: TranscriptionSessionRow, chunks: TranscriptionSess
     objectPaths: [...new Set(chunks.map((chunk) => chunk.storagePath))] };
 }
 
+function processingErrorMessage(error: unknown): string {
+  try {
+    if (typeof error === "string") return error.length <= 512 ? error : "";
+    if (!error || typeof error !== "object") return "";
+    const message = Object.getOwnPropertyDescriptor(error, "message")?.value;
+    return typeof message === "string" && message.length <= 512 ? message : "";
+  } catch { return ""; }
+}
+
 function throwProcessingError(error: unknown): never {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = processingErrorMessage(error);
   const code = [
     "QUOTA_DOCTOR_TRANSCRIPTION_MINUTES", "QUOTA_CLINIC_TRANSCRIPTION_MINUTES",
     "QUOTA_DOCTOR_TRANSCRIPTION", "QUOTA_CLINIC_TRANSCRIPTION",
@@ -456,7 +465,7 @@ function throwProcessingError(error: unknown): never {
   if (conflict) {
     throw new HttpError(409, "AI processing request conflicts with existing work.", conflict);
   }
-  throw error;
+  throw new HttpError(500, "Internal server error.", "INTERNAL_ERROR");
 }
 
 export function createProcessingJobRepository(supabase: SupabaseClient): ProcessingJobRepository {
