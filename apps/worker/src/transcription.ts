@@ -2,10 +2,10 @@ import { MAX_AUDIO_BYTES_PHASE_1, MAX_RECORDING_SECONDS, requirePatientId, type 
 import { HttpError, sanitizeErrorForTelemetry, toHttpError } from "./http-errors.js";
 import {
   claimProcessingJob, processingIdempotencyKey, reconcileProcessingArtifacts,
-  requireLease, sha256, validateTranscriptionManifest,
+  PROVIDER_PROCESSING_TIMEOUT_MS, requireLease, runWithProcessingDeadline, sha256, validateTranscriptionManifest,
   withProcessingHeartbeat
 } from "./processing.js";
-import type { AuthContext, TranscriptionAttemptStage, WorkerDependencies } from "./types.js";
+import type { AuthContext, ProcessingJobClaim, TranscriptionAttemptStage, WorkerDependencies } from "./types.js";
 
 export interface TranscriptionFileInput {
   buffer: Buffer;
@@ -19,6 +19,7 @@ export interface TranscribeRecordingInput {
   audio?: TranscriptionFileInput;
   requestId?: string;
   idempotencyKey?: string;
+  processingClaim?: ProcessingJobClaim;
 }
 
 export interface TranscribeRecordingResponse {
@@ -164,11 +165,11 @@ export async function transcribeRecording(
     requireTranscriptionPatientId(recording);
     const idempotencyKey = input.idempotencyKey?.trim() ||
       processingIdempotencyKey("transcription", recording.id, "v1");
-    const keyJob = deps.processingJobs
+    const keyJob = input.processingClaim?.job ?? (deps.processingJobs
       ? await deps.processingJobs.findByIdempotencyKey({
           operation: "transcription", doctorId: auth.doctor.id, idempotencyKey
         })
-      : null;
+      : null);
     let audio = input.audio ? requireAudio(input.audio) : undefined;
     let inputHash = audio ? sha256(audio.buffer) : keyJob?.inputHash;
     if (audio && keyJob && keyJob.inputHash !== inputHash) {
@@ -229,13 +230,13 @@ export async function transcribeRecording(
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0 || duration > MAX_RECORDING_SECONDS) {
       throw new HttpError(400, "Recording duration is invalid.", "RECORDING_DURATION_INVALID");
     }
-    const claim = deps.processingJobs
+    const claim = input.processingClaim ?? (deps.processingJobs
       ? await claimProcessingJob(deps.processingJobs, {
           operation: "transcription", idempotencyKey, inputHash, recordingId: recording.id,
           doctorId: auth.doctor.id, clinicId, transcriptionSeconds: duration,
           storageBytes: audio?.size ?? 0
         })
-      : null;
+      : null);
     if (claim?.disposition === "completed") {
       recording = await deps.recordings.findRecordingForDoctor(recording.id, auth.doctor.id);
       if (!recording?.transcript || !recording.audio_storage_path) {
@@ -282,6 +283,12 @@ export async function transcribeRecording(
       } catch {
         // A pending intent with no object is safe to upload to the same deterministic path.
       }
+    }
+    if (lease && deps.processingJobs && audioStoragePath && !knownArtifact) {
+      await deps.processingJobs.recordArtifact({
+        ...lease, kind: "audio", storagePath: audioStoragePath,
+        byteSize: audio.buffer.byteLength, checksum: inputHash, state: "current"
+      });
     }
     if (!audioStoragePath) {
       stage = "upload_audio";
@@ -359,13 +366,13 @@ export async function transcribeRecording(
       }
       activeChunkIndex = index;
       const startedAt = Date.now();
-      const providerWork = () => deps.transcriptionClient.transcribe({
+      const providerWork = (leaseSignal?: AbortSignal) => runWithProcessingDeadline((signal) => deps.transcriptionClient.transcribe({
           audio: part.buffer,
           mimeType: audio.mimetype,
           filename: part.filename,
           language: auth.doctor.transcription_lang,
-          ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {})
-        });
+          ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {}), signal
+        }), PROVIDER_PROCESSING_TIMEOUT_MS, "PROVIDER_TIMEOUT", leaseSignal);
       const transcriptPart = (
         lease && deps.processingJobs
           ? await withProcessingHeartbeat(deps.processingJobs, lease, providerWork)
@@ -441,7 +448,9 @@ export async function transcribeRecording(
             errorMessage: sanitizedError.error_message
           });
         }
-        await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
+        if (!input.processingClaim) {
+          await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
+        }
       } catch {
         // A lost lease must not mask the operation error.
       }

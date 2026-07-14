@@ -144,6 +144,29 @@ describe("worker app", () => {
       });
   });
 
+  it("reports readiness only when the processing queue repository is reachable", async () => {
+    await request(createApp(depsFor(null))).get("/readyz").expect(503);
+
+    const deps = depsFor(null);
+    deps.processingJobs = {
+      findStaleRunning: vi.fn(async () => []),
+    } as unknown as NonNullable<WorkerDependencies["processingJobs"]>;
+
+    await request(createApp(deps))
+      .get("/readyz")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ ok: true, queue: "ready" });
+      });
+  });
+
+  it("fails readiness when the required queue loop is unhealthy", async () => {
+    const deps = depsFor(null);
+    deps.processingJobs = { findStaleRunning: vi.fn(async () => []) } as unknown as NonNullable<WorkerDependencies["processingJobs"]>;
+    await request(createApp(deps, { queueRequired: true, queueReady: () => false })).get("/readyz").expect(503);
+    await request(createApp(deps, { queueRequired: true, queueReady: () => true })).get("/readyz").expect(200);
+  });
+
   it("allows browser requests only from configured CORS origins", async () => {
     await request(
       createApp(depsFor(null), {
@@ -393,6 +416,97 @@ describe("worker app", () => {
       .set("Authorization", "Bearer valid-token").set("Idempotency-Key", "finalize-1")
       .send({}).expect(400).expect(({ body }) => expect(body.error.code).toBe("VALIDATION_ERROR"));
     expect(deps.transcriptionSessions.finalize).not.toHaveBeenCalled();
+  });
+
+  it("returns a scoped processing job status for authenticated polling", async () => {
+    const deps = depsFor(activeDoctor);
+    const processingJobs = {
+      findStatus: vi.fn(async () => ({
+        id: "job-1",
+        operation: "summary",
+        state: "queued",
+        attempt: 1,
+        maxAttempts: 3,
+        scheduledAt: "2026-07-10T10:00:00.000Z",
+        startedAt: null,
+        completedAt: null,
+        nextRetryAt: null,
+        isStale: false,
+        error: null,
+      })),
+    };
+    deps.processingJobs = processingJobs as unknown as NonNullable<WorkerDependencies["processingJobs"]>;
+
+    await request(createApp(deps))
+      .get("/api/processing-jobs/job-1")
+      .set("Authorization", "Bearer valid-token")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.job).toMatchObject({ id: "job-1", state: "queued" });
+      });
+    expect(processingJobs.findStatus).toHaveBeenCalledWith({
+      jobId: "job-1",
+      doctorId: activeDoctor.id,
+      clinicId: activeDoctor.clinic_id,
+    });
+  });
+
+  it("enqueues summary work without waiting for the provider when the queue flag is enabled", async () => {
+    const deps = depsFor(activeDoctor);
+    const processingJobs = {
+      enqueue: vi.fn(async () => ({
+        id: "job-1",
+        operation: "summary",
+        state: "failed",
+        lifecycleState: "queued",
+        leaseToken: null,
+        leaseExpiresAt: null,
+        attempt: 1,
+        maxAttempts: 3,
+        result: null,
+        inputHash: "a".repeat(64),
+        inputVersion: 1,
+        scheduledAt: "2026-07-10T10:00:00.000Z",
+        startedAt: null,
+        heartbeatAt: null,
+        nextRetryAt: null,
+        completedAt: null,
+        terminalErrorCode: null,
+        terminalErrorMessage: null,
+        outputReference: null,
+        stateVersion: 0,
+        createdAt: "2026-07-10T10:00:00.000Z",
+        recordingId: recording.id,
+        doctorId: activeDoctor.id,
+        clinicId: activeDoctor.clinic_id!,
+        idempotencyKey: "summary-key",
+      })),
+    };
+    deps.processingJobs = processingJobs as unknown as NonNullable<WorkerDependencies["processingJobs"]>;
+
+    await request(createApp(deps, { queueOperations: { summary: true } }))
+      .post("/api/summarize")
+      .set("Authorization", "Bearer valid-token")
+      .set("Idempotency-Key", "summary-key")
+      .send({ recording_id: recording.id })
+      .expect(202)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          job_id: "job-1",
+          operation: "summary",
+          state: "queued",
+          status_url: "/api/processing-jobs/job-1",
+        });
+      });
+    expect(processingJobs.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "summary",
+      idempotencyKey: "summary-key",
+      recordingId: recording.id,
+      doctorId: activeDoctor.id,
+      clinicId: activeDoctor.clinic_id,
+      inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }));
+    expect(deps.summaryClient.summarize).not.toHaveBeenCalled();
   });
 
   it("rejects transcription requests without bearer tokens before audio work", async () => {
@@ -900,6 +1014,7 @@ describe("worker app", () => {
       mimeType: "audio/webm",
       filename: "recording.webm",
       language: "auto",
+      signal: expect.any(AbortSignal),
     });
     expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith({
       recordingId: recording.id,
@@ -1215,6 +1330,7 @@ describe("worker app", () => {
       doctor: activeDoctor,
       recording,
       generatedAt: expect.any(Date),
+      signal: expect.any(AbortSignal),
     });
     expect(deps.pdfStorage.uploadRecordingPdf).toHaveBeenCalled();
     expect(deps.recordings.markRecordingPdfSaved).toHaveBeenCalledWith({

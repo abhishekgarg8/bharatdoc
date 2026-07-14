@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
 import type {
   AudioStorage, PdfStorage, ProcessingJob,
@@ -6,6 +7,9 @@ import type {
   ProcessingJobRepository,
   ProcessingOperation
 } from "./types.js";
+
+export const PROVIDER_PROCESSING_TIMEOUT_MS = 4 * 60_000;
+export const PDF_RENDER_TIMEOUT_MS = 60_000;
 
 export interface TranscriptionChunkInput {
   index: number;
@@ -47,6 +51,42 @@ export interface TranscriptionManifestLimits {
 
 export function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function pdfProcessingInputHash(input: {
+  clinic: Clinic; doctor: Doctor; recording: Recording; generatedAt?: Date;
+}): string {
+  const generatedAt = input.generatedAt ?? new Date(input.recording.created_at);
+  return sha256(JSON.stringify({ version: 1, generatedAt: generatedAt.toISOString(),
+    summary: input.recording.summary, patientId: input.recording.patient_id,
+    recordedAt: input.recording.recorded_at,
+    doctor: [input.doctor.name, input.doctor.specialization],
+    clinic: [input.clinic.clinic_code, input.clinic.name, input.clinic.address] }));
+}
+
+export async function runWithProcessingDeadline<T>(
+  work: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  code = "PROVIDER_TIMEOUT",
+  parentSignal?: AbortSignal
+): Promise<T> {
+  const controller = new AbortController();
+  const abort = new Promise<never>((_resolve, reject) => {
+    controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
+  });
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) abortFromParent();
+  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const timer = setTimeout(() => controller.abort(
+    new HttpError(504, "Processing exceeded its deadline.", code)
+  ), timeoutMs);
+  timer.unref?.();
+  try {
+    return await Promise.race([work(controller.signal), abort]);
+  } finally {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", abortFromParent);
+  }
 }
 
 export function processingIdempotencyKey(
@@ -164,18 +204,27 @@ export function requireLease(claim: ProcessingJobClaim): { jobId: string; leaseT
 export async function withProcessingHeartbeat<T>(
   repository: ProcessingJobRepository,
   lease: { jobId: string; leaseToken: string },
-  work: () => Promise<T>
+  work: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   let heartbeatError: unknown;
+  let heartbeat = Promise.resolve();
+  const controller = new AbortController();
   const timer = setInterval(() => {
-    void repository.heartbeat(lease).catch((error) => { heartbeatError = error; });
+    heartbeat = heartbeat.then(async () => {
+      if (!heartbeatError) await repository.heartbeat(lease);
+    }).catch((error) => {
+      heartbeatError = error;
+      controller.abort(error);
+    });
   }, 30_000);
   timer.unref?.();
   try {
-    const result = await work();
+    const result = await work(controller.signal);
+    await heartbeat;
     if (heartbeatError) throw heartbeatError;
     return result;
   } finally {
     clearInterval(timer);
+    await heartbeat;
   }
 }

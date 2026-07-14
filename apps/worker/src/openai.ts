@@ -21,7 +21,10 @@ export function createOpenAISummaryClient(apiKey: string, model: string): Summar
             { role: "user", content: input.prompt }
           ]
         },
-        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
+        input.idempotencyKey || input.signal
+          ? { ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+              ...(input.signal ? { signal: input.signal } : {}) }
+          : undefined
       );
       const summary = result.choices[0]?.message?.content?.trim();
 
@@ -47,7 +50,10 @@ export function createOpenAITranscriptionClient(apiKey: string, model: string): 
       };
       const result = await openai.audio.transcriptions.create(
         input.language === "hi" || input.language === "en" ? { ...params, language: input.language } : params,
-        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
+        input.idempotencyKey || input.signal
+          ? { ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+              ...(input.signal ? { signal: input.signal } : {}) }
+          : undefined
       );
       const transcript = result.text?.trim();
 

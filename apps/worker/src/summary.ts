@@ -7,13 +7,14 @@ import {
 import { HttpError, toHttpError } from "./http-errors.js";
 import {
   claimProcessingJob, processingIdempotencyKey, reconcileProcessingArtifacts,
-  requireLease, sha256, withProcessingHeartbeat
+  PROVIDER_PROCESSING_TIMEOUT_MS, requireLease, runWithProcessingDeadline, sha256, withProcessingHeartbeat
 } from "./processing.js";
-import type { AuthContext, WorkerDependencies } from "./types.js";
+import type { AuthContext, ProcessingJobClaim, WorkerDependencies } from "./types.js";
 
 export interface SummaryRequestInput {
   recordingId?: string;
   idempotencyKey?: string;
+  processingClaim?: ProcessingJobClaim;
 }
 
 export interface SummaryResponse {
@@ -76,12 +77,12 @@ export async function summarizeRecording(
   const inputHash = sha256(prompt);
   const idempotencyKey = input.idempotencyKey?.trim() ||
     processingIdempotencyKey("summary", recording.id, inputHash);
-  const claim = deps.processingJobs
+  const claim = input.processingClaim ?? (deps.processingJobs
     ? await claimProcessingJob(deps.processingJobs, {
         operation: "summary", idempotencyKey, inputHash, recordingId: recording.id,
         doctorId: auth.doctor.id, clinicId
       })
-    : null;
+    : null);
 
   if (claim?.disposition === "completed") {
     recording = requireTranscribableRecording(
@@ -100,10 +101,10 @@ export async function summarizeRecording(
       await deps.processingJobs.markProviderSubmitted({ ...lease, providerRequestKey: providerRequestKey! });
     }
     const startedAt = Date.now();
-    const providerWork = () => deps.summaryClient.summarize({
+    const providerWork = (leaseSignal?: AbortSignal) => runWithProcessingDeadline((signal) => deps.summaryClient.summarize({
       prompt, recording, doctor: auth.doctor,
-      ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {})
-    });
+      ...(providerRequestKey ? { idempotencyKey: providerRequestKey } : {}), signal
+    }), PROVIDER_PROCESSING_TIMEOUT_MS, "PROVIDER_TIMEOUT", leaseSignal);
     const summary = sanitizeClinicalSummaryText(
       lease && deps.processingJobs
         ? await withProcessingHeartbeat(deps.processingJobs, lease, providerWork)
@@ -138,7 +139,7 @@ export async function summarizeRecording(
     }
     return { recording_id: recording.id, summary, status: "summary_ready" };
   } catch (error) {
-    if (lease && deps.processingJobs) {
+    if (lease && deps.processingJobs && !input.processingClaim) {
       try {
         await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
       } catch {

@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  pdfProcessingInputHash,
   processingIdempotencyKey,
   reconcileProcessingArtifacts,
   validateTranscriptionManifest,
   type TranscriptionChunkInput
 } from "../processing.js";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 
 function chunks(): TranscriptionChunkInput[] {
   return [
@@ -22,6 +24,18 @@ describe("AI processing controls", () => {
       processingIdempotencyKey("summary", "recording-1", "same input")
     );
     expect(processingIdempotencyKey("summary", "recording-1", "same input").length).toBeLessThanOrEqual(120);
+  });
+
+  it("fingerprints every PDF render input with a deterministic generation time", () => {
+    const clinic = { clinic_code: "ABC234", name: "Clinic", address: "Address" } as Clinic;
+    const doctor = { name: "Doctor", specialization: "Medicine" } as Doctor;
+    const recording = { summary: "Summary", patient_id: "P-1", recorded_at: "2026-01-01T00:00:00Z",
+      created_at: "2026-01-01T00:01:00Z" } as Recording;
+    const fingerprint = pdfProcessingInputHash({ clinic, doctor, recording });
+    expect(pdfProcessingInputHash({ clinic, doctor, recording })).toBe(fingerprint);
+    expect(pdfProcessingInputHash({ clinic: { ...clinic, name: "Other" }, doctor, recording })).not.toBe(fingerprint);
+    expect(pdfProcessingInputHash({ clinic, doctor: { ...doctor, name: "Other" }, recording })).not.toBe(fingerprint);
+    expect(pdfProcessingInputHash({ clinic, doctor, recording: { ...recording, patient_id: "P-2" } })).not.toBe(fingerprint);
   });
 
   it("accepts one contiguous immutable manifest with exact aggregate totals", () => {

@@ -10,6 +10,7 @@ import type {
   PdfStorage,
   ProcessingJob,
   ProcessingJobStateRepository,
+  QueuedProcessingJob,
   RecordingProcessingRepository,
   TranscriptionAttemptRepository,
   TranscriptionManifest,
@@ -56,6 +57,20 @@ export function createDoctorRepository(supabase: SupabaseClient): DoctorReposito
           ].join(",")
         )
         .eq("firebase_uid", authUid)
+        .maybeSingle<DoctorRow>();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    },
+
+    async findById(doctorId: string): Promise<Doctor | null> {
+      const { data, error } = await supabase
+        .from("doctors")
+        .select("*")
+        .eq("id", doctorId)
         .maybeSingle<DoctorRow>();
 
       if (error) {
@@ -335,6 +350,8 @@ interface ProcessingJobRow {
 interface ProcessingJobStatusRow {
   id: string;
   operation: ProcessingJob["operation"];
+  doctor_key?: string;
+  clinic_key?: string;
   job_state: DurableProcessingJob["lifecycleState"];
   attempt: number;
   max_attempts: number;
@@ -345,6 +362,13 @@ interface ProcessingJobStatusRow {
   terminal_error_code: string | null;
   terminal_error_message: string | null;
   is_stale: boolean;
+}
+
+interface QueuedProcessingJobRow extends ProcessingJobRow {
+  recording_key: string;
+  doctor_key: string;
+  clinic_key: string;
+  idempotency_key: string;
 }
 
 const processingJobColumns = [
@@ -426,6 +450,16 @@ function processingJobStatus(row: ProcessingJobStatusRow) {
     terminalErrorCode: row.terminal_error_code,
     terminalErrorMessage: row.terminal_error_message
   });
+}
+
+function queuedProcessingJob(row: QueuedProcessingJobRow): QueuedProcessingJob {
+  return {
+    ...processingJob(row),
+    recordingId: row.recording_key,
+    doctorId: row.doctor_key,
+    clinicId: row.clinic_key,
+    idempotencyKey: row.idempotency_key
+  };
 }
 
 function transcriptionChunk(row: TranscriptionChunkRow): PersistedTranscriptionChunk {
@@ -541,11 +575,15 @@ function throwProcessingError(error: unknown): never {
     "PROCESSING_STATE_CONFLICT",
     "PROCESSING_TRANSITION_INVALID", "PROCESSING_ARTIFACT_INCONSISTENT",
     "PROCESSING_IDEMPOTENCY_CONFLICT", "PROCESSING_ACTIVE_CONFLICT",
-    "PROCESSING_NOT_READY", "PROCESSING_ATTEMPT_INVALID", "PROCESSING_ATTEMPTS_EXHAUSTED"
+    "PROCESSING_NOT_READY", "PROCESSING_ATTEMPT_INVALID", "PROCESSING_ATTEMPTS_EXHAUSTED",
+    "PROCESSING_CANCELLATION_NOT_ALLOWED", "PROCESSING_RETRY_NOT_ALLOWED"
   ]
     .find((value) => message.includes(value));
   if (conflict) {
     throw new HttpError(409, "AI processing request conflicts with existing work.", conflict);
+  }
+  if (message.includes("PROCESSING_JOB_NOT_FOUND")) {
+    throw new HttpError(404, "Processing job was not found.", "PROCESSING_JOB_NOT_FOUND");
   }
   throw new HttpError(500, "Internal server error.", "INTERNAL_ERROR");
 }
@@ -638,15 +676,6 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
       return ((data ?? []) as unknown as ProcessingJobRow[]).map(processingJob);
     },
 
-    async recoverStale(input) {
-      const { data, error } = await supabase.rpc("recover_stale_processing_jobs", {
-        p_before: input.before, p_retry_at: input.retryAt ?? null,
-        p_limit: Math.min(1000, Math.max(1, input.limit))
-      });
-      if (error) throwProcessingError(error);
-      return Number(data ?? 0);
-    },
-
     async requestCancellation(input) {
       const { data, error } = await supabase.rpc("request_processing_job_cancellation", {
         p_job_id: input.jobId, p_doctor_id: input.doctorId, p_clinic_id: input.clinicId,
@@ -665,6 +694,56 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
         .maybeSingle<ProcessingJobStatusRow>();
       if (error) throw error;
       return data ? processingJobStatus(data) : null;
+    },
+
+    async enqueue(input) {
+      const { data, error } = await supabase.rpc("enqueue_recording_processing_job", {
+        p_operation: input.operation,
+        p_idempotency_key: input.idempotencyKey,
+        p_input_hash: input.inputHash,
+        p_recording_id: input.recordingId,
+        p_doctor_id: input.doctorId,
+        p_clinic_id: input.clinicId,
+        p_input_version: 1,
+        p_transcription_seconds: input.transcriptionSeconds,
+        p_storage_bytes: input.storageBytes,
+        p_audio_storage_path: input.artifactPath ?? null
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as QueuedProcessingJobRow[] | null)?.[0];
+      if (!row) throw new Error("Processing enqueue returned no row.");
+      return queuedProcessingJob(row);
+    },
+
+    async activateQueuedTranscriptionArtifact(input) {
+      const { error } = await supabase.rpc("activate_queued_transcription_artifact", {
+        p_job_id: input.jobId,
+        p_doctor_id: input.doctorId,
+        p_clinic_id: input.clinicId,
+        p_storage_path: input.storagePath,
+        p_checksum: input.checksum
+      });
+      if (error) throwProcessingError(error);
+    },
+
+    async claimReady(input) {
+      const { data, error } = await supabase.rpc("claim_ready_recording_processing_jobs", {
+        p_worker_id: input.workerId,
+        p_operations: input.operations,
+        p_limit: Math.min(10, Math.max(1, input.limit))
+      });
+      if (error) throwProcessingError(error);
+      return ((data ?? []) as unknown as QueuedProcessingJobRow[]).map(queuedProcessingJob);
+    },
+
+    async recoverStale(input) {
+      const { data, error } = await supabase.rpc("recover_stale_recording_processing_jobs", {
+        p_before: input.before,
+        p_retry_at: input.retryAt ?? new Date(Date.now() + 30_000).toISOString(),
+        p_limit: Math.min(100, Math.max(1, input.limit))
+      });
+      if (error) throwProcessingError(error);
+      return Number(data ?? 0);
     },
 
     async heartbeat(input) {
