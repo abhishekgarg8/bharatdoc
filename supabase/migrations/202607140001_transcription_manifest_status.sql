@@ -51,7 +51,7 @@ grant execute on function public.fail_transcription_chunk(uuid,uuid,integer,text
 -- Issue #65: server-authoritative independently uploaded transcription chunks.
 create table public.transcription_sessions (
   id uuid primary key default gen_random_uuid(),
-  recording_id uuid not null references public.recordings(id) on delete restrict,
+  recording_id uuid not null references public.recordings(id) on delete cascade,
   doctor_id uuid not null references public.doctors(id) on delete restrict,
   clinic_id uuid not null references public.clinics(id) on delete restrict,
   expected_chunk_count integer not null check (expected_chunk_count between 1 and 120),
@@ -177,7 +177,9 @@ begin
      or (chunk_count+1=s.expected_chunk_count and abs(total_seconds+p_duration_seconds-recording.duration_seconds)>1) then
     raise exception 'TRANSCRIPTION_CHUNK_LIMIT_EXCEEDED' using errcode='P0001';
   end if;
-  update public.transcription_sessions set mime_type=coalesce(mime_type,p_mime_type),updated_at=now() where id=p_session_id;
+  update public.transcription_sessions target_session
+    set mime_type=coalesce(target_session.mime_type,p_mime_type),updated_at=now()
+    where target_session.id=p_session_id;
   insert into public.transcription_chunks(session_id,recording_key,chunk_index,expected_count,byte_size,duration_seconds,
     mime_type,checksum,storage_path,state) values(p_session_id,s.recording_id,p_chunk_index,p_expected_count,p_byte_size,
     p_duration_seconds,p_mime_type,p_checksum,p_storage_path,'receiving') returning * into c;
@@ -231,11 +233,82 @@ begin
   update public.transcription_sessions set state='failed',updated_at=now() where id=p_session_id;
 end $$;
 
+create or replace function public.expire_transcription_sessions(p_receipt_id uuid)
+returns integer language plpgsql security definer set search_path=public,pg_temp as $$
+declare expired integer;
+begin
+  perform 1 from public.transcription_sessions s where s.updated_at<now()-interval '90 days' for update;
+  insert into public.deletion_object_queue(receipt_id,bucket,storage_path)
+    select distinct p_receipt_id,'audio',refs.storage_path from (
+      select c.storage_path from public.transcription_chunks c join public.transcription_sessions s on s.id=c.session_id
+        where s.updated_at<now()-interval '90 days'
+      union all
+      select a.storage_path from public.processing_artifacts a join public.transcription_sessions s on s.id=a.session_id
+        where s.updated_at<now()-interval '90 days' and a.state<>'deleted'
+    ) refs where refs.storage_path is not null and refs.storage_path<>''
+    on conflict(receipt_id,bucket,storage_path) do nothing;
+  delete from public.processing_artifacts a using public.transcription_sessions s
+    where a.session_id=s.id and s.updated_at<now()-interval '90 days';
+  delete from public.transcription_chunks c using public.transcription_sessions s
+    where c.session_id=s.id and s.updated_at<now()-interval '90 days';
+  delete from public.transcription_sessions where updated_at<now()-interval '90 days';
+  get diagnostics expired=row_count;
+  return expired;
+end $$;
+
+create or replace function public.reconcile_retention_and_orphans()
+returns jsonb language plpgsql security definer set search_path=public,storage,pg_temp as $$
+declare v_receipt_id uuid; queued integer; logs_deleted integer; attempts_deleted integer; sessions_expired integer;
+begin
+  update public.recording_processing_jobs set state='failed',error_code='PROCESSING_LEASE_EXPIRED',
+    failure_count=failure_count+1,lease_token=null,lease_expires_at=null,updated_at=now()
+  where state='running' and lease_expires_at<=now();
+  delete from public.diagnostic_logs where created_at<now()-interval '30 days';
+  get diagnostics logs_deleted=row_count;
+  delete from public.transcription_attempts where created_at<now()-interval '30 days';
+  get diagnostics attempts_deleted=row_count;
+  insert into public.deletion_receipts(request_type,subject_hash,actor_hash)
+    values('retention',encode(extensions.digest('retention:'||clock_timestamp()::text,'sha256'),'hex'),
+      encode(extensions.digest('system-retention','sha256'),'hex')) returning id into v_receipt_id;
+  insert into public.deletion_object_queue(receipt_id,bucket,storage_path)
+    select v_receipt_id,o.bucket_id,o.name from storage.objects o
+    where o.bucket_id in ('audio','pdfs') and o.created_at<now()-interval '1 day'
+      and not exists(select 1 from public.recordings r where
+        (o.bucket_id='audio' and r.audio_storage_path=o.name) or (o.bucket_id='pdfs' and r.pdf_storage_path=o.name))
+      and (o.bucket_id<>'audio' or not exists(select 1 from public.transcription_attempts t where t.audio_storage_path=o.name))
+      and (o.bucket_id<>'audio' or not exists(select 1 from public.transcription_chunks c where c.storage_path=o.name))
+      and not exists(select 1 from public.processing_artifacts a where a.storage_path=o.name and a.state<>'deleted'
+        and ((o.bucket_id='audio' and a.kind='audio') or (o.bucket_id='pdfs' and a.kind='pdf')))
+      and not exists(select 1 from public.deletion_object_queue q where q.bucket=o.bucket_id and q.storage_path=o.name)
+    on conflict do nothing;
+  sessions_expired:=public.expire_transcription_sessions(v_receipt_id);
+  select count(*) into queued from public.deletion_object_queue where receipt_id=v_receipt_id;
+  update public.deletion_receipts set object_count=queued,state=case when queued=0 then 'completed' else 'queued' end,
+    completed_at=case when queued=0 then now() else null end where id=v_receipt_id;
+  delete from public.processing_artifacts a where a.state='deleted' and a.deleted_at<now()-interval '90 days';
+  update public.processing_artifacts set job_id=null where job_id in (
+    select id from public.recording_processing_jobs where state<>'running'
+      and coalesce(completed_at,updated_at,created_at)<now()-interval '90 days');
+  delete from public.transcription_chunks where job_id in (
+    select id from public.recording_processing_jobs where state<>'running'
+      and coalesce(completed_at,updated_at,created_at)<now()-interval '90 days');
+  delete from public.processing_usage_reservations where job_id in (
+    select id from public.recording_processing_jobs where state<>'running'
+      and coalesce(completed_at,updated_at,created_at)<now()-interval '90 days');
+  delete from public.recording_processing_jobs where state<>'running'
+    and coalesce(completed_at,updated_at,created_at)<now()-interval '90 days';
+  delete from public.deletion_receipts where expires_at<now() and state='completed';
+  return jsonb_build_object('receipt_id',v_receipt_id,'orphan_objects_queued',queued,
+    'diagnostic_logs_deleted',logs_deleted,'transcription_attempts_deleted',attempts_deleted,
+    'transcription_sessions_expired',sessions_expired);
+end $$;
+
 revoke all on table public.transcription_sessions from public,anon,authenticated;
 revoke all on function public.create_transcription_session(uuid,uuid,uuid,integer,text,text,text),
   public.claim_transcription_session_chunk(uuid,uuid,uuid,integer,integer,integer,numeric,text,text,text),
   public.mark_transcription_session_chunk_stored(uuid,integer,text),public.submit_transcription_session_chunk(uuid,integer,text),
-  public.complete_transcription_session_chunk(uuid,integer,text),public.fail_transcription_session_chunk(uuid,integer,text,text)
+  public.complete_transcription_session_chunk(uuid,integer,text),public.fail_transcription_session_chunk(uuid,integer,text,text),
+  public.expire_transcription_sessions(uuid)
   from public,anon,authenticated;
 grant select on public.transcription_sessions,public.transcription_chunks to service_role;
 grant execute on function public.create_transcription_session(uuid,uuid,uuid,integer,text,text,text),

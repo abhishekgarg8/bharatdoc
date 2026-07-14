@@ -357,6 +357,11 @@ describe("initial Supabase migration contract", () => {
     expect(migration).toContain("state='provider_submitted'");
     expect(migration).toContain("'auto','en','hi','hien'");
     expect(migration).toContain("s.mime_type<>p_mime_type");
+    expect(migration).toContain("set mime_type=coalesce(target_session.mime_type,p_mime_type)");
+    expect(migration).toContain("recording_id uuid not null references public.recordings(id) on delete cascade");
+    expect(migration).toContain("create or replace function public.expire_transcription_sessions");
+    expect(migration).toContain("sessions_expired:=public.expire_transcription_sessions(v_receipt_id)");
+    expect(migration).toMatch(/insert into public\.deletion_object_queue[\s\S]+delete from public\.processing_artifacts[\s\S]+delete from public\.transcription_chunks[\s\S]+delete from public\.transcription_sessions/);
     expect(migration).toContain("recording.duration_seconds+1");
     expect(migration).toContain("state in ('stored','provider_submitted','completed')");
     expect(migration).toContain("alter table public.transcription_sessions enable row level security");
