@@ -4,11 +4,16 @@ import type {
   AudioStorage,
   ClinicRepository,
   DoctorRepository,
+  PersistedTranscriptionChunk,
   PdfStorage,
   ProcessingJob,
   ProcessingJobRepository,
   RecordingProcessingRepository,
-  TranscriptionAttemptRepository
+  TranscriptionAttemptRepository,
+  TranscriptionManifest,
+  TranscriptionSessionChunk,
+  TranscriptionSessionManifest,
+  TranscriptionSessionRepository
 } from "./types.js";
 import { HttpError } from "./http-errors.js";
 
@@ -312,6 +317,27 @@ interface ProcessingJobRow {
   disposition?: "acquired" | "running" | "completed";
 }
 
+interface TranscriptionManifestJobRow extends ProcessingJobRow {
+  recording_key: string;
+  doctor_key: string;
+  clinic_key: string;
+  error_code: string | null;
+}
+
+interface TranscriptionChunkRow {
+  chunk_index: number;
+  expected_count: number;
+  byte_size: number;
+  duration_seconds: number | string;
+  checksum: string;
+  storage_path: string;
+  state: PersistedTranscriptionChunk["state"];
+  transcript: string | null;
+  provider_request_key?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+
 function processingJob(row: ProcessingJobRow): ProcessingJob {
   return {
     id: row.id,
@@ -323,6 +349,72 @@ function processingJob(row: ProcessingJobRow): ProcessingJob {
     inputHash: row.input_hash,
     createdAt: row.created_at
   };
+}
+
+function transcriptionChunk(row: TranscriptionChunkRow): PersistedTranscriptionChunk {
+  return {
+    index: row.chunk_index,
+    count: row.expected_count,
+    bytes: row.byte_size,
+    durationSeconds: Number(row.duration_seconds),
+    checksum: row.checksum,
+    storagePath: row.storage_path,
+    state: row.state,
+    transcript: row.transcript,
+    providerRequestKey: row.provider_request_key ?? null,
+    errorCode: row.error_code ?? null,
+    errorMessage: row.error_message ?? null
+  };
+}
+
+function transcriptionManifest(job: TranscriptionManifestJobRow, chunks: PersistedTranscriptionChunk[]): TranscriptionManifest {
+  const expectedCount = chunks[0]?.count ?? 0;
+  const present = new Set(chunks.map((chunk) => chunk.index));
+  return {
+    job: {
+      ...processingJob(job),
+      recordingId: job.recording_key,
+      doctorId: job.doctor_key,
+      clinicId: job.clinic_key,
+      errorCode: job.error_code
+    },
+    chunks,
+    missingChunkIndices: Array.from({ length: expectedCount }, (_, index) => index).filter((index) => !present.has(index)),
+    failedChunkIndices: chunks.filter((chunk) => chunk.state === "failed").map((chunk) => chunk.index),
+    completedChunkIndices: chunks.filter((chunk) => chunk.state === "completed").map((chunk) => chunk.index),
+    objectPaths: Array.from(new Set(chunks.map((chunk) => chunk.storagePath)))
+  };
+}
+
+interface TranscriptionSessionRow {
+  id: string; recording_id: string; doctor_id: string; clinic_id: string; expected_chunk_count: number;
+  state: TranscriptionSessionManifest["session"]["state"]; language: TranscriptionSessionManifest["session"]["language"];
+  mime_type: string | null; model: string; idempotency_key: string; created_at: string; disposition?: "created" | "existing";
+}
+
+interface SessionChunkRow {
+  chunk_index: number; expected_count: number; byte_size: number; duration_seconds: number | string;
+  mime_type: string; checksum: string; storage_path: string; state: TranscriptionSessionChunk["state"];
+  transcript: string | null; error_code: string | null; error_message: string | null;
+  disposition?: "accepted" | "existing";
+}
+
+function sessionChunk(row: SessionChunkRow): TranscriptionSessionChunk {
+  return { index: row.chunk_index, count: row.expected_count, bytes: row.byte_size,
+    durationSeconds: Number(row.duration_seconds), mimeType: row.mime_type, checksum: row.checksum,
+    storagePath: row.storage_path, state: row.state, transcript: row.transcript,
+    errorCode: row.error_code, errorMessage: row.error_message };
+}
+
+function sessionManifest(row: TranscriptionSessionRow, chunks: TranscriptionSessionChunk[]): TranscriptionSessionManifest {
+  const present = new Set(chunks.map((chunk) => chunk.index));
+  return { session: { id: row.id, recordingId: row.recording_id, doctorId: row.doctor_id,
+      clinicId: row.clinic_id, expectedChunkCount: row.expected_chunk_count, state: row.state,
+      mimeType: row.mime_type, language: row.language, model: row.model, idempotencyKey: row.idempotency_key, createdAt: row.created_at },
+    chunks, missingChunkIndices: Array.from({ length: row.expected_chunk_count }, (_, index) => index).filter((index) => !present.has(index)),
+    failedChunkIndices: chunks.filter((chunk) => chunk.state === "failed").map((chunk) => chunk.index),
+    completedChunkIndices: chunks.filter((chunk) => chunk.state === "completed").map((chunk) => chunk.index),
+    objectPaths: [...new Set(chunks.map((chunk) => chunk.storagePath))] };
 }
 
 function throwProcessingError(error: unknown): never {
@@ -342,7 +434,8 @@ function throwProcessingError(error: unknown): never {
   }
   const invalid = [
     "PROCESSING_INPUT_INVALID", "PROCESSING_RECORDING_SCOPE_INVALID", "PROCESSING_DURATION_INVALID",
-    "TRANSCRIPTION_CHUNK_STATE_INVALID", "PROCESSING_ARTIFACT_INVALID"
+    "TRANSCRIPTION_CHUNK_STATE_INVALID", "PROCESSING_ARTIFACT_INVALID", "TRANSCRIPTION_SESSION_INVALID",
+    "TRANSCRIPTION_CHUNK_INVALID", "TRANSCRIPTION_CHUNK_LIMIT_EXCEEDED"
   ].find((value) => message.includes(value));
   if (invalid) {
     throw new HttpError(400, "AI processing request is invalid.", invalid);
@@ -351,7 +444,8 @@ function throwProcessingError(error: unknown): never {
     "IDEMPOTENCY_KEY_REUSED", "TRANSCRIPTION_MANIFEST_IMMUTABLE", "PROCESSING_LEASE_LOST",
     "PROCESSING_RECORDING_BUSY", "PROCESSING_RECORDING_STATE_INVALID", "PROCESSING_INPUT_CHANGED",
     "TRANSCRIPTION_MANIFEST_INCOMPLETE", "PROCESSING_ARTIFACT_CONFLICT",
-    "PROCESSING_ARTIFACT_CLEANUP_BUSY", "RECORDING_NOT_TRANSCRIBABLE"
+    "PROCESSING_ARTIFACT_CLEANUP_BUSY", "RECORDING_NOT_TRANSCRIBABLE",
+    "TRANSCRIPTION_SESSION_IMMUTABLE", "TRANSCRIPTION_SESSION_ACTIVE", "TRANSCRIPTION_CHUNK_IMMUTABLE"
   ]
     .find((value) => message.includes(value));
   if (conflict) {
@@ -421,14 +515,7 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
         p_chunks: input.chunks
       });
       if (error) throwProcessingError(error);
-      return ((data ?? []) as Array<{
-        chunk_index: number; expected_count: number; byte_size: number; duration_seconds: number;
-        checksum: string; storage_path: string; state: "pending" | "completed" | "failed"; transcript: string | null;
-      }>).map((row) => ({
-        index: row.chunk_index, count: row.expected_count, bytes: row.byte_size,
-        durationSeconds: Number(row.duration_seconds), checksum: row.checksum, storagePath: row.storage_path,
-        state: row.state, transcript: row.transcript
-      }));
+      return ((data ?? []) as TranscriptionChunkRow[]).map(transcriptionChunk);
     },
 
     async markProviderSubmitted(input) {
@@ -445,6 +532,44 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
         p_chunk_index: input.index, p_transcript: input.transcript
       });
       if (error) throwProcessingError(error);
+    },
+
+    async markTranscriptionChunkFailed(input) {
+      const { error } = await supabase.rpc("fail_transcription_chunk", {
+        p_job_id: input.jobId,
+        p_lease_token: input.leaseToken,
+        p_chunk_index: input.index,
+        p_error_code: input.errorCode,
+        p_error_message: input.errorMessage
+      });
+      if (error) throwProcessingError(error);
+    },
+
+    async getTranscriptionManifest(input) {
+      const { data: job, error: jobError } = await supabase
+        .from("recording_processing_jobs")
+        .select([
+          "id", "operation", "state", "lease_token", "attempt", "result", "input_hash",
+          "created_at", "recording_key", "doctor_key", "clinic_key", "error_code"
+        ].join(","))
+        .eq("id", input.jobId)
+        .eq("operation", "transcription")
+        .eq("doctor_key", input.doctorId)
+        .eq("clinic_key", input.clinicId)
+        .maybeSingle<TranscriptionManifestJobRow>();
+      if (jobError) throw jobError;
+      if (!job) return null;
+
+      const { data: chunks, error: chunksError } = await supabase
+        .from("transcription_chunks")
+        .select([
+          "chunk_index", "expected_count", "byte_size", "duration_seconds", "checksum",
+          "storage_path", "state", "transcript", "provider_request_key", "error_code", "error_message"
+        ].join(","))
+        .eq("job_id", input.jobId)
+        .order("chunk_index", { ascending: true });
+      if (chunksError) throw chunksError;
+      return transcriptionManifest(job, ((chunks ?? []) as unknown as TranscriptionChunkRow[]).map(transcriptionChunk));
     },
 
     async recordProviderCall(input) {
@@ -540,6 +665,78 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
   };
 }
 
+export function createTranscriptionSessionRepository(supabase: SupabaseClient): TranscriptionSessionRepository {
+  const get = async (input: { sessionId: string; doctorId: string; clinicId: string }) => {
+    const { data: session, error } = await supabase.from("transcription_sessions")
+      .select("id,recording_id,doctor_id,clinic_id,expected_chunk_count,state,mime_type,language,model,idempotency_key,created_at")
+      .eq("id", input.sessionId).eq("doctor_id", input.doctorId).eq("clinic_id", input.clinicId)
+      .maybeSingle<TranscriptionSessionRow>();
+    if (error) throw error;
+    if (!session) return null;
+    const { data: rows, error: chunkError } = await supabase.from("transcription_chunks")
+      .select("chunk_index,expected_count,byte_size,duration_seconds,mime_type,checksum,storage_path,state,transcript,error_code,error_message")
+      .eq("session_id", input.sessionId).order("chunk_index", { ascending: true });
+    if (chunkError) throw chunkError;
+    return sessionManifest(session, ((rows ?? []) as unknown as SessionChunkRow[]).map(sessionChunk));
+  };
+  return {
+    async create(input) {
+      const { data, error } = await supabase.rpc("create_transcription_session", {
+        p_recording_id: input.recordingId, p_doctor_id: input.doctorId, p_clinic_id: input.clinicId,
+        p_expected_chunk_count: input.expectedChunkCount, p_language: input.language,
+        p_model: input.model, p_idempotency_key: input.idempotencyKey
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as TranscriptionSessionRow[] | null)?.[0];
+      if (!row?.disposition) throw new Error("Session creation returned no row.");
+      const manifest = row.disposition === "existing"
+        ? await get({ sessionId: row.id, doctorId: input.doctorId, clinicId: input.clinicId })
+        : sessionManifest(row, []);
+      if (!manifest) throw new Error("Existing session was not readable.");
+      return { disposition: row.disposition, manifest };
+    },
+    get,
+    async claimChunk(input) {
+      const { data, error } = await supabase.rpc("claim_transcription_session_chunk", {
+        p_session_id: input.sessionId, p_doctor_id: input.doctorId, p_clinic_id: input.clinicId,
+        p_chunk_index: input.index, p_expected_count: input.count, p_byte_size: input.bytes,
+        p_duration_seconds: input.durationSeconds, p_mime_type: input.mimeType,
+        p_checksum: input.checksum, p_storage_path: input.storagePath
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as SessionChunkRow[] | null)?.[0];
+      if (!row?.disposition) throw new Error("Chunk claim returned no row.");
+      return { disposition: row.disposition, chunk: sessionChunk(row) };
+    },
+    async markStored(input) {
+      const { error } = await supabase.rpc("mark_transcription_session_chunk_stored", {
+        p_session_id: input.sessionId, p_chunk_index: input.index, p_checksum: input.checksum
+      });
+      if (error) throwProcessingError(error);
+    },
+    async markProviderSubmitted(input) {
+      const { data, error } = await supabase.rpc("submit_transcription_session_chunk", {
+        p_session_id: input.sessionId, p_chunk_index: input.index, p_provider_request_key: input.providerRequestKey
+      });
+      if (error) throwProcessingError(error);
+      return data === true;
+    },
+    async completeChunk(input) {
+      const { error } = await supabase.rpc("complete_transcription_session_chunk", {
+        p_session_id: input.sessionId, p_chunk_index: input.index, p_transcript: input.transcript
+      });
+      if (error) throwProcessingError(error);
+    },
+    async failChunk(input) {
+      const { error } = await supabase.rpc("fail_transcription_session_chunk", {
+        p_session_id: input.sessionId, p_chunk_index: input.index,
+        p_error_code: input.errorCode, p_error_message: input.errorMessage
+      });
+      if (error) throwProcessingError(error);
+    }
+  };
+}
+
 export function createSupabaseAudioStorage(supabase: SupabaseClient): AudioStorage {
   const pathFor = (input: { mimeType: string; clinicId: string; doctorId: string; recordingId: string; artifactKey: string }) => {
     const normalizedMimeType = input.mimeType.toLowerCase();
@@ -550,6 +747,19 @@ export function createSupabaseAudioStorage(supabase: SupabaseClient): AudioStora
   };
   return {
     recordingAudioPath: pathFor,
+    transcriptionChunkPath(input) {
+      const extension = input.mimeType.includes("mp4") || input.mimeType.includes("m4a") || input.mimeType.includes("aac")
+        ? "m4a" : input.mimeType.includes("wav") ? "wav" : input.mimeType.includes("ogg") ? "ogg" : "webm";
+      return [input.clinicId, input.doctorId, input.recordingId, "sessions", input.sessionId, "chunks",
+        `${String(input.index).padStart(4, "0")}-${input.checksum}.${extension}`].join("/");
+    },
+    async uploadTranscriptionChunk(input): Promise<string> {
+      const { error } = await supabase.storage.from("audio").upload(input.storagePath, input.audio, {
+        contentType: input.mimeType, upsert: false
+      });
+      if (error) throw error;
+      return input.storagePath;
+    },
     async uploadRecordingAudio(input): Promise<string> {
       const artifact = input.artifactKey?.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || String(Date.now());
       const path = pathFor({ ...input, artifactKey: artifact });

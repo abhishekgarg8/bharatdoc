@@ -27,7 +27,7 @@ const baseRecording: Recording = {
 };
 
 type InternalJob = ProcessingJob & {
-  idempotencyKey: string; recordingId: string; doctorId: string;
+  idempotencyKey: string; recordingId: string; doctorId: string; clinicId: string; errorCode: string | null;
 };
 
 class MemoryProcessingJobs implements ProcessingJobRepository {
@@ -57,7 +57,8 @@ class MemoryProcessingJobs implements ProcessingJobRepository {
       id: `job-${++this.sequence}`, operation: input.operation, state: "running",
       leaseToken: "lease-1", attempt: 1, result: null, inputHash: input.inputHash,
       createdAt: "2026-07-10T00:00:00.000Z",
-      idempotencyKey: input.idempotencyKey, recordingId: input.recordingId, doctorId: input.doctorId
+      idempotencyKey: input.idempotencyKey, recordingId: input.recordingId,
+      doctorId: input.doctorId, clinicId: input.clinicId, errorCode: null
     };
     this.jobs.push(created);
     return { disposition: "acquired" as const, job: { ...created } };
@@ -74,16 +75,50 @@ class MemoryProcessingJobs implements ProcessingJobRepository {
     const existing = this.chunks.get(input.jobId);
     if (existing) return existing;
     const chunks: PersistedTranscriptionChunk[] = input.chunks.map((chunk) => ({
-      ...chunk, state: "pending", transcript: null
+      ...chunk, state: "pending", transcript: null, providerRequestKey: null,
+      errorCode: null, errorMessage: null
     }));
     this.chunks.set(input.jobId, chunks);
     return chunks;
   }
   async markProviderSubmitted(input: Parameters<ProcessingJobRepository["markProviderSubmitted"]>[0]) {
-    if (input.chunkIndex !== undefined) this.chunks.get(input.jobId)![input.chunkIndex]!.state = "provider_submitted";
+    if (input.chunkIndex !== undefined) {
+      Object.assign(this.chunks.get(input.jobId)![input.chunkIndex]!, {
+        state: "provider_submitted",
+        providerRequestKey: input.providerRequestKey
+      });
+    }
   }
   async markTranscriptionChunkCompleted(input: Parameters<ProcessingJobRepository["markTranscriptionChunkCompleted"]>[0]) {
-    Object.assign(this.chunks.get(input.jobId)![input.index]!, { state: "completed", transcript: input.transcript });
+    Object.assign(this.chunks.get(input.jobId)![input.index]!, {
+      state: "completed", transcript: input.transcript, errorCode: null, errorMessage: null
+    });
+  }
+  async markTranscriptionChunkFailed(input: Parameters<ProcessingJobRepository["markTranscriptionChunkFailed"]>[0]) {
+    Object.assign(this.chunks.get(input.jobId)![input.index]!, {
+      state: "failed", errorCode: input.errorCode, errorMessage: input.errorMessage
+    });
+  }
+  async getTranscriptionManifest(input: Parameters<ProcessingJobRepository["getTranscriptionManifest"]>[0]) {
+    const job = this.jobs.find((item) => item.id === input.jobId && item.doctorId === input.doctorId && item.clinicId === input.clinicId);
+    if (!job) return null;
+    const chunks = this.chunks.get(input.jobId) ?? [];
+    const present = new Set(chunks.map((chunk) => chunk.index));
+    const expectedCount = chunks[0]?.count ?? 0;
+    return {
+      job: {
+        ...job,
+        recordingId: job.recordingId,
+        doctorId: job.doctorId,
+        clinicId: job.clinicId,
+        errorCode: job.errorCode
+      },
+      chunks,
+      missingChunkIndices: Array.from({ length: expectedCount }, (_value, index) => index).filter((index) => !present.has(index)),
+      failedChunkIndices: chunks.filter((chunk) => chunk.state === "failed").map((chunk) => chunk.index),
+      completedChunkIndices: chunks.filter((chunk) => chunk.state === "completed").map((chunk) => chunk.index),
+      objectPaths: Array.from(new Set(chunks.map((chunk) => chunk.storagePath)))
+    };
   }
   async recordProviderCall() { this.providerCalls += 1; }
   async recordArtifact(input: Parameters<ProcessingJobRepository["recordArtifact"]>[0]) {
@@ -123,7 +158,9 @@ class MemoryProcessingJobs implements ProcessingJobRepository {
     Object.assign(this.jobs.find((job) => job.id === input.jobId)!, { state: "completed", leaseToken: null, result: input.result });
   }
   async fail(input: Parameters<ProcessingJobRepository["fail"]>[0]) {
-    Object.assign(this.jobs.find((job) => job.id === input.jobId)!, { state: "failed", leaseToken: null });
+    Object.assign(this.jobs.find((job) => job.id === input.jobId)!, {
+      state: "failed", leaseToken: null, errorCode: input.errorCode
+    });
   }
 }
 
@@ -232,7 +269,24 @@ describe("durable AI workflows", () => {
     const auth = { doctor, token: { uid: doctor.firebase_uid } };
     const input = { recordingId: baseRecording.id, idempotencyKey: "audio-key", audio: { buffer: audio, size: audio.byteLength, mimetype: "audio/webm", originalname: "audio.webm" } };
     await expect(transcribeRecording(auth, input, deps)).rejects.toThrow("worker crashed");
+    await expect(jobs.getTranscriptionManifest({
+      jobId: "job-1", doctorId: doctor.id, clinicId: clinic.id
+    })).resolves.toMatchObject({
+      failedChunkIndices: [1],
+      completedChunkIndices: [0],
+      chunks: [
+        { index: 0, state: "completed", transcript: "first" },
+        { index: 1, state: "failed", errorCode: "INTERNAL_ERROR" }
+      ],
+      objectPaths: ["clinic/doctor/audio.webm"]
+    });
     await expect(transcribeRecording(auth, input, deps)).resolves.toMatchObject({ transcript: "first\n\nsecond" });
+    await expect(jobs.getTranscriptionManifest({
+      jobId: "job-1", doctorId: doctor.id, clinicId: clinic.id
+    })).resolves.toMatchObject({
+      failedChunkIndices: [],
+      completedChunkIndices: [0, 1]
+    });
     expect(storage.uploadRecordingAudio).toHaveBeenCalledOnce();
     expect(transcribe).toHaveBeenCalledTimes(3);
   });

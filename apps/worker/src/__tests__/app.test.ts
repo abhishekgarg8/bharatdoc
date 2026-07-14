@@ -234,6 +234,76 @@ describe("worker app", () => {
       });
   });
 
+  it("applies authenticated upload admission before parsing session chunks", async () => {
+    const app = createApp(depsFor(activeDoctor), {
+      transcriptionSessionsEnabled: true,
+      uploadAdmission: { maxPerUser: 1, maxConcurrent: 1 }
+    });
+    await request(app).post("/api/transcription-sessions/session-1/chunks")
+      .set("Authorization", "Bearer valid-token")
+      .field("chunk_index", "0").field("chunk_count", "1").field("duration_seconds", "1")
+      .attach("audio", Buffer.from("audio"), { filename: "0.webm", contentType: "audio/webm" })
+      .expect(404);
+    await request(app).post("/api/transcription-sessions/session-1/chunks")
+      .set("Authorization", "Bearer valid-token")
+      .attach("audio", Buffer.from("audio"), { filename: "0.webm", contentType: "audio/webm" })
+      .expect(429)
+      .expect(({ body }) => expect(body.error.code).toBe("UPLOAD_USER_RATE_LIMITED"));
+  });
+
+  it("returns a scoped transcription manifest for the authenticated doctor", async () => {
+    const deps = depsFor(activeDoctor);
+    deps.processingJobs = {
+      getTranscriptionManifest: vi.fn(async () => ({
+        job: {
+          id: "job-1",
+          operation: "transcription",
+          state: "failed",
+          leaseToken: null,
+          attempt: 1,
+          result: null,
+          inputHash: "a".repeat(64),
+          createdAt: "2026-07-10T10:00:00.000Z",
+          recordingId: recording.id,
+          doctorId: activeDoctor.id,
+          clinicId: activeDoctor.clinic_id!,
+          errorCode: "INTERNAL_ERROR",
+        },
+        chunks: [{
+          index: 0,
+          count: 1,
+          bytes: 5,
+          durationSeconds: 24,
+          checksum: "b".repeat(64),
+          storagePath: "clinic/doctor/recording.webm",
+          state: "failed",
+          transcript: null,
+          providerRequestKey: "job-1:transcription:0",
+          errorCode: "INTERNAL_ERROR",
+          errorMessage: "Internal server error.",
+        }],
+        missingChunkIndices: [],
+        failedChunkIndices: [0],
+        completedChunkIndices: [],
+        objectPaths: ["clinic/doctor/recording.webm"],
+      })),
+    } as unknown as NonNullable<WorkerDependencies["processingJobs"]>;
+
+    await request(createApp(deps))
+      .get("/api/transcription-manifests/job-1")
+      .set("Authorization", "Bearer valid-token")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.manifest.failedChunkIndices).toEqual([0]);
+      });
+
+    expect(deps.processingJobs.getTranscriptionManifest).toHaveBeenCalledWith({
+      jobId: "job-1",
+      doctorId: activeDoctor.id,
+      clinicId: activeDoctor.clinic_id,
+    });
+  });
+
   it("rejects transcription requests without bearer tokens before audio work", async () => {
     const deps = depsFor(activeDoctor);
 
@@ -568,15 +638,40 @@ describe("worker app", () => {
       async findByLogicalInput() { return exists ? { ...job } : null; },
       async heartbeat() {},
       async saveTranscriptionManifest(input) {
-        chunks = input.chunks.map((chunk) => ({ ...chunk, state: "pending", transcript: null }));
+        chunks = input.chunks.map((chunk) => ({
+          ...chunk,
+          state: "pending",
+          transcript: null,
+          providerRequestKey: null,
+          errorCode: null,
+          errorMessage: null
+        }));
         return chunks;
       },
       async markProviderSubmitted(input) {
-        if (input.chunkIndex !== undefined) chunks[input.chunkIndex]!.state = "provider_submitted";
+        if (input.chunkIndex !== undefined) {
+          Object.assign(chunks[input.chunkIndex]!, {
+            state: "provider_submitted",
+            providerRequestKey: input.providerRequestKey
+          });
+        }
       },
       async markTranscriptionChunkCompleted(input) {
-        Object.assign(chunks[input.index]!, { state: "completed", transcript: input.transcript });
+        Object.assign(chunks[input.index]!, {
+          state: "completed",
+          transcript: input.transcript,
+          errorCode: null,
+          errorMessage: null
+        });
       },
+      async markTranscriptionChunkFailed(input) {
+        Object.assign(chunks[input.index]!, {
+          state: "failed",
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage
+        });
+      },
+      async getTranscriptionManifest() { return null; },
       async recordProviderCall() {}, async recordArtifact() {}, async findArtifact() { return null; },
       async markArtifactReady() {}, async supersedeArtifacts() { return []; },
       async markArtifactOrphaned() {}, async claimCleanupArtifacts() { return []; },

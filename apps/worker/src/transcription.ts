@@ -145,6 +145,7 @@ export async function transcribeRecording(
   let audioSizeBytes: number | null = null;
   let audioMimeType: string | null = null;
   let lease: { jobId: string; leaseToken: string } | null = null;
+  let activeChunkIndex: number | null = null;
 
   try {
     const clinicId = requireClinicId(auth.doctor.clinic_id);
@@ -356,6 +357,7 @@ export async function transcribeRecording(
           ...lease, providerRequestKey: providerRequestKey!, chunkIndex: index
         });
       }
+      activeChunkIndex = index;
       const startedAt = Date.now();
       const providerWork = () => deps.transcriptionClient.transcribe({
           audio: part.buffer,
@@ -379,6 +381,7 @@ export async function transcribeRecording(
           ...lease, index, transcript: transcriptPart
         });
       }
+      activeChunkIndex = null;
 
       if (transcriptPart) {
         transcriptParts.push(transcriptPart);
@@ -430,6 +433,14 @@ export async function transcribeRecording(
 
     if (lease && deps.processingJobs) {
       try {
+        if (activeChunkIndex !== null) {
+          await deps.processingJobs.markTranscriptionChunkFailed({
+            ...lease,
+            index: activeChunkIndex,
+            errorCode: sanitizedError.error_code,
+            errorMessage: sanitizedError.error_message
+          });
+        }
         await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
       } catch {
         // A lost lease must not mask the operation error.

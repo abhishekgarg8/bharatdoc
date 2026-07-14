@@ -148,6 +148,13 @@ export interface AudioStorage {
   recordingAudioPath?(input: {
     mimeType: string; clinicId: string; doctorId: string; recordingId: string; artifactKey: string;
   }): string;
+  transcriptionChunkPath?(input: {
+    mimeType: string; clinicId: string; doctorId: string; recordingId: string;
+    sessionId: string; index: number; checksum: string;
+  }): string;
+  uploadTranscriptionChunk?(input: {
+    audio: Buffer; mimeType: string; storagePath: string;
+  }): Promise<string>;
 }
 
 export type ProcessingOperation = "transcription" | "summary" | "pdf";
@@ -178,6 +185,78 @@ export interface PersistedTranscriptionChunk {
   storagePath: string;
   state: "pending" | "provider_submitted" | "completed" | "failed";
   transcript: string | null;
+  providerRequestKey: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export interface TranscriptionManifest {
+  job: ProcessingJob & {
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    errorCode: string | null;
+  };
+  chunks: PersistedTranscriptionChunk[];
+  missingChunkIndices: number[];
+  failedChunkIndices: number[];
+  completedChunkIndices: number[];
+  objectPaths: string[];
+}
+
+export type TranscriptionSessionState = "accepting" | "processing" | "completed" | "failed";
+export type TranscriptionSessionChunkState =
+  | "receiving" | "stored" | "provider_submitted" | "completed" | "failed";
+
+export interface TranscriptionSessionChunk {
+  index: number;
+  count: number;
+  bytes: number;
+  durationSeconds: number;
+  mimeType: string;
+  checksum: string;
+  storagePath: string;
+  state: TranscriptionSessionChunkState;
+  transcript: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export interface TranscriptionSessionManifest {
+  session: {
+    id: string;
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    expectedChunkCount: number;
+    state: TranscriptionSessionState;
+    mimeType: string | null;
+    language: Doctor["transcription_lang"];
+    model: string;
+    idempotencyKey: string;
+    createdAt: string;
+  };
+  chunks: TranscriptionSessionChunk[];
+  missingChunkIndices: number[];
+  failedChunkIndices: number[];
+  completedChunkIndices: number[];
+  objectPaths: string[];
+}
+
+export interface TranscriptionSessionRepository {
+  create(input: {
+    recordingId: string; doctorId: string; clinicId: string; expectedChunkCount: number;
+    language: Doctor["transcription_lang"]; model: string; idempotencyKey: string;
+  }): Promise<{ disposition: "created" | "existing"; manifest: TranscriptionSessionManifest }>;
+  get(input: { sessionId: string; doctorId: string; clinicId: string }): Promise<TranscriptionSessionManifest | null>;
+  claimChunk(input: {
+    sessionId: string; doctorId: string; clinicId: string; index: number; count: number;
+    bytes: number; durationSeconds: number; mimeType: string; checksum: string; storagePath: string;
+  }): Promise<{ disposition: "accepted" | "existing"; chunk: TranscriptionSessionChunk }>;
+  markStored(input: { sessionId: string; index: number; checksum: string }): Promise<void>;
+  markProviderSubmitted(input: { sessionId: string; index: number; providerRequestKey: string }): Promise<boolean>;
+  completeChunk(input: { sessionId: string; index: number; transcript: string }): Promise<void>;
+  failChunk(input: { sessionId: string; index: number; errorCode: string; errorMessage: string }): Promise<void>;
 }
 
 export interface ProcessingJobRepository {
@@ -222,6 +301,18 @@ export interface ProcessingJobRepository {
     index: number;
     transcript: string;
   }): Promise<void>;
+  markTranscriptionChunkFailed(input: {
+    jobId: string;
+    leaseToken: string;
+    index: number;
+    errorCode: string;
+    errorMessage: string;
+  }): Promise<void>;
+  getTranscriptionManifest(input: {
+    jobId: string;
+    doctorId: string;
+    clinicId: string;
+  }): Promise<TranscriptionManifest | null>;
   markProviderSubmitted(input: {
     jobId: string;
     leaseToken: string;
@@ -288,6 +379,7 @@ export interface WorkerDependencies {
   pdfRenderer: PdfRenderer;
   pdfStorage: PdfStorage;
   processingJobs?: ProcessingJobRepository;
+  transcriptionSessions?: TranscriptionSessionRepository;
   logger?: StructuredLogger;
 }
 

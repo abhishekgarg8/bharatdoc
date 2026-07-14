@@ -170,10 +170,138 @@ describe("createProcessingJobRepository", () => {
 
     await expect(repository.saveTranscriptionManifest({
       jobId: "job-1", leaseToken: "lease-1", recordingId: "recording-1", chunks
-    })).resolves.toEqual([{ ...chunks[0], state: "pending", transcript: null }]);
+    })).resolves.toEqual([{
+      ...chunks[0],
+      state: "pending",
+      transcript: null,
+      providerRequestKey: null,
+      errorCode: null,
+      errorMessage: null
+    }]);
     expect(rpc).toHaveBeenCalledWith("save_transcription_chunk_manifest", {
       p_job_id: "job-1", p_lease_token: "lease-1", p_recording_id: "recording-1", p_chunks: chunks
     });
+  });
+
+  it("marks failed transcription chunks through the lease-scoped RPC", async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.markTranscriptionChunkFailed({
+      jobId: "job-1",
+      leaseToken: "lease-1",
+      index: 1,
+      errorCode: "UPSTREAM_TIMEOUT",
+      errorMessage: "Provider timed out.",
+    })).resolves.toBeUndefined();
+
+    expect(rpc).toHaveBeenCalledWith("fail_transcription_chunk", {
+      p_job_id: "job-1",
+      p_lease_token: "lease-1",
+      p_chunk_index: 1,
+      p_error_code: "UPSTREAM_TIMEOUT",
+      p_error_message: "Provider timed out.",
+    });
+  });
+
+  it("reads a doctor and clinic scoped transcription manifest", async () => {
+    const jobQuery = {
+      select: vi.fn(() => jobQuery),
+      eq: vi.fn(() => jobQuery),
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          id: "job-1",
+          operation: "transcription",
+          state: "failed",
+          lease_token: null,
+          attempt: 2,
+          result: null,
+          input_hash: "a".repeat(64),
+          created_at: "2026-07-10T10:00:00.000Z",
+          recording_key: transcribedRecording.id,
+          doctor_key: transcribedRecording.doctor_id,
+          clinic_key: transcribedRecording.clinic_id,
+          error_code: "INTERNAL_ERROR",
+        },
+        error: null,
+      })),
+    };
+    const chunkRows = [
+      {
+        chunk_index: 0,
+        expected_count: 3,
+        byte_size: 5,
+        duration_seconds: "10.5",
+        checksum: "b".repeat(64),
+        storage_path: "audio/chunk-0.webm",
+        state: "completed",
+        transcript: "first",
+        provider_request_key: "job-1:transcription:0",
+        error_code: null,
+        error_message: null,
+      },
+      {
+        chunk_index: 2,
+        expected_count: 3,
+        byte_size: 7,
+        duration_seconds: "9.5",
+        checksum: "c".repeat(64),
+        storage_path: "audio/chunk-2.webm",
+        state: "failed",
+        transcript: null,
+        provider_request_key: "job-1:transcription:2",
+        error_code: "UPSTREAM_TIMEOUT",
+        error_message: "Provider timed out.",
+      },
+    ];
+    const chunkQuery = {
+      select: vi.fn(() => chunkQuery),
+      eq: vi.fn(() => chunkQuery),
+      order: vi.fn(async () => ({ data: chunkRows, error: null })),
+    };
+    const supabase = {
+      from: vi.fn((table: string) => table === "recording_processing_jobs" ? jobQuery : chunkQuery),
+    } as unknown as SupabaseClient;
+    const repository = createProcessingJobRepository(supabase);
+
+    await expect(repository.getTranscriptionManifest({
+      jobId: "job-1",
+      doctorId: transcribedRecording.doctor_id,
+      clinicId: transcribedRecording.clinic_id,
+    })).resolves.toMatchObject({
+      job: {
+        id: "job-1",
+        recordingId: transcribedRecording.id,
+        doctorId: transcribedRecording.doctor_id,
+        clinicId: transcribedRecording.clinic_id,
+        errorCode: "INTERNAL_ERROR",
+      },
+      missingChunkIndices: [1],
+      failedChunkIndices: [2],
+      completedChunkIndices: [0],
+      objectPaths: ["audio/chunk-0.webm", "audio/chunk-2.webm"],
+      chunks: [
+        {
+          index: 0,
+          durationSeconds: 10.5,
+          transcript: "first",
+          providerRequestKey: "job-1:transcription:0",
+          errorCode: null,
+        },
+        {
+          index: 2,
+          durationSeconds: 9.5,
+          state: "failed",
+          errorCode: "UPSTREAM_TIMEOUT",
+          errorMessage: "Provider timed out.",
+        },
+      ],
+    });
+    expect(jobQuery.eq).toHaveBeenNthCalledWith(1, "id", "job-1");
+    expect(jobQuery.eq).toHaveBeenNthCalledWith(2, "operation", "transcription");
+    expect(jobQuery.eq).toHaveBeenNthCalledWith(3, "doctor_key", transcribedRecording.doctor_id);
+    expect(jobQuery.eq).toHaveBeenNthCalledWith(4, "clinic_key", transcribedRecording.clinic_id);
+    expect(chunkQuery.eq).toHaveBeenCalledWith("job_id", "job-1");
   });
 });
 
