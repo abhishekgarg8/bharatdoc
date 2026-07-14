@@ -79,6 +79,10 @@ const retentionMigrationPath = resolve(
   dirname,
   "../../../supabase/migrations/202607110001_phi_retention_and_deletion.sql",
 );
+const manifestStatusPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140001_transcription_manifest_status.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -323,6 +327,18 @@ describe("initial Supabase migration contract", () => {
     expect(hotfix).not.toContain("jsonb_array_elements(p_chunks) item");
     expect(hotfix).toMatch(
       /grant execute on function public\.save_transcription_chunk_manifest\(uuid,uuid,uuid,jsonb\)\s+to service_role/,
+    );
+  });
+
+  it("adds chunk-level transcription manifest status and failure metadata", () => {
+    const status = readFileSync(manifestStatusPath, "utf8");
+    expect(status).toContain("add column if not exists error_code text");
+    expect(status).toContain("add column if not exists error_message text");
+    expect(status).toContain("create or replace function public.fail_transcription_chunk");
+    expect(status).toContain("state = 'failed'");
+    expect(status).toContain("TRANSCRIPTION_CHUNK_STATE_INVALID");
+    expect(status).toMatch(
+      /grant execute on function public\.fail_transcription_chunk\(uuid,uuid,integer,text,text\)\s+to service_role/,
     );
   });
 

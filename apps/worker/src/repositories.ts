@@ -4,11 +4,13 @@ import type {
   AudioStorage,
   ClinicRepository,
   DoctorRepository,
+  PersistedTranscriptionChunk,
   PdfStorage,
   ProcessingJob,
   ProcessingJobRepository,
   RecordingProcessingRepository,
-  TranscriptionAttemptRepository
+  TranscriptionAttemptRepository,
+  TranscriptionManifest
 } from "./types.js";
 import { HttpError } from "./http-errors.js";
 
@@ -312,6 +314,27 @@ interface ProcessingJobRow {
   disposition?: "acquired" | "running" | "completed";
 }
 
+interface TranscriptionManifestJobRow extends ProcessingJobRow {
+  recording_key: string;
+  doctor_key: string;
+  clinic_key: string;
+  error_code: string | null;
+}
+
+interface TranscriptionChunkRow {
+  chunk_index: number;
+  expected_count: number;
+  byte_size: number;
+  duration_seconds: number | string;
+  checksum: string;
+  storage_path: string;
+  state: PersistedTranscriptionChunk["state"];
+  transcript: string | null;
+  provider_request_key?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+
 function processingJob(row: ProcessingJobRow): ProcessingJob {
   return {
     id: row.id,
@@ -322,6 +345,41 @@ function processingJob(row: ProcessingJobRow): ProcessingJob {
     result: row.result,
     inputHash: row.input_hash,
     createdAt: row.created_at
+  };
+}
+
+function transcriptionChunk(row: TranscriptionChunkRow): PersistedTranscriptionChunk {
+  return {
+    index: row.chunk_index,
+    count: row.expected_count,
+    bytes: row.byte_size,
+    durationSeconds: Number(row.duration_seconds),
+    checksum: row.checksum,
+    storagePath: row.storage_path,
+    state: row.state,
+    transcript: row.transcript,
+    providerRequestKey: row.provider_request_key ?? null,
+    errorCode: row.error_code ?? null,
+    errorMessage: row.error_message ?? null
+  };
+}
+
+function transcriptionManifest(job: TranscriptionManifestJobRow, chunks: PersistedTranscriptionChunk[]): TranscriptionManifest {
+  const expectedCount = chunks[0]?.count ?? 0;
+  const present = new Set(chunks.map((chunk) => chunk.index));
+  return {
+    job: {
+      ...processingJob(job),
+      recordingId: job.recording_key,
+      doctorId: job.doctor_key,
+      clinicId: job.clinic_key,
+      errorCode: job.error_code
+    },
+    chunks,
+    missingChunkIndices: Array.from({ length: expectedCount }, (_, index) => index).filter((index) => !present.has(index)),
+    failedChunkIndices: chunks.filter((chunk) => chunk.state === "failed").map((chunk) => chunk.index),
+    completedChunkIndices: chunks.filter((chunk) => chunk.state === "completed").map((chunk) => chunk.index),
+    objectPaths: Array.from(new Set(chunks.map((chunk) => chunk.storagePath)))
   };
 }
 
@@ -421,14 +479,7 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
         p_chunks: input.chunks
       });
       if (error) throwProcessingError(error);
-      return ((data ?? []) as Array<{
-        chunk_index: number; expected_count: number; byte_size: number; duration_seconds: number;
-        checksum: string; storage_path: string; state: "pending" | "completed" | "failed"; transcript: string | null;
-      }>).map((row) => ({
-        index: row.chunk_index, count: row.expected_count, bytes: row.byte_size,
-        durationSeconds: Number(row.duration_seconds), checksum: row.checksum, storagePath: row.storage_path,
-        state: row.state, transcript: row.transcript
-      }));
+      return ((data ?? []) as TranscriptionChunkRow[]).map(transcriptionChunk);
     },
 
     async markProviderSubmitted(input) {
@@ -445,6 +496,44 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
         p_chunk_index: input.index, p_transcript: input.transcript
       });
       if (error) throwProcessingError(error);
+    },
+
+    async markTranscriptionChunkFailed(input) {
+      const { error } = await supabase.rpc("fail_transcription_chunk", {
+        p_job_id: input.jobId,
+        p_lease_token: input.leaseToken,
+        p_chunk_index: input.index,
+        p_error_code: input.errorCode,
+        p_error_message: input.errorMessage
+      });
+      if (error) throwProcessingError(error);
+    },
+
+    async getTranscriptionManifest(input) {
+      const { data: job, error: jobError } = await supabase
+        .from("recording_processing_jobs")
+        .select([
+          "id", "operation", "state", "lease_token", "attempt", "result", "input_hash",
+          "created_at", "recording_key", "doctor_key", "clinic_key", "error_code"
+        ].join(","))
+        .eq("id", input.jobId)
+        .eq("operation", "transcription")
+        .eq("doctor_key", input.doctorId)
+        .eq("clinic_key", input.clinicId)
+        .maybeSingle<TranscriptionManifestJobRow>();
+      if (jobError) throw jobError;
+      if (!job) return null;
+
+      const { data: chunks, error: chunksError } = await supabase
+        .from("transcription_chunks")
+        .select([
+          "chunk_index", "expected_count", "byte_size", "duration_seconds", "checksum",
+          "storage_path", "state", "transcript", "provider_request_key", "error_code", "error_message"
+        ].join(","))
+        .eq("job_id", input.jobId)
+        .order("chunk_index", { ascending: true });
+      if (chunksError) throw chunksError;
+      return transcriptionManifest(job, ((chunks ?? []) as unknown as TranscriptionChunkRow[]).map(transcriptionChunk));
     },
 
     async recordProviderCall(input) {

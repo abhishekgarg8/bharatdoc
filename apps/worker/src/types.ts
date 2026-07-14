@@ -178,6 +178,23 @@ export interface PersistedTranscriptionChunk {
   storagePath: string;
   state: "pending" | "provider_submitted" | "completed" | "failed";
   transcript: string | null;
+  providerRequestKey: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export interface TranscriptionManifest {
+  job: ProcessingJob & {
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    errorCode: string | null;
+  };
+  chunks: PersistedTranscriptionChunk[];
+  missingChunkIndices: number[];
+  failedChunkIndices: number[];
+  completedChunkIndices: number[];
+  objectPaths: string[];
 }
 
 export interface ProcessingJobRepository {
@@ -222,6 +239,18 @@ export interface ProcessingJobRepository {
     index: number;
     transcript: string;
   }): Promise<void>;
+  markTranscriptionChunkFailed(input: {
+    jobId: string;
+    leaseToken: string;
+    index: number;
+    errorCode: string;
+    errorMessage: string;
+  }): Promise<void>;
+  getTranscriptionManifest(input: {
+    jobId: string;
+    doctorId: string;
+    clinicId: string;
+  }): Promise<TranscriptionManifest | null>;
   markProviderSubmitted(input: {
     jobId: string;
     leaseToken: string;

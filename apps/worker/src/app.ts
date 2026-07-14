@@ -142,6 +142,34 @@ export function createApp(
     res.json({ doctor: authenticatedContext(res).doctor });
   });
 
+  app.get("/api/transcription-manifests/:jobId", authenticate, async (req, res, next) => {
+    try {
+      const auth = authenticatedContext(res);
+      const clinicId = auth.doctor.clinic_id;
+      const jobId = typeof req.params.jobId === "string" ? req.params.jobId.trim() : "";
+      if (!jobId) {
+        throw new HttpError(400, "Transcription manifest ID is required.", "TRANSCRIPTION_MANIFEST_ID_REQUIRED");
+      }
+      if (!clinicId) {
+        throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
+      }
+      if (!deps.processingJobs) {
+        throw new HttpError(404, "Transcription manifest was not found.", "TRANSCRIPTION_MANIFEST_NOT_FOUND");
+      }
+      const manifest = await deps.processingJobs.getTranscriptionManifest({
+        jobId,
+        doctorId: auth.doctor.id,
+        clinicId
+      });
+      if (!manifest) {
+        throw new HttpError(404, "Transcription manifest was not found.", "TRANSCRIPTION_MANIFEST_NOT_FOUND");
+      }
+      res.json({ manifest });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post(
     "/api/transcribe",
     uploadAdmission.limitIp,
