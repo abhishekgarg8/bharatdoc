@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
 import { HttpError } from "./http-errors.js";
 import type {
   AudioStorage, PdfStorage, ProcessingJob,
@@ -6,6 +7,9 @@ import type {
   ProcessingJobRepository,
   ProcessingOperation
 } from "./types.js";
+
+export const PROVIDER_PROCESSING_TIMEOUT_MS = 4 * 60_000;
+export const PDF_RENDER_TIMEOUT_MS = 60_000;
 
 export interface TranscriptionChunkInput {
   index: number;
@@ -47,6 +51,39 @@ export interface TranscriptionManifestLimits {
 
 export function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function pdfProcessingInputHash(input: {
+  clinic: Clinic; doctor: Doctor; recording: Recording; generatedAt?: Date;
+}): string {
+  const generatedAt = input.generatedAt ?? new Date(input.recording.created_at);
+  return sha256(JSON.stringify({ version: 1, generatedAt: generatedAt.toISOString(),
+    summary: input.recording.summary, patientId: input.recording.patient_id,
+    recordedAt: input.recording.recorded_at,
+    doctor: [input.doctor.name, input.doctor.specialization],
+    clinic: [input.clinic.clinic_code, input.clinic.name, input.clinic.address] }));
+}
+
+export async function runWithProcessingDeadline<T>(
+  work: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  code = "PROVIDER_TIMEOUT"
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new HttpError(504, "Processing exceeded its deadline.", code);
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([work(controller.signal), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export function processingIdempotencyKey(
@@ -167,12 +204,14 @@ export async function withProcessingHeartbeat<T>(
   work: () => Promise<T>
 ): Promise<T> {
   let heartbeatError: unknown;
+  let heartbeat = Promise.resolve();
   const timer = setInterval(() => {
-    void repository.heartbeat(lease).catch((error) => { heartbeatError = error; });
+    heartbeat = repository.heartbeat(lease).catch((error) => { heartbeatError = error; });
   }, 30_000);
   timer.unref?.();
   try {
     const result = await work();
+    await heartbeat;
     if (heartbeatError) throw heartbeatError;
     return result;
   } finally {

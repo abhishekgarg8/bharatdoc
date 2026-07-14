@@ -114,7 +114,8 @@ describe("worker PDF generation service", () => {
       clinic,
       doctor: activeDoctor,
       recording,
-      generatedAt: new Date("2026-04-23T09:00:00.000Z")
+      generatedAt: new Date("2026-04-23T09:00:00.000Z"),
+      signal: expect.any(AbortSignal)
     });
     expect(deps.pdfStorage.uploadRecordingPdf).toHaveBeenCalledWith({
       pdf: Buffer.from("%PDF-1.4\n"),

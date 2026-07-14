@@ -96,7 +96,35 @@ describe("environment validation", () => {
       OPENAI_TRANSCRIPTION_MODEL: "gpt-4o-mini-transcribe",
       OPENAI_SUMMARY_MODEL: "gpt-4o-mini",
       TRANSCRIPTION_CHUNK_SESSIONS_ENABLED: "false",
-      WORKER_CORS_ORIGINS: "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+      WORKER_CORS_ORIGINS: "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000",
+      WORKER_QUEUE_ENABLED: "false",
+      WORKER_QUEUE_TRANSCRIPTION: "false",
+      WORKER_QUEUE_SUMMARY: "false",
+      WORKER_QUEUE_PDF: "false",
+      WORKER_QUEUE_POLL_MS: 1000,
+      WORKER_QUEUE_BATCH_SIZE: 5,
+      WORKER_QUEUE_WORKER_ID: "bharatdoc-worker"
+    });
+  });
+
+  it("parses explicit worker queue rollout flags", () => {
+    expect(
+      parseWorkerEnv({
+        OPENAI_API_KEY: "openai",
+        SUPABASE_URL: "https://supabase.example.com",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        WORKER_QUEUE_ENABLED: "true",
+        WORKER_QUEUE_SUMMARY: "true",
+        WORKER_QUEUE_POLL_MS: "250",
+        WORKER_QUEUE_BATCH_SIZE: "2",
+        WORKER_QUEUE_WORKER_ID: "railway-worker-1"
+      })
+    ).toMatchObject({
+      WORKER_QUEUE_ENABLED: "true",
+      WORKER_QUEUE_SUMMARY: "true",
+      WORKER_QUEUE_POLL_MS: 250,
+      WORKER_QUEUE_BATCH_SIZE: 2,
+      WORKER_QUEUE_WORKER_ID: "railway-worker-1"
     });
   });
 

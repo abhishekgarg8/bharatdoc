@@ -2,14 +2,15 @@ import { requirePatientId, type Clinic, type Recording } from "@bharatdoc/shared
 import { HttpError, toHttpError } from "./http-errors.js";
 import {
   claimProcessingJob, processingIdempotencyKey, reconcileProcessingArtifacts,
-  requireLease, sha256, withProcessingHeartbeat
+  PDF_RENDER_TIMEOUT_MS, pdfProcessingInputHash, requireLease, runWithProcessingDeadline, sha256, withProcessingHeartbeat
 } from "./processing.js";
-import type { AuthContext, WorkerDependencies } from "./types.js";
+import type { AuthContext, ProcessingJobClaim, WorkerDependencies } from "./types.js";
 
 export interface PdfRequestInput {
   recordingId?: string;
   generatedAt?: Date;
   idempotencyKey?: string;
+  processingClaim?: ProcessingJobClaim;
 }
 
 export interface PdfResponse {
@@ -21,7 +22,7 @@ export interface PdfResponse {
   pdf_version: string;
 }
 
-const PDF_STORAGE_RESERVATION_BYTES = 5 * 1024 * 1024;
+export const PDF_STORAGE_RESERVATION_BYTES = 5 * 1024 * 1024;
 
 function requireClinicId(clinicId: string | null): string {
   if (!clinicId) {
@@ -91,17 +92,19 @@ export async function generateRecordingPdf(
     deps.clinics.findClinicById(clinicId)
   ]);
   const pdfReadyRecording = requirePdfReadyRecording(recording);
-  const inputHash = sha256(`pdf-v1\n${pdfReadyRecording.summary}`);
+  const generatedAt = input.generatedAt ?? new Date(pdfReadyRecording.created_at);
+  const inputHash = pdfProcessingInputHash({ clinic: requireClinic(clinic), doctor: auth.doctor,
+    recording: pdfReadyRecording, generatedAt });
   const idempotencyKey = input.idempotencyKey?.trim() || processingIdempotencyKey("pdf", recordingId, inputHash);
   const claimInput = {
     operation: "pdf" as const, idempotencyKey, inputHash, recordingId,
     doctorId: auth.doctor.id, clinicId, storageBytes: PDF_STORAGE_RESERVATION_BYTES
   };
-  let claim = deps.processingJobs
+  let claim = input.processingClaim ?? (deps.processingJobs
     ? await claimProcessingJob(deps.processingJobs, {
         ...claimInput
       })
-    : null;
+    : null);
   if (claim?.disposition === "completed") {
     const result = claim.job.result as Partial<PdfResponse> | null;
     if (result?.pdf_storage_path && deps.processingJobs) {
@@ -112,7 +115,7 @@ export async function generateRecordingPdf(
         await deps.processingJobs.invalidateCompleted({
           jobId: claim.job.id, inputHash, errorCode: "PROCESSING_ARTIFACT_SUPERSEDED"
         });
-        claim = await claimProcessingJob(deps.processingJobs, claimInput);
+        claim = input.processingClaim ?? await claimProcessingJob(deps.processingJobs, claimInput);
       }
     }
   }
@@ -126,14 +129,13 @@ export async function generateRecordingPdf(
     }
     return {
       recording_id: recordingId, pdf_storage_path: result.pdf_storage_path,
-      signed_url: await deps.pdfStorage.createSignedUrl(result.pdf_storage_path), status: "pdf_saved",
+      signed_url: input.processingClaim ? "" : await deps.pdfStorage.createSignedUrl(result.pdf_storage_path), status: "pdf_saved",
       pdf_generated_at: result.pdf_generated_at, pdf_version: result.pdf_version
     };
   }
 
   const lease = claim ? requireLease(claim) : null;
   const providerRequestKey = lease ? `${lease.jobId}:pdf` : undefined;
-  const generatedAt = input.generatedAt ?? (claim ? new Date(claim.job.createdAt) : new Date());
   let uploadedPath: string | null = null;
   let artifactPath: string | null = null;
   let published = false;
@@ -142,9 +144,9 @@ export async function generateRecordingPdf(
       await deps.processingJobs.markProviderSubmitted({ ...lease, providerRequestKey: providerRequestKey! });
     }
     const startedAt = Date.now();
-    const render = () => deps.pdfRenderer.render({
-      clinic: requireClinic(clinic), doctor: auth.doctor, recording: pdfReadyRecording, generatedAt
-    });
+    const render = () => runWithProcessingDeadline((signal) => deps.pdfRenderer.render({
+      clinic: requireClinic(clinic), doctor: auth.doctor, recording: pdfReadyRecording, generatedAt, signal
+    }), PDF_RENDER_TIMEOUT_MS, "PDF_RENDER_TIMEOUT");
     const pdf = requireRenderedPdf(
       lease && deps.processingJobs
         ? await withProcessingHeartbeat(deps.processingJobs, lease, render)
@@ -215,7 +217,7 @@ export async function generateRecordingPdf(
     }
     const result: PdfResponse = {
       recording_id: pdfReadyRecording.id, pdf_storage_path: pdfStoragePath,
-      signed_url: await deps.pdfStorage.createSignedUrl(pdfStoragePath), status: "pdf_saved",
+      signed_url: input.processingClaim ? "" : await deps.pdfStorage.createSignedUrl(pdfStoragePath), status: "pdf_saved",
       pdf_generated_at: pdfGeneratedAt, pdf_version: pdfVersion
     };
     return result;
@@ -230,10 +232,12 @@ export async function generateRecordingPdf(
           // The durable orphan marker leaves cleanup retryable.
         }
       }
-      try {
-        await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
-      } catch {
-        // A lost lease must not mask the operation error.
+      if (!input.processingClaim) {
+        try {
+          await deps.processingJobs.fail({ ...lease, errorCode: toHttpError(error).code });
+        } catch {
+          // A lost lease must not mask the operation error.
+        }
       }
     }
     throw error;

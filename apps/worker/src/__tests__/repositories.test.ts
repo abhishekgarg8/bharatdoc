@@ -344,12 +344,8 @@ describe("createProcessingJobRepository", () => {
 
     await expect(repository.requestCancellation({ jobId: "job-1", doctorId: "doctor-1",
       clinicId: "clinic-1", expectedVersion: 1 })).resolves.toMatchObject({ lifecycleState: "cancel_requested" });
-    await expect(repository.recoverStale({ before: "2026-07-10T10:10:00.000Z", limit: 25 })).resolves.toBe(2);
-    expect(rpc).toHaveBeenNthCalledWith(1, "request_processing_job_cancellation", {
+    expect(rpc).toHaveBeenCalledWith("request_processing_job_cancellation", {
       p_job_id: "job-1", p_doctor_id: "doctor-1", p_clinic_id: "clinic-1", p_expected_version: 1
-    });
-    expect(rpc).toHaveBeenNthCalledWith(2, "recover_stale_processing_jobs", {
-      p_before: "2026-07-10T10:10:00.000Z", p_retry_at: null, p_limit: 25
     });
   });
 
@@ -418,6 +414,113 @@ describe("createProcessingJobRepository", () => {
     expect(query.eq).toHaveBeenCalledWith("doctor_key", "doctor-1");
     expect(query.eq).toHaveBeenCalledWith("clinic_key", "clinic-1");
     expect(JSON.stringify(dto)).not.toMatch(/John|P-SECRET|storage|lease|result/i);
+  });
+
+  it("enqueues durable processing jobs without provider work", async () => {
+    const rpc = vi.fn(async () => ({
+      data: [{
+        ...durableJobRow,
+        job_state: "queued",
+        recording_key: transcribedRecording.id,
+        doctor_key: transcribedRecording.doctor_id,
+        clinic_key: transcribedRecording.clinic_id,
+        idempotency_key: "summary-key",
+      }],
+      error: null,
+    }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.enqueue({
+      operation: "summary",
+      idempotencyKey: "summary-key",
+      inputHash: "a".repeat(64),
+      recordingId: transcribedRecording.id,
+      doctorId: transcribedRecording.doctor_id,
+      clinicId: transcribedRecording.clinic_id,
+      transcriptionSeconds: 0,
+      storageBytes: 0,
+    })).resolves.toMatchObject({
+      lifecycleState: "queued",
+      recordingId: transcribedRecording.id,
+      idempotencyKey: "summary-key",
+    });
+    expect(rpc).toHaveBeenCalledWith("enqueue_recording_processing_job", {
+      p_operation: "summary",
+      p_idempotency_key: "summary-key",
+      p_input_hash: "a".repeat(64),
+      p_recording_id: transcribedRecording.id,
+      p_doctor_id: transcribedRecording.doctor_id,
+      p_clinic_id: transcribedRecording.clinic_id,
+      p_input_version: 1,
+      p_transcription_seconds: 0,
+      p_storage_bytes: 0,
+      p_audio_storage_path: null,
+    });
+  });
+
+  it("activates a reserved transcription artifact atomically", async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await repository.activateQueuedTranscriptionArtifact({
+      jobId: "job-1",
+      doctorId: transcribedRecording.doctor_id,
+      clinicId: transcribedRecording.clinic_id,
+      storagePath: "clinic/doctor/reserved.webm",
+      checksum: "a".repeat(64),
+    });
+
+    expect(rpc).toHaveBeenCalledWith("activate_queued_transcription_artifact", {
+      p_job_id: "job-1",
+      p_doctor_id: transcribedRecording.doctor_id,
+      p_clinic_id: transcribedRecording.clinic_id,
+      p_storage_path: "clinic/doctor/reserved.webm",
+      p_checksum: "a".repeat(64),
+    });
+  });
+
+  it("claims ready jobs and recovers stale leases through queue RPCs", async () => {
+    const rpc = vi.fn(async (name: string) => name === "claim_ready_recording_processing_jobs"
+      ? {
+          data: [{
+            ...durableJobRow,
+            state: "running",
+            job_state: "running",
+            lease_token: "lease-1",
+            recording_key: transcribedRecording.id,
+            doctor_key: transcribedRecording.doctor_id,
+            clinic_key: transcribedRecording.clinic_id,
+            idempotency_key: "pdf-key",
+          }],
+          error: null,
+        }
+      : { data: 2, error: null });
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.claimReady({
+      workerId: "worker-1",
+      operations: ["pdf", "summary"],
+      limit: 3,
+    })).resolves.toEqual([expect.objectContaining({
+      lifecycleState: "running",
+      leaseToken: "lease-1",
+      operation: "summary",
+    })]);
+    await expect(repository.recoverStale({
+      before: "2026-07-10T10:00:00.000Z",
+      retryAt: "2026-07-10T10:05:00.000Z",
+      limit: 50,
+    })).resolves.toBe(2);
+    expect(rpc).toHaveBeenNthCalledWith(1, "claim_ready_recording_processing_jobs", {
+      p_worker_id: "worker-1",
+      p_operations: ["pdf", "summary"],
+      p_limit: 3,
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, "recover_stale_recording_processing_jobs", {
+      p_before: "2026-07-10T10:00:00.000Z",
+      p_retry_at: "2026-07-10T10:05:00.000Z",
+      p_limit: 50,
+    });
   });
 
   it("passes an immutable manifest to the hotfixed RPC and maps its rows", async () => {

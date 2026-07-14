@@ -95,6 +95,10 @@ const processingStateMachinePath = resolve(
   dirname,
   "../../../supabase/migrations/202607140003_processing_job_state_machine.sql",
 );
+const durableQueuePath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140004_durable_processing_queue.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -456,6 +460,54 @@ describe("initial Supabase migration contract", () => {
     expect(stateMachine).toContain("grant select on public.processing_job_status to service_role");
     expect(stateMachine).not.toContain("grant select on public.processing_job_status to authenticated");
     expect(stateMachine).not.toContain("grant select, insert, update on public.processing_job_attempts");
+  });
+
+  it("adds durable queue enqueue, claim, recovery, and scoped status contracts", () => {
+    const queue = readFileSync(durableQueuePath, "utf8");
+    expect(queue).toContain("create or replace function public.enqueue_recording_processing_job");
+    expect(queue).toContain("create or replace function public.activate_queued_transcription_artifact");
+    expect(queue).toContain("create or replace function public.claim_ready_recording_processing_jobs");
+    expect(queue).toContain("create or replace function public.recover_stale_recording_processing_jobs");
+    expect(queue).toContain("for update skip locked");
+    expect(queue).toContain("pg_advisory_xact_lock(6800, 1)");
+    expect(queue).toContain("least(greatest(coalesce(p_limit, 1), 1), 10)");
+    expect(queue).toContain("job.job_state in ('queued', 'retry_wait')");
+    expect(queue).toContain("job.scheduled_at <= now()");
+    expect(queue).toContain("(job.job_state = 'queued' and job.attempt <= job.max_attempts)");
+    expect(queue).toContain("(job.job_state = 'retry_wait' and job.attempt < job.max_attempts)");
+    expect(queue).toContain("lease_owner = btrim(p_worker_id)");
+    expect(queue).toContain("now() + interval '5 minutes'");
+    expect(queue).toContain("insert into public.processing_usage_reservations");
+    expect(queue).toContain("usage.created_at >= now() - interval '1 day'");
+    expect(queue).toContain("+ job.transcription_seconds <= 14400");
+    expect(queue).toContain("then 0 else job.storage_bytes end <= 2147483648");
+    expect(queue).toContain("PROCESSING_LEASE_EXPIRED");
+    expect(queue).toContain("when job.job_state = 'cancel_requested' then 'cancelled'");
+    expect(queue).toContain("create or replace view public.processing_queue_metrics as");
+    for (const field of ["oldest_queue_age_seconds", "stale_jobs", "average_wait_seconds",
+      "average_run_seconds", "failures", "provider_calls", "estimated_cost_usd"]) expect(queue).toContain(field);
+    expect(queue).toContain("now() - coalesce(next_retry_at,scheduled_at,created_at)");
+    expect(queue).toContain("next_retry_at is null or next_retry_at<=now()");
+    expect(queue).toContain("create or replace function public.processing_job_retry_at");
+    expect(queue).toContain("create or replace function public.processing_job_error_retryable");
+    expect(queue).toContain("create or replace function public.fail_recording_processing_job");
+    expect(queue).toContain("when job.job_state='cancel_requested' then 'cancelled'");
+    expect(queue).toContain("doctor_key, clinic_key");
+    expect(queue).toContain("public.processing_job_safe_error_code(terminal_error_code) as terminal_error_code");
+    expect(queue).toContain("public.processing_job_safe_error_message(terminal_error_code) as terminal_error_message");
+    expect(queue).toContain("lease_expires_at<=now() as is_stale");
+    expect(queue).toContain("job.input_version = p_input_version");
+    expect(queue).toContain("prevent_transcription_session_queue_collision");
+    expect(queue).toContain("job.created_at<=now()-interval '15 minutes'");
+    expect(queue).toContain("job.lease_expires_at <= least(p_before,now())");
+    expect(queue).toContain("pg_advisory_xact_lock(6201");
+    expect(queue).toContain("pg_advisory_xact_lock(6202");
+    expect(queue).toContain("revoke all on public.processing_job_status, public.processing_queue_metrics from public, anon, authenticated");
+    expect(queue).toContain("grant select on public.processing_job_status, public.processing_queue_metrics to service_role");
+    expect(queue).toMatch(
+      /grant execute on function public\.enqueue_recording_processing_job\(text,text,text,uuid,uuid,uuid,integer,numeric,bigint,text\)/,
+    );
+    expect(queue).not.toContain(" to authenticated");
   });
 
   it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {

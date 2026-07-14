@@ -137,6 +137,7 @@ describe("transcribeRecording", () => {
       mimeType: "audio/webm",
       filename: "recording.webm",
       language: "hien",
+      signal: expect.any(AbortSignal),
     });
     expect(deps.recordings.markRecordingTranscribed).toHaveBeenCalledWith({
       recordingId: recording.id,
@@ -178,6 +179,7 @@ describe("transcribeRecording", () => {
       mimeType: "audio/webm",
       filename: "recording.webm",
       language: "hien",
+      signal: expect.any(AbortSignal),
     });
   });
 

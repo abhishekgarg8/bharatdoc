@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DoctorSchema,
+  RecordingSchema,
   RegistrationInputSchema,
   TranscriptionSessionFinalizationSchema,
   TranscriptionSessionFinalizeRequestSchema
@@ -20,6 +21,18 @@ describe("transcription session finalization schemas", () => {
 });
 
 describe("registration input schemas", () => {
+  it("parses arbitrary keyed AI provenance with the Zod 4 record contract", () => {
+    expect(RecordingSchema.parse({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      doctor_id: "11111111-1111-4111-8111-111111111111",
+      clinic_id: "22222222-2222-4222-8222-222222222222",
+      patient_id: "P-1", label: null, duration_seconds: 1, audio_storage_path: "audio.webm",
+      transcript: "text", summary: null, pdf_storage_path: null, pdf_generated_at: null,
+      pdf_version: null, ai_provenance: { provider: "openai", chunk_count: 1 },
+      status: "transcribed", recorded_at: "2026-07-14T00:00:00.000Z", created_at: "2026-07-14T00:00:00.000Z"
+    }).ai_provenance).toEqual({ provider: "openai", chunk_count: 1 });
+  });
+
   it("accepts hospital creation and join input", () => {
     expect(
       RegistrationInputSchema.parse({

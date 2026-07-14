@@ -22,6 +22,7 @@ export interface AuthTokenVerifier {
 
 export interface DoctorRepository {
   findByAuthUid(authUid: string): Promise<Doctor | null>;
+  findById?(doctorId: string): Promise<Doctor | null>;
 }
 
 export interface ClinicRepository {
@@ -93,6 +94,7 @@ export interface SummaryClient {
     recording: Recording;
     doctor: Doctor;
     idempotencyKey?: string;
+    signal?: AbortSignal;
   }): Promise<string>;
 }
 
@@ -103,6 +105,7 @@ export interface TranscriptionClient {
     filename: string;
     language: Doctor["transcription_lang"];
     idempotencyKey?: string;
+    signal?: AbortSignal;
   }): Promise<string>;
 }
 
@@ -112,6 +115,7 @@ export interface PdfRenderer {
     doctor: Doctor;
     recording: Recording;
     generatedAt: Date;
+    signal?: AbortSignal;
   }): Promise<Buffer>;
 }
 
@@ -186,6 +190,13 @@ export interface DurableProcessingJob extends ProcessingJob {
   terminalErrorMessage: string | null;
   outputReference: Record<string, unknown> | null;
   stateVersion: number;
+}
+
+export interface QueuedProcessingJob extends DurableProcessingJob {
+  recordingId: string;
+  doctorId: string;
+  clinicId: string;
+  idempotencyKey: string;
 }
 
 export interface ProcessingJobClaim {
@@ -419,6 +430,29 @@ export interface ProcessingJobStateRepository extends ProcessingJobRepository {
     expectedVersion: number;
   }): Promise<DurableProcessingJob>;
   findStatus(input: { jobId: string; doctorId: string; clinicId: string }): Promise<ProcessingJobStatusDto | null>;
+  enqueue(input: {
+    operation: ProcessingOperation;
+    idempotencyKey: string;
+    inputHash: string;
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    transcriptionSeconds: number;
+    storageBytes: number;
+    artifactPath?: string;
+  }): Promise<QueuedProcessingJob>;
+  activateQueuedTranscriptionArtifact(input: {
+    jobId: string;
+    doctorId: string;
+    clinicId: string;
+    storagePath: string;
+    checksum: string;
+  }): Promise<void>;
+  claimReady(input: {
+    workerId: string;
+    operations: ProcessingOperation[];
+    limit: number;
+  }): Promise<QueuedProcessingJob[]>;
 }
 
 export interface WorkerDependencies {

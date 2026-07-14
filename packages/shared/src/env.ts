@@ -39,7 +39,14 @@ export const WorkerEnvSchema = z.object({
   TRANSCRIPTION_CHUNK_SESSIONS_ENABLED: z.enum(["true", "false"]).default("false"),
   WORKER_CORS_ORIGINS: nonEmpty.default(
     "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
-  )
+  ),
+  WORKER_QUEUE_ENABLED: z.enum(["true", "false"]).default("false"),
+  WORKER_QUEUE_TRANSCRIPTION: z.enum(["true", "false"]).default("false"),
+  WORKER_QUEUE_SUMMARY: z.enum(["true", "false"]).default("false"),
+  WORKER_QUEUE_PDF: z.enum(["true", "false"]).default("false"),
+  WORKER_QUEUE_POLL_MS: z.coerce.number().int().positive().default(1000),
+  WORKER_QUEUE_BATCH_SIZE: z.coerce.number().int().positive().max(10).default(5),
+  WORKER_QUEUE_WORKER_ID: nonEmpty.default("bharatdoc-worker")
 });
 
 export type WebEnv = z.infer<typeof WebEnvSchema>;

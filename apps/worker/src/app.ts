@@ -14,6 +14,11 @@ import {
 } from "./http-errors.js";
 import { consoleStructuredLogger } from "./logger.js";
 import { generateRecordingPdf } from "./pdf-generation.js";
+import {
+  enqueuePdfProcessingJob,
+  enqueueSummaryProcessingJob,
+  enqueueTranscriptionProcessingJob
+} from "./processing-queue.js";
 import { summarizeRecording } from "./summary.js";
 import { createTranscriptionSession, uploadTranscriptionChunk } from "./transcription-sessions.js";
 import {
@@ -23,6 +28,7 @@ import {
   type TranscribeRecordingInput,
 } from "./transcription.js";
 import type { WorkerDependencies } from "./types.js";
+import type { ProcessingOperation, ProcessingJobStateRepository } from "./types.js";
 import {
   createUploadAdmission,
   holdUploadPermitForHandler,
@@ -35,6 +41,9 @@ interface WorkerAppOptions {
   uploadAdmission?: Partial<UploadAdmissionLimits>;
   transcriptionSessionsEnabled?: boolean;
   transcriptionModel?: string;
+  queueOperations?: Partial<Record<ProcessingOperation, boolean>>;
+  queueRequired?: boolean;
+  queueReady?: () => boolean;
 }
 
 const DEFAULT_CORS_ORIGINS = [
@@ -88,6 +97,12 @@ function recordingIdFromBody(body: unknown): string | null {
     : null;
 }
 
+function processingJobId(value: string | string[] | undefined): string {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (!id) throw new HttpError(400, "Processing job ID is required.", "PROCESSING_JOB_ID_REQUIRED");
+  return id;
+}
+
 export function createApp(
   deps: WorkerDependencies,
   options: WorkerAppOptions = {},
@@ -116,6 +131,8 @@ export function createApp(
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_TRANSCRIPTION_AUDIO_BYTES, files: 1, fields: 3, parts: 5, fieldNameSize: 64, fieldSize: 1024 }
   }).single("audio");
+  const queueEnabled = (operation: ProcessingOperation): boolean =>
+    options.queueOperations?.[operation] === true;
 
   app.disable("x-powered-by");
   app.use((req, res, next) => {
@@ -146,6 +163,20 @@ export function createApp(
       ok: true,
       service: "bharatdoc-worker",
     });
+  });
+  app.get("/livez", (_req, res) => {
+    res.json({ ok: true, service: "bharatdoc-worker" });
+  });
+  app.get("/readyz", async (_req, res) => {
+    try {
+      const repo = deps.processingJobs as ProcessingJobStateRepository | undefined;
+      if (!repo?.findStaleRunning) throw new Error("processing queue repository is unavailable");
+      await repo.findStaleRunning({ before: new Date(0).toISOString(), limit: 1 });
+      if (options.queueRequired && !options.queueReady?.()) throw new Error("processing queue loop is unavailable");
+      res.json({ ok: true, service: "bharatdoc-worker", queue: "ready" });
+    } catch {
+      res.status(503).json({ ok: false, service: "bharatdoc-worker", queue: "unavailable" });
+    }
   });
 
   app.get("/api/me", authenticate, (_req, res) => {
@@ -247,6 +278,25 @@ export function createApp(
     }
   });
 
+  app.get("/api/processing-jobs/:jobId", authenticate, async (req, res, next) => {
+    try {
+      const auth = authenticatedContext(res);
+      const clinicId = auth.doctor.clinic_id;
+      const jobId = processingJobId(req.params.jobId);
+      if (!clinicId) {
+        throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
+      }
+      const repo = deps.processingJobs as ProcessingJobStateRepository | undefined;
+      const job = await repo?.findStatus?.({ jobId, doctorId: auth.doctor.id, clinicId });
+      if (!job) {
+        throw new HttpError(404, "Processing job was not found.", "PROCESSING_JOB_NOT_FOUND");
+      }
+      res.json({ job });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post(
     "/api/transcribe",
     uploadAdmission.limitIp,
@@ -294,6 +344,19 @@ export function createApp(
         input.requestId = requestId;
         const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
         if (idempotencyKey) input.idempotencyKey = idempotencyKey;
+        if (queueEnabled("transcription")) {
+          const job = await enqueueTranscriptionProcessingJob(auth, input, deps);
+          logger.info("transcription.request.enqueued", {
+            request_id: requestId,
+            recording_id: recordingId,
+            job_id: job.job_id,
+            doctor_id: auth.doctor.id,
+            clinic_id: auth.doctor.clinic_id,
+            duration_ms: Date.now() - startedAt,
+          });
+          res.status(202).json(job);
+          return;
+        }
         const result = await transcribeRecording(auth, input, deps);
 
         logger.info("transcription.request.succeeded", {
@@ -322,6 +385,18 @@ export function createApp(
     try {
       const auth = authenticatedContext(res);
       const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
+      if (queueEnabled("summary")) {
+        const job = await enqueueSummaryProcessingJob(
+          auth,
+          {
+            ...(typeof req.body.recording_id === "string" ? { recordingId: req.body.recording_id } : {}),
+            ...(idempotencyKey ? { idempotencyKey } : {})
+          },
+          deps,
+        );
+        res.status(202).json(job);
+        return;
+      }
       const result = await summarizeRecording(
         auth,
         {
@@ -345,6 +420,18 @@ export function createApp(
       try {
         const auth = authenticatedContext(res);
         const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
+        if (queueEnabled("pdf")) {
+          const job = await enqueuePdfProcessingJob(
+            auth,
+            {
+              ...(typeof req.body.recording_id === "string" ? { recordingId: req.body.recording_id } : {}),
+              ...(idempotencyKey ? { idempotencyKey } : {})
+            },
+            deps,
+          );
+          res.status(202).json(job);
+          return;
+        }
         const result = await generateRecordingPdf(
           auth,
           {

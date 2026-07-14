@@ -94,7 +94,8 @@ describe("worker summary service", () => {
     expect(deps.summaryClient.summarize).toHaveBeenCalledWith({
       prompt: "Custom note:\nPatient reports fever for two days.",
       recording,
-      doctor: activeDoctor
+      doctor: activeDoctor,
+      signal: expect.any(AbortSignal)
     });
     expect(deps.recordings.markRecordingSummarized).toHaveBeenCalledWith({
       recordingId: recording.id,
