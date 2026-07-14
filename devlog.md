@@ -140,3 +140,12 @@ After the full three-minute deploy wait, production created one canonical sessio
 Identical synthetic chunk upload/replay returned one checksum, object, and completed manifest with zero missing/failed chunks.
 Deleted the synthetic consultation normally and verified its recording and manifest were gone.
 Saved scrubbed screenshots/video/JSON under ignored testing/issue-65; no credentials, transcript, paths, or canonical IDs were retained.
+
+2026-07-14 - Issue #66: Finalized canonical transcription sessions server-side with immutable, path-free AI provenance.
+Accepted only session ID plus idempotency key; validated ordered chunks, totals, artifacts, ownership, hashes, and recording CAS in SQL.
+Preserved legacy records/RPCs, superseded legacy audio safely, standardized lock order, and kept raw chunks retention-bound.
+Passed 661 application tests, full builds, PHI gates, and real PostgreSQL concurrency/security/corruption/lifecycle matrices.
+Merged PR #127, applied the migration, waited three minutes, and verified tamper rejection plus stable concurrent replay.
+Production exposed plain PostgREST conflicts mapping to 500; fixed safe response/telemetry mapping in PR #128 and re-soaked.
+Retest returned safe 409, stable 200/200 replay, and a Transcribed record; authenticated deletion removed record and manifest.
+Saved scrubbed screenshots/video/JSON under ignored testing/issue-66 with no transcript, token, paths, provider IDs, or UUIDs.
