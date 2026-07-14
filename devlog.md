@@ -131,3 +131,12 @@ Applied the production migration before merging PR #121 at commit da2a92c and wa
 Production synthetic audio, transcript, summary, and PDF deletion completed with 2/2 objects removed and a minimal receipt.
 Verified idempotent retry, record/search/log absence, a dead signed PDF, fail-closed auth, and zero local IndexedDB rows.
 Saved scrubbed screenshots/video only under ignored testing/issue-64-production-phi-retention; no account deletion was performed.
+
+2026-07-14 - Issue #65: Persisted server-authoritative transcription sessions, chunk manifests, checksums, states, and cleanup paths.
+Added immutable retry handling, bounded aggregate validation, tenant scoping, interrupted/out-of-order recovery, and a migration flag.
+Passed 654 application tests, lint, typecheck, production build, PHI scan, and real PostgreSQL lifecycle/concurrency exercises.
+Applied the production migration and merged PR #125 at commit 2024236 after all GitHub and Vercel checks passed.
+After the full three-minute deploy wait, production created one canonical session from two concurrent requests.
+Identical synthetic chunk upload/replay returned one checksum, object, and completed manifest with zero missing/failed chunks.
+Deleted the synthetic consultation normally and verified its recording and manifest were gone.
+Saved scrubbed screenshots/video/JSON under ignored testing/issue-65; no credentials, transcript, paths, or canonical IDs were retained.
