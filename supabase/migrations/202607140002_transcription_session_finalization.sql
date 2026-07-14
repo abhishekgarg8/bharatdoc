@@ -19,11 +19,6 @@ create unique index transcription_session_finalization_key_unique
   on public.transcription_sessions(doctor_id,finalization_idempotency_key)
   where finalization_idempotency_key is not null;
 
--- A completed manifest remains active until its one authoritative commit.
-drop index if exists public.transcription_sessions_one_active_recording;
-create unique index transcription_sessions_one_active_recording on public.transcription_sessions(recording_id)
-  where state in ('accepting','processing') or (state='completed' and finalized_at is null);
-
 create or replace function public.create_transcription_session(
   p_recording_id uuid,p_doctor_id uuid,p_clinic_id uuid,p_expected_chunk_count integer,
   p_language text,p_model text,p_idempotency_key text
@@ -86,6 +81,7 @@ create or replace function public.finalize_transcription_session(
   p_session_id uuid,p_doctor_id uuid,p_clinic_id uuid,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
 declare
+  session_recording_id uuid;
   session_row public.transcription_sessions%rowtype;
   recording_row public.recordings%rowtype;
   v_chunk_count integer; v_total_bytes bigint; v_total_duration numeric;
@@ -95,15 +91,25 @@ begin
      or p_idempotency_key!~'^[A-Za-z0-9._:-]+$' then
     raise exception 'TRANSCRIPTION_SESSION_INVALID' using errcode='P0001';
   end if;
+  select session.recording_id into session_recording_id from public.transcription_sessions as session
+    where session.id=p_session_id and session.doctor_id=p_doctor_id and session.clinic_id=p_clinic_id;
+  if session_recording_id is null then
+    raise exception 'TRANSCRIPTION_SESSION_NOT_FOUND' using errcode='P0001';
+  end if;
+  -- Match create/delete lock order: recording advisory lock before any session row lock.
+  perform pg_advisory_xact_lock(hashtextextended(session_recording_id::text,0));
   perform pg_advisory_xact_lock(hashtextextended('transcription-finalize-key:'||p_doctor_id||':'||p_idempotency_key,0));
   select * into session_row from public.transcription_sessions as session
     where session.id=p_session_id for update;
-  if session_row.id is null or session_row.doctor_id<>p_doctor_id or session_row.clinic_id<>p_clinic_id then
+  if session_row.id is null or session_row.recording_id<>session_recording_id
+     or session_row.doctor_id<>p_doctor_id or session_row.clinic_id<>p_clinic_id then
     raise exception 'TRANSCRIPTION_SESSION_NOT_FOUND' using errcode='P0001';
   end if;
-  perform pg_advisory_xact_lock(hashtextextended(session_row.recording_id::text,0));
   select * into recording_row from public.recordings as recording
     where recording.id=session_row.recording_id for update;
+  if recording_row.id is null or recording_row.doctor_id<>p_doctor_id or recording_row.clinic_id<>p_clinic_id then
+    raise exception 'TRANSCRIPTION_SESSION_NOT_FOUND' using errcode='P0001';
+  end if;
 
   if session_row.finalization_idempotency_key is not null then
     if session_row.finalization_idempotency_key<>p_idempotency_key
@@ -119,8 +125,8 @@ begin
     and reused.finalization_idempotency_key=p_idempotency_key and reused.id<>session_row.id) then
     raise exception 'TRANSCRIPTION_FINALIZATION_KEY_REUSED' using errcode='P0001';
   end if;
-  if session_row.state<>'completed' or recording_row.id is null or recording_row.status<>'recorded'
-     or recording_row.audio_storage_path is not null or recording_row.ai_provenance is not null then
+  if session_row.state<>'completed' or recording_row.status<>'recorded'
+     or recording_row.ai_provenance is not null then
     raise exception 'TRANSCRIPTION_SESSION_NOT_FINALIZABLE' using errcode='P0001';
   end if;
 
@@ -133,7 +139,8 @@ begin
        left join public.transcription_chunks as chunk on chunk.session_id=session_row.id
         and chunk.chunk_index=expected.chunk_index where chunk.id is null)
      or exists(select 1 from public.transcription_chunks as chunk where chunk.session_id=session_row.id
-       and (chunk.expected_count<>session_row.expected_chunk_count or chunk.state<>'completed'
+       and (chunk.recording_key<>session_row.recording_id
+         or chunk.expected_count<>session_row.expected_chunk_count or chunk.state<>'completed'
          or nullif(btrim(chunk.transcript),'') is null))
      or (select count(distinct chunk.storage_path) from public.transcription_chunks as chunk
        where chunk.session_id=session_row.id)<>session_row.expected_chunk_count then
@@ -163,10 +170,26 @@ begin
     'transcript_hash',v_transcript_hash,'finalized_at',v_finalized_at
   ) into v_provenance from public.transcription_chunks as chunk where chunk.session_id=session_row.id;
 
+  if recording_row.audio_storage_path is not null then
+    if exists(select 1 from public.processing_artifacts as artifact
+      where artifact.storage_path=recording_row.audio_storage_path
+        and (artifact.recording_key<>session_row.recording_id or artifact.kind<>'audio')) then
+      raise exception 'PROCESSING_ARTIFACT_CONFLICT' using errcode='P0001';
+    end if;
+    if not exists(select 1 from public.processing_artifacts as artifact
+      where artifact.storage_path=recording_row.audio_storage_path and artifact.session_id=session_row.id) then
+      insert into public.processing_artifacts(recording_key,kind,storage_path,state,origin)
+        values(session_row.recording_id,'audio',recording_row.audio_storage_path,'superseded','legacy')
+        on conflict(storage_path) do update set state=case
+          when public.processing_artifacts.state in ('deleting','deleted') then public.processing_artifacts.state
+          else 'superseded' end;
+    end if;
+  end if;
+
   update public.recordings as recording set transcript=v_transcript,summary=null,pdf_storage_path=null,
-    pdf_generated_at=null,pdf_version=null,status='transcribed',ai_provenance=v_provenance
+    pdf_generated_at=null,pdf_version=null,audio_storage_path=null,status='transcribed',ai_provenance=v_provenance
     where recording.id=session_row.recording_id and recording.status='recorded'
-      and recording.audio_storage_path is null and recording.ai_provenance is null;
+      and recording.ai_provenance is null;
   if not found then raise exception 'RECORDING_NOT_TRANSCRIBABLE' using errcode='P0001'; end if;
   update public.transcription_sessions as session set finalization_idempotency_key=p_idempotency_key,
     transcript_hash=v_transcript_hash,ai_provenance=v_provenance,finalized_at=v_finalized_at,updated_at=v_finalized_at
