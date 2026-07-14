@@ -14,8 +14,10 @@ import {
 import { consoleStructuredLogger } from "./logger.js";
 import { generateRecordingPdf } from "./pdf-generation.js";
 import { summarizeRecording } from "./summary.js";
+import { createTranscriptionSession, uploadTranscriptionChunk } from "./transcription-sessions.js";
 import {
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
+  MAX_TRANSCRIPTION_AUDIO_BYTES,
   transcribeRecording,
   type TranscribeRecordingInput,
 } from "./transcription.js";
@@ -30,6 +32,8 @@ interface WorkerAppOptions {
   corsOrigins?: string;
   multipartParser?: RequestHandler;
   uploadAdmission?: Partial<UploadAdmissionLimits>;
+  transcriptionSessionsEnabled?: boolean;
+  transcriptionModel?: string;
 }
 
 const DEFAULT_CORS_ORIGINS = [
@@ -106,6 +110,10 @@ export function createApp(
   });
   const multipartParser =
     options.multipartParser ?? audioUpload.single("audio");
+  const chunkMultipartParser = options.multipartParser ?? multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_TRANSCRIPTION_AUDIO_BYTES, files: 1, fields: 3, parts: 5, fieldNameSize: 64, fieldSize: 1024 }
+  }).single("audio");
 
   app.disable("x-powered-by");
   app.use((req, res, next) => {
@@ -141,6 +149,48 @@ export function createApp(
   app.get("/api/me", authenticate, (_req, res) => {
     res.json({ doctor: authenticatedContext(res).doctor });
   });
+
+  app.post("/api/transcription-sessions", authenticate, jsonBody, async (req, res, next) => {
+    try {
+      if (!options.transcriptionSessionsEnabled) throw new HttpError(404, "Chunk sessions are disabled.", "TRANSCRIPTION_SESSIONS_DISABLED");
+      const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
+      const manifest = await createTranscriptionSession(authenticatedContext(res), {
+        recordingId: typeof req.body.recording_id === "string" ? req.body.recording_id : undefined,
+        expectedChunkCount: Number(req.body.expected_chunk_count), ...(idempotencyKey ? { idempotencyKey } : {})
+      }, deps, options.transcriptionModel ?? "gpt-4o-mini-transcribe");
+      res.status(201).json({ manifest });
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/transcription-sessions/:sessionId", authenticate, async (req, res, next) => {
+    try {
+      if (!options.transcriptionSessionsEnabled || !deps.transcriptionSessions) {
+        throw new HttpError(404, "Transcription session was not found.", "TRANSCRIPTION_SESSION_NOT_FOUND");
+      }
+      const auth = authenticatedContext(res);
+      if (!auth.doctor.clinic_id) throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
+      const manifest = await deps.transcriptionSessions.get({
+        sessionId: String(req.params.sessionId), doctorId: auth.doctor.id, clinicId: auth.doctor.clinic_id
+      });
+      if (!manifest) throw new HttpError(404, "Transcription session was not found.", "TRANSCRIPTION_SESSION_NOT_FOUND");
+      res.json({ manifest });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/transcription-sessions/:sessionId/chunks", uploadAdmission.limitIp, authenticate,
+    uploadAdmission.admitAuthenticated, chunkMultipartParser,
+    async (req, res, next) => {
+      const releaseUploadPermit = holdUploadPermitForHandler(res);
+      try {
+        if (!options.transcriptionSessionsEnabled) throw new HttpError(404, "Chunk sessions are disabled.", "TRANSCRIPTION_SESSIONS_DISABLED");
+        const result = await uploadTranscriptionChunk(authenticatedContext(res), {
+          sessionId: String(req.params.sessionId), index: Number(req.body.chunk_index),
+          count: Number(req.body.chunk_count), durationSeconds: Number(req.body.duration_seconds),
+          ...(req.file ? { audio: req.file } : {})
+        }, deps);
+        res.status(result.outcome === "in_progress" ? 202 : 200).json(result);
+      } catch (error) { next(error); } finally { releaseUploadPermit(); }
+    });
 
   app.get("/api/transcription-manifests/:jobId", authenticate, async (req, res, next) => {
     try {

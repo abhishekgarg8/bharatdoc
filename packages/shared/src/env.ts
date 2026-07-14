@@ -36,6 +36,7 @@ export const WorkerEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   OPENAI_TRANSCRIPTION_MODEL: nonEmpty.default("gpt-4o-mini-transcribe"),
   OPENAI_SUMMARY_MODEL: nonEmpty.default("gpt-4o-mini"),
+  TRANSCRIPTION_CHUNK_SESSIONS_ENABLED: z.enum(["true", "false"]).default("false"),
   WORKER_CORS_ORIGINS: nonEmpty.default(
     "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
   )

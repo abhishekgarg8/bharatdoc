@@ -83,6 +83,10 @@ const manifestStatusPath = resolve(
   dirname,
   "../../../supabase/migrations/202607140001_transcription_manifest_status.sql",
 );
+const durableSessionsPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140001_transcription_manifest_status.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -340,6 +344,24 @@ describe("initial Supabase migration contract", () => {
     expect(status).toMatch(
       /grant execute on function public\.fail_transcription_chunk\(uuid,uuid,integer,text,text\)\s+to service_role/,
     );
+  });
+
+  it("adds owner-scoped durable transcription sessions and service-role-only chunk transitions", () => {
+    const migration = readFileSync(durableSessionsPath, "utf8");
+    expect(migration).toContain("create table public.transcription_sessions");
+    expect(migration).toContain("unique (doctor_id, idempotency_key)");
+    expect(migration).toContain("transcription_chunk_session_index_unique");
+    expect(migration).toContain("TRANSCRIPTION_SESSION_ACTIVE");
+    expect(migration).toContain("create or replace function public.claim_transcription_session_chunk");
+    expect(migration).toContain("insert into public.processing_artifacts(session_id");
+    expect(migration).toContain("state='provider_submitted'");
+    expect(migration).toContain("'auto','en','hi','hien'");
+    expect(migration).toContain("s.mime_type<>p_mime_type");
+    expect(migration).toContain("recording.duration_seconds+1");
+    expect(migration).toContain("state in ('stored','provider_submitted','completed')");
+    expect(migration).toContain("alter table public.transcription_sessions enable row level security");
+    expect(migration).toContain("from public,anon,authenticated");
+    expect(migration).toContain("to service_role");
   });
 
   it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {

@@ -234,6 +234,23 @@ describe("worker app", () => {
       });
   });
 
+  it("applies authenticated upload admission before parsing session chunks", async () => {
+    const app = createApp(depsFor(activeDoctor), {
+      transcriptionSessionsEnabled: true,
+      uploadAdmission: { maxPerUser: 1, maxConcurrent: 1 }
+    });
+    await request(app).post("/api/transcription-sessions/session-1/chunks")
+      .set("Authorization", "Bearer valid-token")
+      .field("chunk_index", "0").field("chunk_count", "1").field("duration_seconds", "1")
+      .attach("audio", Buffer.from("audio"), { filename: "0.webm", contentType: "audio/webm" })
+      .expect(404);
+    await request(app).post("/api/transcription-sessions/session-1/chunks")
+      .set("Authorization", "Bearer valid-token")
+      .attach("audio", Buffer.from("audio"), { filename: "0.webm", contentType: "audio/webm" })
+      .expect(429)
+      .expect(({ body }) => expect(body.error.code).toBe("UPLOAD_USER_RATE_LIMITED"));
+  });
+
   it("returns a scoped transcription manifest for the authenticated doctor", async () => {
     const deps = depsFor(activeDoctor);
     deps.processingJobs = {

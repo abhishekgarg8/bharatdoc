@@ -95,6 +95,7 @@ describe("environment validation", () => {
       PORT: 8080,
       OPENAI_TRANSCRIPTION_MODEL: "gpt-4o-mini-transcribe",
       OPENAI_SUMMARY_MODEL: "gpt-4o-mini",
+      TRANSCRIPTION_CHUNK_SESSIONS_ENABLED: "false",
       WORKER_CORS_ORIGINS: "https://bharatdoc-web.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
     });
   });

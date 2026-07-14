@@ -14,6 +14,7 @@ import {
   createSupabaseAudioStorage,
   createSupabasePdfStorage,
   createTranscriptionAttemptRepository,
+  createTranscriptionSessionRepository,
 } from "./repositories.js";
 import { supabase } from "./supabase.js";
 import { consoleStructuredLogger } from "./logger.js";
@@ -37,10 +38,13 @@ const app = createApp(
     pdfRenderer: createSimplePdfRenderer(),
     pdfStorage: createSupabasePdfStorage(supabase),
     processingJobs: createProcessingJobRepository(supabase),
+    transcriptionSessions: createTranscriptionSessionRepository(supabase),
     logger: consoleStructuredLogger,
   },
   {
     corsOrigins: workerEnv.WORKER_CORS_ORIGINS,
+    transcriptionSessionsEnabled: workerEnv.TRANSCRIPTION_CHUNK_SESSIONS_ENABLED === "true",
+    transcriptionModel: workerEnv.OPENAI_TRANSCRIPTION_MODEL,
   },
 );
 
