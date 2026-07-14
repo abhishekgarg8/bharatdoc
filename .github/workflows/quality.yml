@@ -1,20 +1,17 @@
-name: Dependency security
+name: Quality
 
 on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: "17 6 * * 1"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  production-audit:
+  quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -25,4 +22,7 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit:prod
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm build
