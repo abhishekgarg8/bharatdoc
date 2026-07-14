@@ -27,6 +27,60 @@ describe("createTranscriptionSessionRepository", () => {
       p_idempotency_key: "finalize-1"
     });
   });
+
+  it.each([
+    ["TRANSCRIPTION_SESSION_INVALID", 400],
+    ["TRANSCRIPTION_SESSION_NOT_FOUND", 404],
+    ["QUOTA_DOCTOR_TRANSCRIPTION", 429],
+    ["TRANSCRIPTION_FINALIZATION_IMMUTABLE", 409]
+  ])("maps plain PostgREST %s errors to safe HTTP errors", async (message, status) => {
+    const rpc = vi.fn(async () => ({ data: null, error: {
+      message, code: "P0001", details: "patient transcript must never leak", hint: "private storage path"
+    } }));
+    const repository = createTranscriptionSessionRepository({ rpc } as unknown as SupabaseClient);
+    await expect(repository.finalize({ sessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" }))
+      .rejects.toMatchObject({ status, code: message });
+  });
+
+  it("rethrows unknown plain PostgREST errors unchanged", async () => {
+    const error = { message: "UNRECOGNIZED_DATABASE_FAILURE", code: "XX000", details: "private" };
+    const repository = createTranscriptionSessionRepository({
+      rpc: vi.fn(async () => ({ data: null, error }))
+    } as unknown as SupabaseClient);
+    await expect(repository.finalize({ sessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" })).rejects.toBe(error);
+  });
+
+  it("preserves native Error mapping and safely ignores hostile message shapes", async () => {
+    const input = { sessionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      doctorId: "doctor-1", clinicId: "clinic-1", idempotencyKey: "finalize-2" };
+    const nativeRepository = createTranscriptionSessionRepository({ rpc: vi.fn(async () => ({
+      data: null, error: new Error("TRANSCRIPTION_FINALIZATION_IMMUTABLE")
+    })) } as unknown as SupabaseClient);
+    await expect(nativeRepository.finalize(input)).rejects.toMatchObject({
+      status: 409, code: "TRANSCRIPTION_FINALIZATION_IMMUTABLE"
+    });
+
+    const inherited = Object.create({ message: "TRANSCRIPTION_FINALIZATION_IMMUTABLE" }) as object;
+    const getter = Object.defineProperty({}, "message", { get() { throw new Error("accessed getter"); } });
+    const hostile = [
+      { message: null }, { message: 7 }, { message: [] }, { message: {} },
+      { message: "TRANSCRIPTION_FINALIZATION_IMMUTABLE".padEnd(513, "x") },
+      { toString() { throw new Error("called toString"); } }, inherited, getter,
+      Object.defineProperty(new Error(), "message", { get() { throw new Error("error getter"); } }),
+      new Error("TRANSCRIPTION_FINALIZATION_IMMUTABLE".padEnd(513, "x")),
+      new Proxy({}, { getOwnPropertyDescriptor() { throw new Error("proxy trap"); } })
+    ];
+    for (const error of hostile) {
+      const repository = createTranscriptionSessionRepository({
+        rpc: vi.fn(async () => ({ data: null, error }))
+      } as unknown as SupabaseClient);
+      let caught: unknown;
+      try { await repository.finalize(input); } catch (candidate) { caught = candidate; }
+      expect(caught).toBe(error);
+    }
+  });
 });
 
 const transcribedRecording: Recording = {
