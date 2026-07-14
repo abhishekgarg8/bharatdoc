@@ -16,6 +16,11 @@ alter table public.recording_processing_jobs
   add column if not exists state_version bigint not null default 0;
 
 alter table public.recording_processing_jobs
+  drop constraint if exists processing_job_logical_input_unique,
+  add constraint processing_job_logical_input_unique
+    unique (recording_key, operation, input_hash, input_version);
+
+alter table public.recording_processing_jobs
   drop constraint if exists processing_job_lease_state_check;
 
 create or replace function public.processing_job_safe_error_code(p_error_code text)
@@ -83,7 +88,8 @@ update public.recording_processing_jobs job set
       and not ranked.has_running and ranked.failed_rank=1) then 'running' else 'failed' end,
   scheduled_at = coalesce(job.scheduled_at, job.created_at),
   started_at = case when ranked.state = 'running' then coalesce(job.started_at, job.created_at) else job.started_at end,
-  heartbeat_at = case when ranked.state = 'running' then coalesce(job.heartbeat_at, job.updated_at) else job.heartbeat_at end,
+  heartbeat_at = case when ranked.state = 'running' then greatest(coalesce(job.heartbeat_at, job.updated_at),
+    coalesce(job.started_at, job.created_at)) else job.heartbeat_at end,
   next_retry_at = case
     when ranked.state = 'failed' and ranked.attempt < ranked.max_attempts
       and (ranked.completed_at is null or ranked.error_code = 'PROCESSING_ARTIFACT_SUPERSEDED')
@@ -91,6 +97,9 @@ update public.recording_processing_jobs job set
       and not ranked.has_running and ranked.failed_rank = 1 then coalesce(job.next_retry_at, now())
     else job.next_retry_at
   end,
+  lease_expires_at = case when ranked.state='running' then greatest(job.lease_expires_at,
+    greatest(coalesce(job.heartbeat_at,job.updated_at),coalesce(job.started_at,job.created_at))+interval '1 millisecond')
+    else job.lease_expires_at end,
   lease_owner = case when ranked.state = 'running' then coalesce(job.lease_owner, 'legacy-worker') else null end,
   terminal_error_code = case when ranked.state = 'completed' and not case ranked.operation
       when 'transcription' then ranked.recording_status in ('transcribed','summary_ready','pdf_saved')
@@ -144,6 +153,13 @@ alter table public.recording_processing_jobs
   add constraint processing_job_canonical_lease_check check (
     (job_state in ('running', 'cancel_requested') and lease_token is not null and lease_expires_at is not null and lease_owner is not null)
     or (job_state not in ('running', 'cancel_requested') and lease_token is null and lease_expires_at is null and lease_owner is null)
+  ),
+  add constraint processing_job_heartbeat_order_check check (
+    (job_state not in ('running','cancel_requested') or (started_at is not null and heartbeat_at is not null))
+    and (heartbeat_at is null or (started_at is not null and heartbeat_at>=started_at))
+  ),
+  add constraint processing_job_lease_heartbeat_check check (
+    job_state not in ('running','cancel_requested') or lease_expires_at>heartbeat_at
   ),
   add constraint processing_job_legacy_shadow_check check (state=case
     when job_state in ('queued','running','retry_wait','cancel_requested') then 'running'
@@ -243,7 +259,13 @@ begin
       raise exception 'PROCESSING_TRANSITION_INVALID' using errcode='P0001';
     end if;
     if new.job_state is not distinct from old.job_state then
-      if new.state is distinct from old.state then
+      if old.job_state='succeeded' and new.state='failed'
+         and new.error_code in ('PROCESSING_INPUT_CHANGED','PROCESSING_OUTPUT_REPLACED','PROCESSING_ARTIFACT_SUPERSEDED') then
+        -- Legacy callers used to invalidate completed rows. Canonical terminal history is immutable;
+        -- the replacement artifact gets its own versioned job instead.
+        new.state:=old.state;
+        new.error_code:=old.error_code;
+      elsif new.state is distinct from old.state then
         new.job_state:=case new.state when 'completed' then 'succeeded' when 'failed' then case
           when new.error_code in ('PROCESSING_INPUT_CHANGED','PROCESSING_OUTPUT_REPLACED')
             or old.job_state='cancel_requested' or new.attempt>=new.max_attempts then 'failed_terminal'
@@ -272,7 +294,8 @@ begin
   new.scheduled_at := coalesce(new.scheduled_at, now());
   if new.job_state in ('running', 'cancel_requested') then
     new.started_at:=coalesce(new.started_at,now());
-    new.heartbeat_at:=coalesce(new.heartbeat_at,now());
+    new.heartbeat_at:=case when tg_op='UPDATE' and old.job_state in ('queued','retry_wait')
+      and new.job_state='running' then now() else coalesce(new.heartbeat_at,now()) end;
     new.lease_owner:=coalesce(nullif(btrim(new.lease_owner),''),'legacy-worker');
     new.next_retry_at := null;
   else
@@ -400,7 +423,7 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare existing public.recording_processing_jobs%rowtype;
 begin
   if p_operation not in ('transcription','summary','pdf') or p_input_version<1
-     or p_max_attempts<1 or p_input_hash!~'^[a-f0-9]{64}$'
+     or p_max_attempts not between 1 and 10 or p_input_hash!~'^[a-f0-9]{64}$'
      or char_length(p_idempotency_key) not between 1 and 120 then
     raise exception 'PROCESSING_REQUEST_INVALID' using errcode='P0001';
   end if;
@@ -423,7 +446,7 @@ begin
 
   select * into existing from public.recording_processing_jobs job
     where job.recording_key=p_recording_id and job.operation=p_operation
-      and job.input_hash=p_input_hash;
+      and job.input_hash=p_input_hash and job.input_version=p_input_version;
   if found then return next existing; return; end if;
   if exists (select 1 from public.recording_processing_jobs job where job.recording_key=p_recording_id
     and job.job_state in ('queued','running','retry_wait','cancel_requested')) then
@@ -504,7 +527,7 @@ begin
       when p_next_state = 'cancel_requested' then lease_expires_at else null end,
     lease_owner = case when p_next_state = 'running' then btrim(p_lease_owner)
       when p_next_state = 'cancel_requested' then lease_owner else null end,
-    started_at = case when p_next_state='running' then now() else started_at end,
+    started_at = case when p_next_state='running' then coalesce(started_at,now()) else started_at end,
     heartbeat_at = case when p_next_state='running' then now() else heartbeat_at end,
     scheduled_at = case when p_next_state='retry_wait' then p_retry_at else scheduled_at end,
     next_retry_at = case when p_next_state = 'retry_wait' then p_retry_at else null end,
@@ -531,12 +554,12 @@ begin
   select * into job from public.recording_processing_jobs where id=p_job_id
     and doctor_key=p_doctor_id and clinic_key=p_clinic_id for update;
   if job.id is null then raise exception 'PROCESSING_SCOPE_INVALID' using errcode='P0001'; end if;
-  if job.state_version<>p_expected_version then
-    raise exception 'PROCESSING_STATE_CONFLICT' using errcode='P0001';
-  end if;
-  if job.job_state='cancelled' then return next job; return;
+  if job.job_state in ('cancel_requested','cancelled') then return next job; return;
   elsif job.job_state in ('succeeded','failed_terminal') then
     raise exception 'PROCESSING_TRANSITION_INVALID' using errcode='P0001';
+  end if;
+  if job.state_version<>p_expected_version then
+    raise exception 'PROCESSING_STATE_CONFLICT' using errcode='P0001';
   end if;
   next_state:=case when job.job_state in ('queued','retry_wait') then 'cancelled'
     when job.job_state='running' then 'cancel_requested' else job.job_state end;
@@ -557,7 +580,7 @@ declare job public.recording_processing_jobs%rowtype; recovered integer:=0;
 begin
   for job in select * from public.recording_processing_jobs candidate
     where candidate.job_state in ('running','cancel_requested')
-      and candidate.lease_expires_at<=p_before
+      and candidate.lease_expires_at<=least(coalesce(p_before,now()),now())
     order by candidate.lease_expires_at,candidate.id for update skip locked
     limit least(1000,greatest(1,p_limit))
   loop
@@ -604,7 +627,8 @@ $$;
 create or replace function public.fail_recording_processing_job(p_job_id uuid, p_lease_token uuid, p_error_code text)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  update public.recording_processing_jobs set state = 'failed', error_code = left(p_error_code, 120),
+  update public.recording_processing_jobs set state = 'failed',
+    error_code = public.processing_job_safe_error_code(p_error_code),
     failure_count = failure_count + 1, lease_token = null, lease_expires_at = null,
     lease_owner = null, updated_at = now()
   where id = p_job_id and state = 'running' and job_state in ('running', 'cancel_requested')

@@ -443,6 +443,9 @@ describe("initial Supabase migration contract", () => {
     expect(stateMachine).toContain("as is_stale");
     expect(stateMachine).toContain("for update skip locked");
     expect(stateMachine).toContain("processing_job_legacy_shadow_check");
+    expect(stateMachine).toContain("unique (recording_key, operation, input_hash, input_version)");
+    expect(stateMachine).toContain("processing_job_heartbeat_order_check");
+    expect(stateMachine).toContain("processing_job_lease_heartbeat_check");
     expect(stateMachine).toContain("processing_job_error_message_canonical_check");
     expect(stateMachine).toContain("public.processing_job_safe_error_code");
     expect(stateMachine).toContain("public.processing_job_safe_error_message(terminal_error_code) as terminal_error_message");

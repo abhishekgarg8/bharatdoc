@@ -245,6 +245,23 @@ describe("createProcessingJobRepository", () => {
     created_at: "2026-07-10T09:59:00.000Z",
   };
 
+  it.each([
+    ["PROCESSING_REQUEST_INVALID", 400], ["PROCESSING_SCOPE_INVALID", 400],
+    ["PROCESSING_ACTIVE_CONFLICT", 409], ["PROCESSING_IDEMPOTENCY_CONFLICT", 409],
+    ["PROCESSING_NOT_READY", 409], ["PROCESSING_ATTEMPT_INVALID", 409],
+    ["PROCESSING_ATTEMPTS_EXHAUSTED", 409],
+  ])("maps durable controller error %s to a PHI-safe %i response", async (code, status) => {
+    const repository = createProcessingJobRepository({
+      rpc: vi.fn(async () => ({ data: null, error: { message: `Patient Jane: ${code}` } })),
+    } as unknown as SupabaseClient);
+    await expect(repository.createQueued({ operation: "transcription", idempotencyKey: "request-1",
+      inputHash: "a".repeat(64), recordingId: "recording-1", doctorId: "doctor-1",
+      clinicId: "clinic-1" })).rejects.toMatchObject({
+      status, code, message: status === 400 ? "AI processing request is invalid."
+        : "AI processing request conflicts with existing work.",
+    });
+  });
+
   it("maps durable claim timestamps and scopes artifact readiness to the live lease", async () => {
     const rpc = vi.fn(async (name: string) => name === "claim_recording_processing_job"
       ? {

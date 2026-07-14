@@ -9,7 +9,6 @@ import type {
   PersistedTranscriptionChunk,
   PdfStorage,
   ProcessingJob,
-  ProcessingJobRepository,
   ProcessingJobStateRepository,
   RecordingProcessingRepository,
   TranscriptionAttemptRepository,
@@ -541,7 +540,8 @@ function throwProcessingError(error: unknown): never {
     "TRANSCRIPTION_FINALIZATION_KEY_REUSED", "TRANSCRIPTION_FINALIZATION_ARTIFACT_INVALID",
     "PROCESSING_STATE_CONFLICT",
     "PROCESSING_TRANSITION_INVALID", "PROCESSING_ARTIFACT_INCONSISTENT",
-    "PROCESSING_IDEMPOTENCY_CONFLICT", "PROCESSING_ACTIVE_CONFLICT"
+    "PROCESSING_IDEMPOTENCY_CONFLICT", "PROCESSING_ACTIVE_CONFLICT",
+    "PROCESSING_NOT_READY", "PROCESSING_ATTEMPT_INVALID", "PROCESSING_ATTEMPTS_EXHAUSTED"
   ]
     .find((value) => message.includes(value));
   if (conflict) {

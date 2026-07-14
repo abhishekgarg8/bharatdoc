@@ -17,7 +17,7 @@ from (values
 
 do $$
 declare job public.recording_processing_jobs%rowtype; replay public.recording_processing_jobs%rowtype;
-  lease uuid; recovered integer; conflict_seen boolean:=false;
+  recovered integer; conflict_seen boolean:=false;
 begin
   select * into job from public.create_recording_processing_job('transcription','create-1',repeat('a',64),
     'f6700000-0000-4000-8000-000000000101','f6700000-0000-4000-8000-000000000002',
@@ -33,15 +33,23 @@ begin
   if not conflict_seen then raise exception 'one-active invariant failed'; end if;
 
   select * into job from public.transition_recording_processing_job(job.id,'queued','running',0,null,'worker-a');
-  lease:=job.lease_token; conflict_seen:=false;
-  perform public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,1);
-  begin perform public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,1);
+  conflict_seen:=false;
+  begin perform public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,0);
   exception when sqlstate 'P0001' then conflict_seen:=sqlerrm='PROCESSING_STATE_CONFLICT'; end;
   if not conflict_seen then raise exception 'version CAS failed'; end if;
-  update public.recording_processing_jobs set lease_expires_at=now()-interval '1 second' where id=job.id;
+  perform public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,1);
+  select * into replay from public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,1);
+  if replay.job_state<>'cancel_requested' then raise exception 'cancel request replay failed'; end if;
+  update public.recording_processing_jobs set started_at=now()-interval '7 minutes',
+    heartbeat_at=now()-interval '6 minutes',lease_expires_at=now()-interval '1 second' where id=job.id;
   recovered:=public.recover_stale_processing_jobs(now(),now()+interval '1 second',10);
   if recovered<>1 or not exists(select 1 from public.recording_processing_jobs where id=job.id and job_state='cancelled')
     then raise exception 'stale cancellation recovery failed'; end if;
+  select * into replay from public.request_processing_job_cancellation(job.id,job.doctor_key,job.clinic_key,1);
+  if replay.job_state<>'cancelled' then raise exception 'cancelled replay failed'; end if;
+  select * into replay from public.create_recording_processing_job('transcription','create-v2',repeat('a',64),
+    job.recording_key,job.doctor_key,job.clinic_key,2);
+  if replay.id=job.id or replay.input_version<>2 then raise exception 'input version identity failed'; end if;
 
   select * into job from public.create_recording_processing_job('summary','retry-1',repeat('c',64),
     'f6700000-0000-4000-8000-000000000102','f6700000-0000-4000-8000-000000000002',
@@ -52,6 +60,12 @@ begin
   update public.recording_processing_jobs set next_retry_at=now()-interval '1 millisecond' where id=job.id;
   select * into job from public.transition_recording_processing_job(job.id,'retry_wait','running',2,null,'worker-b');
   if job.attempt<>2 or job.state_version<>3 then raise exception 'retry claim did not consume one attempt'; end if;
+  recovered:=public.recover_stale_processing_jobs(now()+interval '1 day',now()+interval '1 second',10);
+  if recovered<>0 then raise exception 'future cutoff recovered a healthy lease'; end if;
+  conflict_seen:=false;
+  begin update public.recording_processing_jobs set lease_expires_at=heartbeat_at where id=job.id;
+  exception when check_violation then conflict_seen:=true; end;
+  if not conflict_seen then raise exception 'invalid heartbeat order accepted'; end if;
 
   select * into job from public.create_recording_processing_job('transcription','artifact-1',repeat('d',64),
     'f6700000-0000-4000-8000-000000000104','f6700000-0000-4000-8000-000000000002',
@@ -64,6 +78,9 @@ begin
   begin update public.recording_processing_jobs set job_state='running' where id=job.id;
   exception when sqlstate 'P0001' then conflict_seen:=sqlerrm='PROCESSING_TRANSITION_INVALID'; end;
   if not conflict_seen then raise exception 'terminal state resurrected'; end if;
+  perform public.invalidate_completed_processing_job(job.id,repeat('d',64),'PROCESSING_ARTIFACT_SUPERSEDED');
+  if not exists(select 1 from public.recording_processing_jobs where id=job.id and job_state='succeeded')
+    then raise exception 'legacy invalidation mutated terminal history'; end if;
 
   select * into job from public.create_recording_processing_job('pdf','artifact-bad',repeat('e',64),
     'f6700000-0000-4000-8000-000000000104','f6700000-0000-4000-8000-000000000002',
@@ -83,10 +100,29 @@ begin
     'f6700000-0000-4000-8000-000000000002');
   exception when sqlstate 'P0001' then conflict_seen:=sqlerrm='RECORDING_PROCESSING_ACTIVE'; end;
   if not conflict_seen then raise exception 'queued job did not block deletion'; end if;
+
+  conflict_seen:=false;
+  begin perform public.create_recording_processing_job('transcription','attempts-11',repeat('9',64),
+    'f6700000-0000-4000-8000-000000000103','f6700000-0000-4000-8000-000000000002',
+    'f6700000-0000-4000-8000-000000000001',1,11);
+  exception when sqlstate 'P0001' then conflict_seen:=sqlerrm='PROCESSING_REQUEST_INVALID'; end;
+  if not conflict_seen then raise exception 'unbounded max attempts accepted'; end if;
 end;
 $$;
 
 do $$begin
+  if exists(
+    with states(value) as (values ('queued'),('running'),('retry_wait'),('succeeded'),
+      ('failed_terminal'),('cancel_requested'),('cancelled')),
+    legal(from_state,to_state) as (values ('queued','running'),('queued','cancelled'),
+      ('running','succeeded'),('running','retry_wait'),('running','failed_terminal'),
+      ('running','cancel_requested'),('retry_wait','running'),('retry_wait','cancelled'),
+      ('cancel_requested','succeeded'),('cancel_requested','failed_terminal'),
+      ('cancel_requested','cancelled'))
+    select 1 from states source cross join states target
+    where public.processing_job_transition_allowed(source.value,target.value)
+      is distinct from exists(select 1 from legal where from_state=source.value and to_state=target.value)
+  ) then raise exception 'SQL transition matrix drifted'; end if;
   if exists(select 1 from information_schema.columns where table_schema='public'
     and table_name='processing_job_status' and column_name in
       ('lease_token','lease_owner','lease_expires_at','result','output_reference','input_hash','terminal_error_message_raw'))
