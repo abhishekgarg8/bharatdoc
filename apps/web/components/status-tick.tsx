@@ -46,8 +46,8 @@ export function StatusTick({ status, className }: StatusTickProps) {
       aria-label={config.label}
     >
       <span className="relative inline-flex h-3.5 w-5 items-center" aria-hidden="true">
-        <Check className="absolute left-0 h-3.5 w-3.5 stroke-[3]" />
-        {config.ticks === 2 ? <Check className="absolute left-1.5 h-3.5 w-3.5 stroke-[3]" /> : null}
+        <Check className="absolute left-0 h-3.5 w-3.5 stroke-3" />
+        {config.ticks === 2 ? <Check className="absolute left-1.5 h-3.5 w-3.5 stroke-3" /> : null}
       </span>
       {config.label}
     </span>

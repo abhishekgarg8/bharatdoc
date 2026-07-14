@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["zod"],
   transpilePackages: ["@bharatdoc/shared"],
   async headers() {
     return [

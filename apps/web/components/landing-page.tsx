@@ -219,7 +219,7 @@ export function LandingPage() {
               <article key={video.src} className="overflow-hidden rounded-lg border border-rule bg-paper-deep">
                 <div className="border-b border-rule bg-ink px-4 py-5">
                   <video
-                    className="mx-auto aspect-[43/76] w-full max-w-[310px] rounded-md bg-ink"
+                    className="mx-auto aspect-43/76 w-full max-w-[310px] rounded-md bg-ink"
                     src={video.src}
                     poster={video.poster}
                     controls

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0 <23"
   },
   "packageManager": "pnpm@10.8.0",
   "scripts": {
@@ -30,12 +30,12 @@
     "with:current-supabase-anon": "node --env-file=.env scripts/with-current-supabase-anon-key.mjs --"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "15.5.20",
+    "@next/eslint-plugin-next": "16.2.10",
     "@railway/cli": "^4.42.1",
     "@types/node": "^22.15.3",
     "eslint": "^9.25.1",
     "prettier": "^3.5.3",
-    "typescript": "^5.8.3",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
     "vitest": "^3.1.2"
   },

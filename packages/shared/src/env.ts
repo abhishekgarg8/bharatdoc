@@ -21,7 +21,7 @@ export const WebEnvSchema = z
   .superRefine(({ RESEND_FROM_EMAIL, RESEND_SENDING_DOMAIN }, ctx) => {
     if (RESEND_FROM_EMAIL && RESEND_SENDING_DOMAIN && !RESEND_FROM_EMAIL.endsWith(`@${RESEND_SENDING_DOMAIN}`)) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: "RESEND_FROM_EMAIL must use RESEND_SENDING_DOMAIN",
         path: ["RESEND_FROM_EMAIL"]
       });
