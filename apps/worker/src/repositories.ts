@@ -1,4 +1,4 @@
-import type { Clinic, Doctor, Recording } from "@bharatdoc/shared";
+import { TranscriptionSessionFinalizationSchema, type Clinic, type Doctor, type Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AudioStorage,
@@ -432,6 +432,9 @@ function throwProcessingError(error: unknown): never {
   if (message.includes("TRANSCRIPTION_MANIFEST_INVALID")) {
     throw new HttpError(400, "Transcription chunk manifest is invalid.", "TRANSCRIPTION_MANIFEST_INVALID");
   }
+  if (message.includes("TRANSCRIPTION_SESSION_NOT_FOUND")) {
+    throw new HttpError(404, "Transcription session was not found.", "TRANSCRIPTION_SESSION_NOT_FOUND");
+  }
   const invalid = [
     "PROCESSING_INPUT_INVALID", "PROCESSING_RECORDING_SCOPE_INVALID", "PROCESSING_DURATION_INVALID",
     "TRANSCRIPTION_CHUNK_STATE_INVALID", "PROCESSING_ARTIFACT_INVALID", "TRANSCRIPTION_SESSION_INVALID",
@@ -445,7 +448,9 @@ function throwProcessingError(error: unknown): never {
     "PROCESSING_RECORDING_BUSY", "PROCESSING_RECORDING_STATE_INVALID", "PROCESSING_INPUT_CHANGED",
     "TRANSCRIPTION_MANIFEST_INCOMPLETE", "PROCESSING_ARTIFACT_CONFLICT",
     "PROCESSING_ARTIFACT_CLEANUP_BUSY", "RECORDING_NOT_TRANSCRIBABLE",
-    "TRANSCRIPTION_SESSION_IMMUTABLE", "TRANSCRIPTION_SESSION_ACTIVE", "TRANSCRIPTION_CHUNK_IMMUTABLE"
+    "TRANSCRIPTION_SESSION_IMMUTABLE", "TRANSCRIPTION_SESSION_ACTIVE", "TRANSCRIPTION_CHUNK_IMMUTABLE",
+    "TRANSCRIPTION_SESSION_NOT_FINALIZABLE", "TRANSCRIPTION_FINALIZATION_IMMUTABLE",
+    "TRANSCRIPTION_FINALIZATION_KEY_REUSED", "TRANSCRIPTION_FINALIZATION_ARTIFACT_INVALID"
   ]
     .find((value) => message.includes(value));
   if (conflict) {
@@ -733,6 +738,14 @@ export function createTranscriptionSessionRepository(supabase: SupabaseClient): 
         p_error_code: input.errorCode, p_error_message: input.errorMessage
       });
       if (error) throwProcessingError(error);
+    },
+    async finalize(input) {
+      const { data, error } = await supabase.rpc("finalize_transcription_session", {
+        p_session_id: input.sessionId, p_doctor_id: input.doctorId,
+        p_clinic_id: input.clinicId, p_idempotency_key: input.idempotencyKey
+      });
+      if (error) throwProcessingError(error);
+      return TranscriptionSessionFinalizationSchema.parse(data);
     }
   };
 }

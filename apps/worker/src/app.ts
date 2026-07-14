@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { TranscriptionSessionFinalizeRequestSchema, UuidSchema } from "@bharatdoc/shared";
 import cors from "cors";
 import express, { type RequestHandler } from "express";
 import multer from "multer";
@@ -97,6 +98,7 @@ export function createApp(
   const authenticate = createAuthenticationMiddleware(deps);
   const uploadAdmission = createUploadAdmission(options.uploadAdmission);
   const jsonBody = express.json({ limit: "1mb" });
+  const finalizationBody = express.raw({ type: "*/*", limit: "1kb" });
   const audioUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -174,6 +176,31 @@ export function createApp(
       });
       if (!manifest) throw new HttpError(404, "Transcription session was not found.", "TRANSCRIPTION_SESSION_NOT_FOUND");
       res.json({ manifest });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/transcription-sessions/:sessionId/finalize", authenticate, finalizationBody, async (req, res, next) => {
+    try {
+      if (!options.transcriptionSessionsEnabled || !deps.transcriptionSessions) {
+        throw new HttpError(404, "Chunk sessions are disabled.", "TRANSCRIPTION_SESSIONS_DISABLED");
+      }
+      let body: unknown = {};
+      if (Buffer.isBuffer(req.body) && req.body.length) {
+        if (!req.is("application/json")) throw new HttpError(400, "Request validation failed.", "VALIDATION_ERROR");
+        try { body = JSON.parse(req.body.toString("utf8")); }
+        catch { throw new HttpError(400, "Request validation failed.", "VALIDATION_ERROR"); }
+      }
+      TranscriptionSessionFinalizeRequestSchema.parse(body);
+      const auth = authenticatedContext(res);
+      if (!auth.doctor.clinic_id) throw new HttpError(403, "Doctor must belong to a hospital.", "CLINIC_REQUIRED");
+      const idempotencyKey = idempotencyKeyFromHeader(req.headers["idempotency-key"]);
+      if (!idempotencyKey) throw new HttpError(400, "Idempotency key is required.", "IDEMPOTENCY_KEY_REQUIRED");
+      const sessionId = UuidSchema.parse(String(req.params.sessionId));
+      const finalization = await deps.transcriptionSessions.finalize({
+        sessionId, doctorId: auth.doctor.id,
+        clinicId: auth.doctor.clinic_id, idempotencyKey
+      });
+      res.json({ finalization });
     } catch (error) { next(error); }
   });
 

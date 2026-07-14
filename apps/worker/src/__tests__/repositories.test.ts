@@ -6,7 +6,28 @@ import {
   createRecordingProcessingRepository,
   createSupabaseAudioStorage,
   createTranscriptionAttemptRepository,
+  createTranscriptionSessionRepository,
 } from "../repositories.js";
+
+describe("createTranscriptionSessionRepository", () => {
+  it("finalizes through the scoped RPC and parses only the canonical safe DTO", async () => {
+    const data = {
+      recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      status: "transcribed", transcript_hash: "a".repeat(64), generation: 1,
+      finalized_at: "2026-07-14T00:00:00.000000+00:00"
+    };
+    const rpc = vi.fn(async () => ({ data, error: null }));
+    const repository = createTranscriptionSessionRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.finalize({ sessionId: data.session_id, doctorId: "doctor-1",
+      clinicId: "clinic-1", idempotencyKey: "finalize-1" })).resolves.toEqual(data);
+    expect(rpc).toHaveBeenCalledWith("finalize_transcription_session", {
+      p_session_id: data.session_id, p_doctor_id: "doctor-1", p_clinic_id: "clinic-1",
+      p_idempotency_key: "finalize-1"
+    });
+  });
+});
 
 const transcribedRecording: Recording = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

@@ -87,6 +87,10 @@ const durableSessionsPath = resolve(
   dirname,
   "../../../supabase/migrations/202607140001_transcription_manifest_status.sql",
 );
+const sessionFinalizationPath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140002_transcription_session_finalization.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -367,6 +371,27 @@ describe("initial Supabase migration contract", () => {
     expect(migration).toContain("alter table public.transcription_sessions enable row level security");
     expect(migration).toContain("from public,anon,authenticated");
     expect(migration).toContain("to service_role");
+  });
+
+  it("finalizes complete session manifests atomically with immutable provenance", () => {
+    const finalization = readFileSync(sessionFinalizationPath, "utf8");
+    expect(finalization).toContain("add column if not exists ai_provenance jsonb");
+    expect(finalization).toContain("create or replace function public.finalize_transcription_session");
+    expect(finalization).toContain("pg_advisory_xact_lock");
+    expect(finalization).toContain("for update");
+    expect(finalization).toContain("generate_series(0,session_row.expected_chunk_count-1)");
+    expect(finalization).toContain("string_agg(chunk.transcript,E'\\n\\n' order by chunk.chunk_index)");
+    expect(finalization).toContain("count(distinct chunk.storage_path)");
+    expect(finalization).toContain("artifact.state='current'");
+    expect(finalization).toContain("artifact.checksum=chunk.checksum");
+    expect(finalization).toContain("artifact.storage_path=chunk.storage_path");
+    expect(finalization).toContain("where recording.id=session_row.recording_id and recording.status='recorded'");
+    expect(finalization).toContain("finalization_idempotency_key");
+    expect(finalization).toContain("'transcript_hash'");
+    expect(finalization).toContain("'chunk_hashes'");
+    expect(finalization).toContain("'provider_request_hashes'");
+    expect(finalization).toContain("from public,anon,authenticated");
+    expect(finalization).toContain("to service_role");
   });
 
   it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {

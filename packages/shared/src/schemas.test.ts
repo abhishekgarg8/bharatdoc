@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { DoctorSchema, RegistrationInputSchema } from "./schemas.js";
+import {
+  DoctorSchema,
+  RegistrationInputSchema,
+  TranscriptionSessionFinalizationSchema,
+  TranscriptionSessionFinalizeRequestSchema
+} from "./schemas.js";
+
+describe("transcription session finalization schemas", () => {
+  it("accepts only an empty request and a PHI-safe canonical result", () => {
+    expect(TranscriptionSessionFinalizeRequestSchema.parse({})).toEqual({});
+    expect(() => TranscriptionSessionFinalizeRequestSchema.parse({ transcript: "tampered" })).toThrow();
+    expect(TranscriptionSessionFinalizationSchema.parse({
+      recording_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      status: "transcribed", transcript_hash: "a".repeat(64), generation: 1,
+      finalized_at: "2026-07-14T00:00:00.000000+00:00"
+    })).not.toHaveProperty("transcript");
+  });
+});
 
 describe("registration input schemas", () => {
   it("accepts hospital creation and join input", () => {
