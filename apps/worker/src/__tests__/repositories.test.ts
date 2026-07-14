@@ -221,6 +221,47 @@ describe("createRecordingProcessingRepository", () => {
 });
 
 describe("createProcessingJobRepository", () => {
+  const durableJobRow = {
+    id: "job-1",
+    operation: "summary",
+    state: "failed",
+    job_state: "retry_wait",
+    lease_token: null,
+    lease_expires_at: null,
+    attempt: 1,
+    max_attempts: 3,
+    result: null,
+    input_hash: "a".repeat(64),
+    scheduled_at: "2026-07-10T10:00:00.000Z",
+    started_at: "2026-07-10T10:00:01.000Z",
+    heartbeat_at: "2026-07-10T10:00:02.000Z",
+    next_retry_at: "2026-07-10T10:05:00.000Z",
+    completed_at: null,
+    terminal_error_code: "PROVIDER_RETRYABLE",
+    terminal_error_message: "Retry scheduled.",
+    output_reference: null,
+    state_version: 2,
+    is_stale: false,
+    created_at: "2026-07-10T09:59:00.000Z",
+  };
+
+  it.each([
+    ["PROCESSING_REQUEST_INVALID", 400], ["PROCESSING_SCOPE_INVALID", 400],
+    ["PROCESSING_ACTIVE_CONFLICT", 409], ["PROCESSING_IDEMPOTENCY_CONFLICT", 409],
+    ["PROCESSING_NOT_READY", 409], ["PROCESSING_ATTEMPT_INVALID", 409],
+    ["PROCESSING_ATTEMPTS_EXHAUSTED", 409],
+  ])("maps durable controller error %s to a PHI-safe %i response", async (code, status) => {
+    const repository = createProcessingJobRepository({
+      rpc: vi.fn(async () => ({ data: null, error: { message: `Patient Jane: ${code}` } })),
+    } as unknown as SupabaseClient);
+    await expect(repository.createQueued({ operation: "transcription", idempotencyKey: "request-1",
+      inputHash: "a".repeat(64), recordingId: "recording-1", doctorId: "doctor-1",
+      clinicId: "clinic-1" })).rejects.toMatchObject({
+      status, code, message: status === 400 ? "AI processing request is invalid."
+        : "AI processing request conflicts with existing work.",
+    });
+  });
+
   it("maps durable claim timestamps and scopes artifact readiness to the live lease", async () => {
     const rpc = vi.fn(async (name: string) => name === "claim_recording_processing_job"
       ? {
@@ -247,6 +288,136 @@ describe("createProcessingJobRepository", () => {
     expect(rpc).toHaveBeenLastCalledWith("mark_processing_artifact_ready", {
       p_job_id: "job-1", p_lease_token: "lease-1", p_storage_path: "pdf/path"
     });
+  });
+
+  it("performs compare-and-set lifecycle transitions through the durable RPC", async () => {
+    const rpc = vi.fn(async () => ({ data: [durableJobRow], error: null }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.transition({
+      jobId: "job-1",
+      expectedState: "running",
+      nextState: "retry_wait",
+      expectedVersion: 1,
+      leaseToken: "lease-1",
+      retryAt: "2026-07-10T10:05:00.000Z",
+      errorCode: "PROVIDER_RETRYABLE",
+    })).resolves.toMatchObject({
+      id: "job-1",
+      lifecycleState: "retry_wait",
+      maxAttempts: 3,
+      stateVersion: 2,
+    });
+    expect(rpc).toHaveBeenCalledWith("transition_recording_processing_job", {
+      p_job_id: "job-1",
+      p_expected_state: "running",
+      p_next_state: "retry_wait",
+      p_expected_version: 1,
+      p_lease_token: "lease-1",
+      p_lease_owner: null,
+      p_retry_at: "2026-07-10T10:05:00.000Z",
+      p_error_code: "PROVIDER_RETRYABLE",
+      p_output_reference: null,
+    });
+  });
+
+  it("creates an idempotent queued lifecycle job through the controller RPC", async () => {
+    const rpc = vi.fn(async () => ({ data: [{ ...durableJobRow, job_state: "queued", state_version: 0 }], error: null }));
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.createQueued({
+      operation: "transcription", idempotencyKey: "request-1", inputHash: "a".repeat(64),
+      recordingId: "recording-1", doctorId: "doctor-1", clinicId: "clinic-1"
+    })).resolves.toMatchObject({ lifecycleState: "queued", stateVersion: 0 });
+    expect(rpc).toHaveBeenCalledWith("create_recording_processing_job", {
+      p_operation: "transcription", p_idempotency_key: "request-1", p_input_hash: "a".repeat(64),
+      p_recording_id: "recording-1", p_doctor_id: "doctor-1", p_clinic_id: "clinic-1",
+      p_input_version: 1, p_max_attempts: 3, p_scheduled_at: null
+    });
+  });
+
+  it("runs scoped cancellation and stale recovery through controller RPCs", async () => {
+    const rpc = vi.fn(async (name: string) => name === "recover_stale_processing_jobs"
+      ? { data: 2, error: null }
+      : { data: [{ ...durableJobRow, job_state: "cancel_requested" }], error: null });
+    const repository = createProcessingJobRepository({ rpc } as unknown as SupabaseClient);
+
+    await expect(repository.requestCancellation({ jobId: "job-1", doctorId: "doctor-1",
+      clinicId: "clinic-1", expectedVersion: 1 })).resolves.toMatchObject({ lifecycleState: "cancel_requested" });
+    await expect(repository.recoverStale({ before: "2026-07-10T10:10:00.000Z", limit: 25 })).resolves.toBe(2);
+    expect(rpc).toHaveBeenNthCalledWith(1, "request_processing_job_cancellation", {
+      p_job_id: "job-1", p_doctor_id: "doctor-1", p_clinic_id: "clinic-1", p_expected_version: 1
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, "recover_stale_processing_jobs", {
+      p_before: "2026-07-10T10:10:00.000Z", p_retry_at: null, p_limit: 25
+    });
+  });
+
+  it("finds stale running leases through the lifecycle lease index", async () => {
+    const query = {
+      select: vi.fn(),
+      in: vi.fn(),
+      lte: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+    };
+    for (const method of ["select", "in", "lte", "order"] as const) query[method].mockReturnValue(query);
+    query.limit.mockResolvedValue({
+      data: [{ ...durableJobRow, state: "running", job_state: "running", lease_expires_at: "2026-07-10T10:00:00.000Z" }],
+      error: null,
+    });
+    const repository = createProcessingJobRepository({
+      from: vi.fn(() => query),
+    } as unknown as SupabaseClient);
+
+    await expect(repository.findStaleRunning({
+      before: "2026-07-10T10:10:00.000Z",
+      limit: 25,
+    })).resolves.toEqual([expect.objectContaining({ id: "job-1", lifecycleState: "running" })]);
+    expect(query.in).toHaveBeenCalledWith("job_state", ["running", "cancel_requested"]);
+    expect(query.lte).toHaveBeenCalledWith("lease_expires_at", "2026-07-10T10:10:00.000Z");
+    expect(query.order).toHaveBeenCalledWith("lease_expires_at", { ascending: true });
+    expect(query.limit).toHaveBeenCalledWith(25);
+  });
+
+  it("returns a PHI-safe processing status DTO", async () => {
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          ...durableJobRow,
+          job_state: "failed_terminal",
+          completed_at: "2026-07-10T10:02:00.000Z",
+          terminal_error_code: "PATIENT_NAME_IN_CODE",
+          terminal_error_message: "Patient John Doe failed.",
+          result: { patient_id: "P-SECRET" },
+          output_reference: { storage_path: "clinic/doctor/P-SECRET.pdf" },
+        },
+        error: null,
+      })),
+    };
+    const repository = createProcessingJobRepository({
+      from: vi.fn(() => query),
+    } as unknown as SupabaseClient);
+
+    const dto = await repository.findStatus({ jobId: "job-1", doctorId: "doctor-1", clinicId: "clinic-1" });
+    expect(dto).toEqual(expect.objectContaining({
+      id: "job-1",
+      state: "failed_terminal",
+      error: {
+        code: "PROCESSING_FAILED",
+        message: "Processing could not be completed.",
+      },
+    }));
+    expect(query.select).toHaveBeenCalledWith([
+      "id", "operation", "job_state", "attempt", "max_attempts", "scheduled_at",
+      "started_at", "completed_at", "next_retry_at", "terminal_error_code",
+      "terminal_error_message", "is_stale"
+    ].join(","));
+    expect(query.eq).toHaveBeenCalledWith("doctor_key", "doctor-1");
+    expect(query.eq).toHaveBeenCalledWith("clinic_key", "clinic-1");
+    expect(JSON.stringify(dto)).not.toMatch(/John|P-SECRET|storage|lease|result/i);
   });
 
   it("passes an immutable manifest to the hotfixed RPC and maps its rows", async () => {

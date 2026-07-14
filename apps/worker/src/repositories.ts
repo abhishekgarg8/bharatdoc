@@ -1,13 +1,15 @@
-import { TranscriptionSessionFinalizationSchema, type Clinic, type Doctor, type Recording } from "@bharatdoc/shared";
+import { TranscriptionSessionFinalizationSchema, toProcessingJobStatusDto,
+  type Clinic, type Doctor, type Recording } from "@bharatdoc/shared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AudioStorage,
   ClinicRepository,
   DoctorRepository,
+  DurableProcessingJob,
   PersistedTranscriptionChunk,
   PdfStorage,
   ProcessingJob,
-  ProcessingJobRepository,
+  ProcessingJobStateRepository,
   RecordingProcessingRepository,
   TranscriptionAttemptRepository,
   TranscriptionManifest,
@@ -310,12 +312,55 @@ interface ProcessingJobRow {
   operation: ProcessingJob["operation"];
   state: ProcessingJob["state"];
   lease_token: string | null;
+  lease_expires_at?: string | null;
   attempt: number;
+  max_attempts?: number;
   result: Record<string, unknown> | null;
   input_hash: string;
+  input_version?: number;
+  job_state?: DurableProcessingJob["lifecycleState"];
+  scheduled_at?: string;
+  started_at?: string | null;
+  heartbeat_at?: string | null;
+  next_retry_at?: string | null;
+  completed_at?: string | null;
+  terminal_error_code?: string | null;
+  terminal_error_message?: string | null;
+  output_reference?: Record<string, unknown> | null;
+  state_version?: number;
   created_at: string;
   disposition?: "acquired" | "running" | "completed";
 }
+
+interface ProcessingJobStatusRow {
+  id: string;
+  operation: ProcessingJob["operation"];
+  job_state: DurableProcessingJob["lifecycleState"];
+  attempt: number;
+  max_attempts: number;
+  scheduled_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  next_retry_at: string | null;
+  terminal_error_code: string | null;
+  terminal_error_message: string | null;
+  is_stale: boolean;
+}
+
+const processingJobColumns = [
+  "id", "operation", "state", "job_state", "lease_token", "lease_expires_at",
+  "attempt", "max_attempts", "result", "input_hash", "input_version", "scheduled_at",
+  "started_at", "heartbeat_at", "next_retry_at", "completed_at",
+  "terminal_error_code", "terminal_error_message", "output_reference",
+  "state_version", "created_at"
+].join(",");
+const legacyProcessingJobColumns = "id,operation,state,lease_token,attempt,result,input_hash,created_at";
+
+const processingJobStatusColumns = [
+  "id", "operation", "job_state", "attempt", "max_attempts", "scheduled_at",
+  "started_at", "completed_at", "next_retry_at", "terminal_error_code",
+  "terminal_error_message", "is_stale"
+].join(",");
 
 interface TranscriptionManifestJobRow extends ProcessingJobRow {
   recording_key: string;
@@ -338,7 +383,9 @@ interface TranscriptionChunkRow {
   error_message?: string | null;
 }
 
-function processingJob(row: ProcessingJobRow): ProcessingJob {
+function processingJob(row: ProcessingJobRow): DurableProcessingJob {
+  const lifecycleState = row.job_state ??
+    (row.state === "completed" ? "succeeded" : row.state === "failed" ? "failed_terminal" : "running");
   return {
     id: row.id,
     operation: row.operation,
@@ -347,8 +394,38 @@ function processingJob(row: ProcessingJobRow): ProcessingJob {
     attempt: row.attempt,
     result: row.result,
     inputHash: row.input_hash,
-    createdAt: row.created_at
+    inputVersion: row.input_version ?? 1,
+    createdAt: row.created_at,
+    lifecycleState,
+    leaseExpiresAt: row.lease_expires_at ?? null,
+    maxAttempts: row.max_attempts ?? 3,
+    scheduledAt: row.scheduled_at ?? row.created_at,
+    startedAt: row.started_at ?? (lifecycleState === "running" ? row.created_at : null),
+    heartbeatAt: row.heartbeat_at ?? null,
+    nextRetryAt: row.next_retry_at ?? null,
+    completedAt: row.completed_at ?? null,
+    terminalErrorCode: row.terminal_error_code ?? null,
+    terminalErrorMessage: row.terminal_error_message ?? null,
+    outputReference: row.output_reference ?? null,
+    stateVersion: row.state_version ?? 0
   };
+}
+
+function processingJobStatus(row: ProcessingJobStatusRow) {
+  return toProcessingJobStatusDto({
+    id: row.id,
+    operation: row.operation,
+    state: row.job_state,
+    attempt: row.attempt,
+    maxAttempts: row.max_attempts,
+    scheduledAt: row.scheduled_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    nextRetryAt: row.next_retry_at,
+    isStale: row.is_stale,
+    terminalErrorCode: row.terminal_error_code,
+    terminalErrorMessage: row.terminal_error_message
+  });
 }
 
 function transcriptionChunk(row: TranscriptionChunkRow): PersistedTranscriptionChunk {
@@ -447,7 +524,8 @@ function throwProcessingError(error: unknown): never {
   const invalid = [
     "PROCESSING_INPUT_INVALID", "PROCESSING_RECORDING_SCOPE_INVALID", "PROCESSING_DURATION_INVALID",
     "TRANSCRIPTION_CHUNK_STATE_INVALID", "PROCESSING_ARTIFACT_INVALID", "TRANSCRIPTION_SESSION_INVALID",
-    "TRANSCRIPTION_CHUNK_INVALID", "TRANSCRIPTION_CHUNK_LIMIT_EXCEEDED"
+    "TRANSCRIPTION_CHUNK_INVALID", "TRANSCRIPTION_CHUNK_LIMIT_EXCEEDED", "PROCESSING_RETRY_INVALID",
+    "PROCESSING_ERROR_CODE_REQUIRED", "PROCESSING_REQUEST_INVALID", "PROCESSING_SCOPE_INVALID"
   ].find((value) => message.includes(value));
   if (invalid) {
     throw new HttpError(400, "AI processing request is invalid.", invalid);
@@ -459,7 +537,11 @@ function throwProcessingError(error: unknown): never {
     "PROCESSING_ARTIFACT_CLEANUP_BUSY", "RECORDING_NOT_TRANSCRIBABLE",
     "TRANSCRIPTION_SESSION_IMMUTABLE", "TRANSCRIPTION_SESSION_ACTIVE", "TRANSCRIPTION_CHUNK_IMMUTABLE",
     "TRANSCRIPTION_SESSION_NOT_FINALIZABLE", "TRANSCRIPTION_FINALIZATION_IMMUTABLE",
-    "TRANSCRIPTION_FINALIZATION_KEY_REUSED", "TRANSCRIPTION_FINALIZATION_ARTIFACT_INVALID"
+    "TRANSCRIPTION_FINALIZATION_KEY_REUSED", "TRANSCRIPTION_FINALIZATION_ARTIFACT_INVALID",
+    "PROCESSING_STATE_CONFLICT",
+    "PROCESSING_TRANSITION_INVALID", "PROCESSING_ARTIFACT_INCONSISTENT",
+    "PROCESSING_IDEMPOTENCY_CONFLICT", "PROCESSING_ACTIVE_CONFLICT",
+    "PROCESSING_NOT_READY", "PROCESSING_ATTEMPT_INVALID", "PROCESSING_ATTEMPTS_EXHAUSTED"
   ]
     .find((value) => message.includes(value));
   if (conflict) {
@@ -468,8 +550,21 @@ function throwProcessingError(error: unknown): never {
   throw new HttpError(500, "Internal server error.", "INTERNAL_ERROR");
 }
 
-export function createProcessingJobRepository(supabase: SupabaseClient): ProcessingJobRepository {
+export function createProcessingJobRepository(supabase: SupabaseClient): ProcessingJobStateRepository {
   return {
+    async createQueued(input) {
+      const { data, error } = await supabase.rpc("create_recording_processing_job", {
+        p_operation: input.operation, p_idempotency_key: input.idempotencyKey,
+        p_input_hash: input.inputHash, p_recording_id: input.recordingId,
+        p_doctor_id: input.doctorId, p_clinic_id: input.clinicId,
+        p_input_version: input.inputVersion ?? 1, p_max_attempts: input.maxAttempts ?? 3,
+        p_scheduled_at: input.scheduledAt ?? null
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as ProcessingJobRow[] | null)?.[0];
+      if (!row) throw new Error("Processing job creation returned no row.");
+      return processingJob(row);
+    },
     async begin(input) {
       const { data, error } = await supabase.rpc("claim_recording_processing_job", {
         p_operation: input.operation,
@@ -489,14 +584,14 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
 
     async find(jobId) {
       const { data, error } = await supabase.from("recording_processing_jobs")
-        .select("id,operation,state,lease_token,attempt,result,input_hash,created_at").eq("id", jobId).maybeSingle<ProcessingJobRow>();
+        .select(legacyProcessingJobColumns).eq("id", jobId).maybeSingle<ProcessingJobRow>();
       if (error) throw error;
       return data ? processingJob(data) : null;
     },
 
     async findByIdempotencyKey(input) {
       const { data, error } = await supabase.from("recording_processing_jobs")
-        .select("id,operation,state,lease_token,attempt,result,input_hash,created_at")
+        .select(legacyProcessingJobColumns)
         .eq("operation", input.operation).eq("doctor_key", input.doctorId)
         .eq("idempotency_key", input.idempotencyKey).maybeSingle<ProcessingJobRow>();
       if (error) throw error;
@@ -505,13 +600,71 @@ export function createProcessingJobRepository(supabase: SupabaseClient): Process
 
     async findByLogicalInput(input) {
       let query = supabase.from("recording_processing_jobs")
-        .select("id,operation,state,lease_token,attempt,result,input_hash,created_at")
+        .select(legacyProcessingJobColumns)
         .eq("operation", input.operation).eq("recording_key", input.recordingId)
         .order("created_at", { ascending: false }).limit(1);
       if (input.inputHash) query = query.eq("input_hash", input.inputHash);
       const { data, error } = await query.maybeSingle<ProcessingJobRow>();
       if (error) throw error;
       return data ? processingJob(data) : null;
+    },
+
+    async transition(input) {
+      const { data, error } = await supabase.rpc("transition_recording_processing_job", {
+        p_job_id: input.jobId,
+        p_expected_state: input.expectedState,
+        p_next_state: input.nextState,
+        p_expected_version: input.expectedVersion,
+        p_lease_token: input.leaseToken ?? null,
+        p_lease_owner: input.leaseOwner ?? null,
+        p_retry_at: input.retryAt ?? null,
+        p_error_code: input.errorCode ?? null,
+        p_output_reference: input.outputReference ?? null
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as ProcessingJobRow[] | null)?.[0];
+      if (!row) throw new Error("Processing transition returned no row.");
+      return processingJob(row);
+    },
+
+    async findStaleRunning(input) {
+      const { data, error } = await supabase.from("recording_processing_jobs")
+        .select(processingJobColumns)
+        .in("job_state", ["running", "cancel_requested"])
+        .lte("lease_expires_at", input.before)
+        .order("lease_expires_at", { ascending: true })
+        .limit(Math.min(100, Math.max(1, input.limit)));
+      if (error) throw error;
+      return ((data ?? []) as unknown as ProcessingJobRow[]).map(processingJob);
+    },
+
+    async recoverStale(input) {
+      const { data, error } = await supabase.rpc("recover_stale_processing_jobs", {
+        p_before: input.before, p_retry_at: input.retryAt ?? null,
+        p_limit: Math.min(1000, Math.max(1, input.limit))
+      });
+      if (error) throwProcessingError(error);
+      return Number(data ?? 0);
+    },
+
+    async requestCancellation(input) {
+      const { data, error } = await supabase.rpc("request_processing_job_cancellation", {
+        p_job_id: input.jobId, p_doctor_id: input.doctorId, p_clinic_id: input.clinicId,
+        p_expected_version: input.expectedVersion
+      });
+      if (error) throwProcessingError(error);
+      const row = (data as ProcessingJobRow[] | null)?.[0];
+      if (!row) throw new Error("Processing cancellation returned no row.");
+      return processingJob(row);
+    },
+
+    async findStatus(input) {
+      const { data, error } = await supabase.from("processing_job_status")
+        .select(processingJobStatusColumns).eq("id", input.jobId)
+        .eq("doctor_key", input.doctorId).eq("clinic_key", input.clinicId)
+        .maybeSingle<ProcessingJobStatusRow>();
+      if (error) throw error;
+      return data ? processingJobStatus(data) : null;
     },
 
     async heartbeat(input) {
