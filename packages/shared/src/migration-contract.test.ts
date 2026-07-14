@@ -91,6 +91,10 @@ const sessionFinalizationPath = resolve(
   dirname,
   "../../../supabase/migrations/202607140002_transcription_session_finalization.sql",
 );
+const processingStateMachinePath = resolve(
+  dirname,
+  "../../../supabase/migrations/202607140003_processing_job_state_machine.sql",
+);
 
 describe("initial Supabase migration contract", () => {
   it("creates all Phase 1 domain tables", () => {
@@ -406,6 +410,49 @@ describe("initial Supabase migration contract", () => {
     expect(finalization).toContain("session.state='completed' and session.finalized_at is null");
     expect(finalization).toContain("from public,anon,authenticated");
     expect(finalization).toContain("to service_role");
+  });
+
+  it("adds a durable processing-job lifecycle state machine contract", () => {
+    const stateMachine = readFileSync(processingStateMachinePath, "utf8");
+    expect(stateMachine).toContain("add column if not exists job_state text");
+    expect(stateMachine).toContain("add column if not exists max_attempts integer not null default 3");
+    expect(stateMachine).toContain("add column if not exists heartbeat_at timestamptz");
+    expect(stateMachine).toContain("add column if not exists terminal_error_code text");
+    expect(stateMachine).toContain("processing_job_lifecycle_state_check");
+    expect(stateMachine).toContain("'queued', 'running', 'retry_wait', 'succeeded', 'failed_terminal', 'cancel_requested', 'cancelled'");
+    expect(stateMachine).toContain("processing_job_transition_allowed");
+    expect(stateMachine).toContain("transition_recording_processing_job");
+    expect(stateMachine).toContain("create_recording_processing_job");
+    expect(stateMachine).toContain("request_processing_job_cancellation");
+    expect(stateMachine).toContain("recover_stale_processing_jobs");
+    expect(stateMachine).toContain("PROCESSING_TRANSITION_INVALID");
+    expect(stateMachine).toContain("PROCESSING_STATE_CONFLICT");
+    expect(stateMachine).toContain("PROCESSING_ARTIFACT_INCONSISTENT");
+    expect(stateMachine).toContain("idx_processing_jobs_one_active_recording_v2");
+    expect(stateMachine).toContain("where job_state in ('queued', 'running', 'retry_wait', 'cancel_requested')");
+    expect(stateMachine).toContain("idx_processing_jobs_ready");
+    expect(stateMachine).toContain("idx_processing_jobs_stale_lease");
+    expect(stateMachine).toContain("public.processing_job_attempts");
+    expect(stateMachine).toContain("public.processing_job_events");
+    expect(stateMachine).toContain("references public.recording_processing_jobs(id) on delete cascade");
+    expect(stateMachine).toContain("'MIGRATED_STATE'");
+    expect(stateMachine).toContain("create or replace view public.processing_job_status as");
+    expect(stateMachine).toContain(
+      "select id, doctor_key, clinic_key, operation, job_state, attempt, max_attempts, scheduled_at, started_at",
+    );
+    expect(stateMachine).toContain("as is_stale");
+    expect(stateMachine).toContain("for update skip locked");
+    expect(stateMachine).toContain("processing_job_legacy_shadow_check");
+    expect(stateMachine).toContain("processing_job_error_message_canonical_check");
+    expect(stateMachine).toContain("public.processing_job_safe_error_code");
+    expect(stateMachine).toContain("public.processing_job_safe_error_message(terminal_error_code) as terminal_error_message");
+    expect(stateMachine).toContain("else case when p_error_code is null then null else 'PROCESSING_FAILED' end");
+    expect(stateMachine).toContain(
+      "revoke all on public.processing_job_attempts, public.processing_job_events, public.processing_job_status",
+    );
+    expect(stateMachine).toContain("grant select on public.processing_job_status to service_role");
+    expect(stateMachine).not.toContain("grant select on public.processing_job_status to authenticated");
+    expect(stateMachine).not.toContain("grant select, insert, update on public.processing_job_attempts");
   });
 
   it("adds durable, PHI-minimal record/account deletion and scheduled retention contracts", () => {

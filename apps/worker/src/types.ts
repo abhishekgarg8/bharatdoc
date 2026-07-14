@@ -1,4 +1,5 @@
-import type { Clinic, Doctor, Recording, TranscriptionSessionFinalization } from "@bharatdoc/shared";
+import type { Clinic, Doctor, ProcessingJobLifecycleState, ProcessingJobStatusDto, Recording,
+  TranscriptionSessionFinalization } from "@bharatdoc/shared";
 import type { StructuredLogger } from "./logger.js";
 
 export type TranscriptionAttemptStage =
@@ -169,6 +170,22 @@ export interface ProcessingJob {
   result: Record<string, unknown> | null;
   inputHash: string;
   createdAt: string;
+}
+
+export interface DurableProcessingJob extends ProcessingJob {
+  inputVersion: number;
+  lifecycleState: ProcessingJobLifecycleState;
+  leaseExpiresAt: string | null;
+  maxAttempts: number;
+  scheduledAt: string;
+  startedAt: string | null;
+  heartbeatAt: string | null;
+  nextRetryAt: string | null;
+  completedAt: string | null;
+  terminalErrorCode: string | null;
+  terminalErrorMessage: string | null;
+  outputReference: Record<string, unknown> | null;
+  stateVersion: number;
 }
 
 export interface ProcessingJobClaim {
@@ -368,6 +385,40 @@ export interface ProcessingJobRepository {
     leaseToken: string;
     errorCode: string;
   }): Promise<void>;
+}
+
+export interface ProcessingJobStateRepository extends ProcessingJobRepository {
+  createQueued(input: {
+    operation: ProcessingOperation;
+    idempotencyKey: string;
+    inputHash: string;
+    recordingId: string;
+    doctorId: string;
+    clinicId: string;
+    inputVersion?: number;
+    maxAttempts?: number;
+    scheduledAt?: string;
+  }): Promise<DurableProcessingJob>;
+  transition(input: {
+    jobId: string;
+    expectedState: ProcessingJobLifecycleState;
+    nextState: ProcessingJobLifecycleState;
+    expectedVersion: number;
+    leaseToken?: string;
+    leaseOwner?: string;
+    retryAt?: string;
+    errorCode?: string;
+    outputReference?: Record<string, unknown>;
+  }): Promise<DurableProcessingJob>;
+  findStaleRunning(input: { before: string; limit: number }): Promise<DurableProcessingJob[]>;
+  recoverStale(input: { before: string; retryAt?: string; limit: number }): Promise<number>;
+  requestCancellation(input: {
+    jobId: string;
+    doctorId: string;
+    clinicId: string;
+    expectedVersion: number;
+  }): Promise<DurableProcessingJob>;
+  findStatus(input: { jobId: string; doctorId: string; clinicId: string }): Promise<ProcessingJobStatusDto | null>;
 }
 
 export interface WorkerDependencies {
