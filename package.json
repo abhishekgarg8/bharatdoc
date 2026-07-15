@@ -23,6 +23,8 @@
     "smoke:pwa": "cd apps/web && node ../../scripts/pwa-offline-smoke.mjs",
     "smoke:real-browser": "node --env-file=.env scripts/real-account-browser-e2e.mjs",
     "smoke:staging": "node --env-file=.env scripts/staging-smoke.mjs",
+    "artifact:scan": "node scripts/scan-artifacts.mjs",
+    "test:artifacts": "node --test scripts/artifact-redaction.test.mjs scripts/artifact-policy.test.mjs",
     "test": "pnpm -r test",
     "test:unit": "pnpm -r test:unit",
     "test:e2e": "pnpm --filter @bharatdoc/web test:e2e",

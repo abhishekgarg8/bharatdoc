@@ -27,6 +27,9 @@ local-*-supabase-auth.png
 output/p1-demo-gate-*.png
 output/playwright/
 test/.browser-*/
+.artifacts/private-e2e/
+test/runs/
+test/screenshots/
 apps/web/public/sw.js
 apps/web/public/workbox-*.js
 
