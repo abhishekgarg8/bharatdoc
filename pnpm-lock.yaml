@@ -28,8 +28,8 @@ importers:
         specifier: ^9.25.1
         version: 9.39.4(jiti@2.7.0)
       prettier:
-        specifier: ^3.5.3
-        version: 3.8.3
+        specifier: ^3.9.5
+        version: 3.9.5
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3399,8 +3399,8 @@ packages:
     engines: {node: '>=10.13.0'}
     hasBin: true
 
-  prettier@3.8.3:
-    resolution: {integrity: sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==}
+  prettier@3.9.5:
+    resolution: {integrity: sha512-/FVl766LpUfB5vXgCYOYa0MeV/441Ia99AeICQIQFTY/Nw0roZwULcXpku5i1/m5kt/baz+s4Zogspd839HSMg==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -5095,7 +5095,7 @@ snapshots:
   '@prettier/plugin-xml@2.2.0':
     dependencies:
       '@xml-tools/parser': 1.0.11
-      prettier: 3.8.3
+      prettier: 3.9.5
 
   '@railway/cli@4.42.1':
     dependencies:
@@ -7501,7 +7501,7 @@ snapshots:
 
   prettier@2.8.8: {}
 
-  prettier@3.8.3: {}
+  prettier@3.9.5: {}
 
   pretty-format@27.5.1:
     dependencies:
